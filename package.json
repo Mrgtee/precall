@@ -1,0 +1,29 @@
+{
+  "name": "precall-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arc-native prediction-market intelligence arena for autonomous market agents.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm -w @precall/shared run build && npm -w @precall/worker run build && npm -w @precall/web run build",
+    "build:all": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "worker": "npm run start -w apps/worker",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "contracts:test": "forge test --root packages/contracts",
+    "contracts:build": "forge build --root packages/contracts"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.1",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
