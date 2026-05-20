@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { createDb, type PrecallDb } from "@precall/shared/db/client";
+import { createDbConnection, type PrecallDb } from "@precall/shared/db/client";
 import {
   agents,
   agentRuns,
@@ -13,10 +13,22 @@ import { hashText } from "@precall/shared/scoring";
 import type { AggregatedCall, PolymarketMarket, MarketSnapshot } from "@precall/shared/types";
 
 let dbClient: PrecallDb | undefined;
+let closeDbClient: (() => Promise<void>) | undefined;
 
 function db() {
-  dbClient ??= createDb();
+  if (!dbClient) {
+    const connection = createDbConnection();
+    dbClient = connection.db;
+    closeDbClient = () => connection.client.end();
+  }
   return dbClient;
+}
+
+export async function closeRepository() {
+  if (!closeDbClient) return;
+  await closeDbClient();
+  dbClient = undefined;
+  closeDbClient = undefined;
 }
 
 export async function upsertMarket(market: PolymarketMarket) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { loadDotenv } from "./dotenv";
 import { discover, health, registerCouncilAgent, resolveMatureCalls, runOnce } from "./run-cycle";
+import { closeRepository } from "./repository";
 
 loadDotenv();
 
@@ -15,11 +16,22 @@ async function main() {
   throw new Error(`Unknown command "${command}". Use health, discover, register-agent, run-once, or resolve.`);
 }
 
+function stringifyResult(result: unknown) {
+  return JSON.stringify(
+    result,
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+    2,
+  );
+}
+
 main()
   .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(stringifyResult(result));
   })
   .catch((error) => {
     console.error(error.stack || error.message);
     process.exitCode = 1;
+  })
+  .finally(async () => {
+    await closeRepository();
   });

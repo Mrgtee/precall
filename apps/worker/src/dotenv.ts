@@ -1,9 +1,22 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+
+function findUp(file: string, start = process.cwd()) {
+  let current = resolve(start);
+
+  while (true) {
+    const candidate = resolve(current, file);
+    if (existsSync(candidate)) return candidate;
+
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
 export function loadDotenv(file = ".env") {
-  const path = resolve(process.cwd(), file);
-  if (!existsSync(path)) return;
+  const path = findUp(file);
+  if (!path) return;
 
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
     const trimmed = line.trim();
