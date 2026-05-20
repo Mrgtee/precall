@@ -60,6 +60,16 @@ export const precallRegistryAbi = [
   },
   {
     type: "function",
+    name: "thesisUnlocked",
+    stateMutability: "view",
+    inputs: [
+      { name: "callId", type: "uint256" },
+      { name: "buyer", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
     name: "resolveCall",
     stateMutability: "nonpayable",
     inputs: [

@@ -53,6 +53,17 @@ export function UnlockThesis({
     return walletClient.getChainId();
   }
 
+  async function loadExistingThesis(wallet: string, successStatus = "Already unlocked") {
+    setStatus("Checking existing unlock...");
+    const thesisResponse = await fetch(`/api/calls/${callId}/thesis?wallet=${wallet}`);
+    if (!thesisResponse.ok) return false;
+
+    const payload = (await thesisResponse.json()) as { thesis: string };
+    setThesis(payload.thesis);
+    setStatus(successStatus);
+    return true;
+  }
+
   async function unlock() {
     if (!registry || !usdcAddress) {
       setStatus("Missing registry or USDC address in public env.");
@@ -68,6 +79,8 @@ export function UnlockThesis({
     }
 
     try {
+      if (await loadExistingThesis(address)) return;
+
       let activeChainId = await getConnectedWalletChainId();
       if (activeChainId !== arcTestnet.id) {
         setStatus("Your connected wallet is on the wrong network. Switch to Arc Testnet when prompted.");
@@ -121,15 +134,11 @@ export function UnlockThesis({
         return;
       }
 
-      const thesisResponse = await fetch(`/api/calls/${callId}/thesis?wallet=${address}`);
-      if (thesisResponse.ok) {
-        const payload = (await thesisResponse.json()) as { thesis: string };
-        setThesis(payload.thesis);
-        setStatus("Unlocked");
-      } else {
+      if (!(await loadExistingThesis(address, "Unlocked"))) {
         setStatus("Unlock indexed, but thesis fetch failed. Refresh and reconnect your wallet.");
       }
     } catch (error) {
+      if (address && (await loadExistingThesis(address))) return;
       setStatus(`Unlock failed: ${errorMessage(error)}`);
     }
   }
