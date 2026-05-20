@@ -38,6 +38,16 @@ export async function health() {
   };
 }
 
+function publishThresholds() {
+  return {
+    minLiquidityUsd: numberEnv("MIN_LIQUIDITY_USD", 500),
+    minEdgeBps: numberEnv("MIN_EDGE_BPS", 650),
+    maxSpreadBps: numberEnv("MAX_SPREAD_BPS", 900),
+    minConfidenceBps: numberEnv("MIN_CONFIDENCE_BPS", 5200),
+    minSuggestedSizeBps: numberEnv("MIN_SUGGESTED_SIZE_BPS", 50),
+  };
+}
+
 export async function discover() {
   const limit = numberEnv("MAX_MARKETS_PER_RUN", 8);
   const markets = await discoverPolymarketMarkets(limit);
@@ -66,12 +76,7 @@ export async function runOnce() {
   const maxMarkets = numberEnv("MAX_MARKETS_PER_RUN", 8);
   const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "1");
   const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
-  const thresholds = {
-    minLiquidityUsd: numberEnv("MIN_LIQUIDITY_USD", 500),
-    minEdgeBps: numberEnv("MIN_EDGE_BPS", 650),
-    maxSpreadBps: numberEnv("MAX_SPREAD_BPS", 900),
-    minConfidenceBps: numberEnv("MIN_CONFIDENCE_BPS", 5200),
-  };
+  const thresholds = publishThresholds();
   const onchainAgentId = Number(optionalEnv("DEFAULT_ONCHAIN_AGENT_ID", "0"));
   if (publishOnchain && (!Number.isFinite(onchainAgentId) || onchainAgentId <= 0)) {
     throw new Error("DEFAULT_ONCHAIN_AGENT_ID is required when PUBLISH_ONCHAIN=true. Run `npm run worker -- register-agent` first.");
@@ -170,6 +175,13 @@ export async function publishStoredRun(runId: number) {
   const call = output?.call as ReturnType<typeof aggregateVotes> | undefined;
   if (!call) throw new Error(`Agent run ${runId} does not contain a call output.`);
   if (call.action === "WATCH") throw new Error(`Agent run ${runId} is WATCH-only and cannot be published.`);
+
+  const thresholds = publishThresholds();
+  if (!boolEnv("ALLOW_PUBLISH_FILTERED_RUN", false) && !passesPublishThresholds(call, thresholds)) {
+    throw new Error(
+      `Agent run ${runId} does not pass publish thresholds: edge=${call.edgeBps}, confidence=${call.confidenceBps}, size=${call.suggestedSizeBps}, liquidity=${call.market.liquidityUsd}, spread=${call.snapshot.spreadBps}. Set ALLOW_PUBLISH_FILTERED_RUN=true only for explicit demos.`,
+    );
+  }
 
   const onchainAgentId = Number(optionalEnv("DEFAULT_ONCHAIN_AGENT_ID", "0"));
   if (!Number.isFinite(onchainAgentId) || onchainAgentId <= 0) {

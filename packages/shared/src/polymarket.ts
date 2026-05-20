@@ -10,6 +10,8 @@ interface GammaMarket {
   slug?: string;
   active?: boolean;
   closed?: boolean;
+  archived?: boolean;
+  acceptingOrders?: boolean;
   outcomes?: unknown;
   outcomePrices?: unknown;
   clobTokenIds?: unknown;
@@ -80,6 +82,8 @@ export async function discoverPolymarketMarkets(limit = 25): Promise<PolymarketM
   return rawMarkets
     .map(normalizeGammaMarket)
     .filter((market): market is PolymarketMarket => Boolean(market))
+    .filter((market) => market.status === "active")
+    .filter((market) => !market.closeTime || new Date(market.closeTime).getTime() > Date.now())
     .slice(0, limit);
 }
 
@@ -127,14 +131,14 @@ export function normalizeGammaMarket(raw: GammaMarket): PolymarketMarket | null 
     slug,
     title,
     description: String(raw.description || ""),
-    url: `https://polymarket.com/event/${slug}`,
+    url: `https://polymarket.com/market/${slug}`,
     outcomes,
     outcomePrices,
     clobTokenIds: parseJsonArray(raw.clobTokenIds),
     liquidityUsd: toNumber(raw.liquidity),
     volume24hUsd: toNumber(raw.volume24hr ?? raw.volume24h),
     closeTime,
-    status: raw.closed === true || raw.active === false ? "closed" : "active",
+    status: raw.closed === true || raw.active === false || raw.archived === true || raw.acceptingOrders === false ? "closed" : "active",
   };
 }
 

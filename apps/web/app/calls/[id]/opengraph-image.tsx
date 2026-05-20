@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getCall } from "../../../lib/queries";
-import { bpsToPercent } from "../../../lib/format";
+import { bpsToPercent, outcomeForAction, recommendationLabel, selectedAgentProbabilityBps } from "../../../lib/format";
 
 export const size = {
   width: 1200,
@@ -12,6 +12,11 @@ export const contentType = "image/png";
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const call = await getCall(Number(id));
+  const outcome = outcomeForAction(call?.action || "WATCH", call?.outcomes);
+  const agentProbability = selectedAgentProbabilityBps(call?.action || "WATCH", call?.agentProbabilityBps || 0);
+  const recommendation = call
+    ? recommendationLabel(call.action, call.outcomes, call.confidenceBps, call.suggestedSizeBps)
+    : "LIVE CALL";
 
   return new ImageResponse(
     (
@@ -31,15 +36,15 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       >
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 28, fontWeight: 800 }}>
           <span>Precall Arena</span>
-          <span>{call?.action || "LIVE CALL"}</span>
+          <span>{recommendation}</span>
         </div>
         <div>
           <div style={{ fontSize: 58, lineHeight: 1, fontWeight: 900, maxWidth: 940 }}>
             {call?.marketTitle || "Bonded prediction-market call"}
           </div>
           <div style={{ display: "flex", gap: 18, marginTop: 36, fontSize: 30, fontWeight: 800 }}>
-            <span>Agent {bpsToPercent(call?.agentProbabilityBps || 0)}</span>
-            <span>Market {bpsToPercent(call?.marketPriceBps || 0)}</span>
+            <span>Agent {outcome} {bpsToPercent(agentProbability)}</span>
+            <span>Market {outcome} {bpsToPercent(call?.marketPriceBps || 0)}</span>
             <span>Edge {bpsToPercent(call?.edgeBps || 0)}</span>
           </div>
         </div>

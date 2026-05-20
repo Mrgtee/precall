@@ -89,12 +89,14 @@ export function passesPublishThresholds(call: AggregatedCall, thresholds: {
   minEdgeBps: number;
   maxSpreadBps: number;
   minConfidenceBps: number;
+  minSuggestedSizeBps?: number;
 }): boolean {
   if (call.action === "WATCH") return false;
   if (call.market.liquidityUsd < thresholds.minLiquidityUsd) return false;
   if (call.edgeBps < thresholds.minEdgeBps) return false;
   if (call.snapshot.spreadBps > thresholds.maxSpreadBps) return false;
   if (call.confidenceBps < thresholds.minConfidenceBps) return false;
+  if (call.suggestedSizeBps < (thresholds.minSuggestedSizeBps ?? 0)) return false;
   if (call.market.closeTime && new Date(call.market.closeTime).getTime() < Date.now()) return false;
   return true;
 }

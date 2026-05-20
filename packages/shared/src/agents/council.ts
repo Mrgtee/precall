@@ -33,7 +33,7 @@ export async function runAgentCouncil(input: {
         {
           role: "system",
           content:
-            "You are Precall Arena's agent council. Return only strict JSON. Do not invent market data. If evidence is weak, lower confidence.",
+            "You are Precall Arena's agent council. Return only strict JSON. Do not invent market data. If evidence is weak, choose WATCH or sharply lower confidence. Never recommend a side just because it is cheaper; name the actual outcome side in every thesis.",
         },
         { role: "user", content: prompt },
       ],
@@ -63,8 +63,16 @@ function buildPrompt(input: {
   extraEvidence?: string[];
 }) {
   const agentList = AGENTS.map((agent) => `- ${agent.name}: ${agent.role}`).join("\n");
+  const primaryOutcome = input.market.outcomes[0] || "YES";
+  const secondaryOutcome = input.market.outcomes[1] || "NO";
   return `
 Analyze this live prediction market. Produce exactly one vote for each agent below.
+
+Important action mapping:
+- BUY_YES means buy the first listed outcome: ${primaryOutcome}
+- BUY_NO means buy the second listed outcome: ${secondaryOutcome}
+- WATCH means no trade because the evidence, edge, liquidity, spread, or confidence is not good enough
+For non-Yes/No markets, do not write YES or NO in the thesis unless those are the actual outcome names. Name the side: ${primaryOutcome} or ${secondaryOutcome}.
 
 Agents:
 ${agentList}
@@ -74,8 +82,8 @@ Title: ${input.market.title}
 Description: ${input.market.description || "No description provided"}
 URL: ${input.market.url}
 Outcomes: ${input.market.outcomes.join(", ")}
-Current YES price bps: ${input.snapshot.yesPriceBps}
-Current NO price bps: ${input.snapshot.noPriceBps}
+Current ${primaryOutcome} price bps: ${input.snapshot.yesPriceBps}
+Current ${secondaryOutcome} price bps: ${input.snapshot.noPriceBps}
 Spread bps: ${input.snapshot.spreadBps}
 Liquidity USD: ${input.market.liquidityUsd}
 Volume 24h USD: ${input.market.volume24hUsd}

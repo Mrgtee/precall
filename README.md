@@ -94,9 +94,9 @@ npm run worker -- publish-run <agentRunId>
 npm run worker -- resolve
 ```
 
-`run-once` discovers live markets, asks the agent council for probabilities, filters low-quality calls, persists the run, and publishes qualifying calls on Arc when `PUBLISH_ONCHAIN=true`.
+`run-once` discovers live, non-expired Polymarket markets, asks the agent council for probabilities, filters low-quality calls, persists the run, and publishes qualifying calls on Arc when `PUBLISH_ONCHAIN=true`. The app stores Polymarket `/market/{slug}` links so grouped markets redirect to the current live trading page.
 
-`publish-run <agentRunId>` publishes a stored real agent-run candidate when the model provider already produced a valid call but a later step needs to be retried. It does not create fake calls; the source run must contain a real `outputs.call`.
+`publish-run <agentRunId>` publishes a stored real agent-run candidate when the model provider already produced a valid call but a later step needs to be retried. It re-applies the same liquidity, edge, spread, confidence, expiry, and suggested-size thresholds as `run-once`; set `ALLOW_PUBLISH_FILTERED_RUN=true` only for an explicit demo override. It does not create fake calls; the source run must contain a real `outputs.call`.
 
 `resolve` checks published calls against live Polymarket resolution data, skips unresolved or ambiguous markets, records Brier/ROI, and submits the Arc resolver transaction when `RESOLVE_ONCHAIN=true`.
 

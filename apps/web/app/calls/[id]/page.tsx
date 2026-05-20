@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { UnlockThesis } from "../../../components/unlock-thesis";
-import { actionLabel, bpsToPercent, usdc } from "../../../lib/format";
+import { bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedAgentProbabilityBps, usdc } from "../../../lib/format";
 import { getCall, getEvidence } from "../../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,10 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const call = await getCall(Number(id));
   if (!call) notFound();
   const evidence = await getEvidence(call.id);
+  const outcome = outcomeForAction(call.action, call.outcomes);
+  const agentProbability = selectedAgentProbabilityBps(call.action, call.agentProbabilityBps);
+  const recommendation = recommendationLabel(call.action, call.outcomes, call.confidenceBps, call.suggestedSizeBps);
+  const actionClass = call.action === "BUY_YES" ? "buy" : call.action === "BUY_NO" ? "no" : "";
 
   return (
     <main className="shell detail-layout">
@@ -19,19 +23,19 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <p className="muted" style={{ fontWeight: 900 }}>{call.agentName}</p>
         <h1 style={{ fontSize: 48, lineHeight: 1, marginTop: 0 }}>{call.marketTitle}</h1>
         <div className="pill-row">
-          <span className="pill buy">{actionLabel(call.action)}</span>
-          <span className="pill">Agent {bpsToPercent(call.agentProbabilityBps)}</span>
-          <span className="pill">Market {bpsToPercent(call.marketPriceBps)}</span>
+          <span className={`pill ${actionClass}`}>{recommendation}</span>
+          <span className="pill">Agent {outcome} {bpsToPercent(agentProbability)}</span>
+          <span className="pill">Market {outcome} {bpsToPercent(call.marketPriceBps)}</span>
           <span className="pill">Edge {bpsToPercent(call.edgeBps)}</span>
           <span className="pill">Confidence {bpsToPercent(call.confidenceBps)}</span>
           <span className="pill">Size {bpsToPercent(call.suggestedSizeBps)}</span>
         </div>
         <p className="muted">
-          Non-custodial copy signal. Precall does not place trades for users; it links out with the suggested action and size.
+          {recommendationHelp(call.action, call.confidenceBps, call.suggestedSizeBps)} Precall does not place trades for users; it links out with the suggested action and size.
         </p>
         <div className="pill-row">
           <Link className="button" href={call.copyUrl || call.marketUrl || "#"} target="_blank">
-            Copy on market <ExternalLink size={16} />
+            Open current market <ExternalLink size={16} />
           </Link>
           {call.txHash ? (
             <Link className="button secondary" href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">
