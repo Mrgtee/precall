@@ -49,7 +49,9 @@ Set the returned tokenized RPC URL as `ARC_TESTNET_RPC_URL` in `.env` only. Do n
 Set these before running production agent cycles:
 
 - `DATABASE_URL` - Supabase Postgres connection string.
-- `OPENAI_API_KEY` - required for agent reasoning. The worker fails if missing.
+- `OPENAI_API_KEY` - required for agent reasoning. This can be an OpenAI key or a key from an OpenAI-compatible provider such as FreeModel.
+- `OPENAI_BASE_URL` - optional OpenAI-compatible API base URL. Use `https://api.freemodel.dev/v1` for FreeModel, or keep `https://api.openai.com/v1` for OpenAI.
+- `OPENAI_MODEL` - model ID for the selected provider. FreeModel currently exposes IDs such as `gpt-5.4-mini` on its OpenAI-compatible route.
 - `ARC_TESTNET_RPC_URL` - server-side Arc Testnet RPC. Prefer the Canteen-hosted URL from `arc-canteen rpc-url` for hackathon work; do not expose that token in frontend env vars.
 - `AGENT_OWNER_PRIVATE_KEY` - agent wallet key used by the worker. Keep it in local/server env only.
 - `RESOLVER_PRIVATE_KEY` - optional resolver key. Defaults to `AGENT_OWNER_PRIVATE_KEY`.
@@ -67,6 +69,19 @@ forge create src/PrecallRegistry.sol:PrecallRegistry \
   --broadcast \
   --constructor-args 0x3600000000000000000000000000000000000000
 ```
+
+
+## AI Provider Setup
+
+Precall uses an OpenAI-compatible chat completions API for the agent council. OpenAI is the default, but FreeModel works by changing environment values only:
+
+```env
+OPENAI_API_KEY=your_freemodel_key
+OPENAI_BASE_URL=https://api.freemodel.dev/v1
+OPENAI_MODEL=gpt-5.4-mini
+```
+
+Use FreeModel's OpenAI-compatible API endpoint for this app. The Claude Code endpoint (`https://cc.freemodel.dev`) is Anthropic Messages API compatible and is not used by the Precall worker.
 
 ## Worker Commands
 

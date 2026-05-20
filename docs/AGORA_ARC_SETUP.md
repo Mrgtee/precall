@@ -80,7 +80,7 @@ After deployment, set both `PRECALL_REGISTRY_ADDRESS` and `NEXT_PUBLIC_PRECALL_R
 
 - Complete the Canteen profile with Discord, Telegram, and preferred hackathon email.
 - Provide Supabase Postgres `DATABASE_URL`.
-- Provide an `OPENAI_API_KEY` or compatible model provider key.
+- Provide an `OPENAI_API_KEY` from OpenAI or an OpenAI-compatible provider. For FreeModel also set `OPENAI_BASE_URL=https://api.freemodel.dev/v1` and a FreeModel model such as `gpt-5.4-mini`.
 - Create or choose a deployer/agent wallet, fund it with Arc Testnet USDC, and import it as `precall-deployer`.
 - Deploy `PrecallRegistry`, then set the registry address in local and hosting environment variables.
 - Optional: provide Circle wallet/x402 credentials if paid enrichment should be enabled for live demos.

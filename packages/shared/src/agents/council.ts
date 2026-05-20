@@ -16,9 +16,10 @@ export async function runAgentCouncil(input: {
 }): Promise<AgentVote[]> {
   const apiKey = requireEnv("OPENAI_API_KEY");
   const model = optionalEnv("OPENAI_MODEL", "gpt-4.1-mini");
+  const baseUrl = optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
   const prompt = buildPrompt(input);
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch(chatCompletionsUrl(baseUrl), {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
@@ -41,13 +42,19 @@ export async function runAgentCouncil(input: {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenAI request failed ${response.status}: ${body.slice(0, 500)}`);
+    throw new Error(`Model provider request failed ${response.status}: ${body.slice(0, 500)}`);
   }
 
   const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenAI returned no content.");
+  if (!content) throw new Error("Model provider returned no content.");
   return validateVotes(JSON.parse(content) as unknown, input.market);
+}
+
+function chatCompletionsUrl(baseUrl: string) {
+  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  if (normalized.endsWith("/chat/completions")) return normalized;
+  return `${normalized}/chat/completions`;
 }
 
 function buildPrompt(input: {

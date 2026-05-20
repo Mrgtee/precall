@@ -30,7 +30,9 @@ export async function health() {
     ok: true,
     livePolymarketMarkets: markets.length,
     databaseUrl: Boolean(process.env.DATABASE_URL),
-    openAiKey: Boolean(process.env.OPENAI_API_KEY),
+    modelApiKey: Boolean(process.env.OPENAI_API_KEY),
+    modelBaseUrl: optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+    model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
     registryAddress: Boolean(process.env.PRECALL_REGISTRY_ADDRESS),
   };
 }
