@@ -16,8 +16,12 @@
     "worker": "npm run start -w apps/worker",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
-    "contracts:test": "forge test --root packages/contracts",
-    "contracts:build": "forge build --root packages/contracts"
+    "contracts:test": "PATH=\"$HOME/.foundry/bin:$PATH\" forge test --root packages/contracts",
+    "contracts:build": "PATH=\"$HOME/.foundry/bin:$PATH\" forge build --root packages/contracts",
+    "arc:status": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen status",
+    "arc:rpc": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen rpc-url",
+    "arc:chain-id": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen rpc eth_chainId",
+    "arc:context": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen context sync"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.1",

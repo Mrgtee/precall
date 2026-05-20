@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createPublicClient, custom, http, parseUnits } from "viem";
+import { createPublicClient, custom, http, parseUnits, type EIP1193Provider } from "viem";
 import { useAccount, useConnect, useWriteContract } from "wagmi";
 import { arcTestnet } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
@@ -10,7 +10,7 @@ import { usdc } from "../lib/format";
 
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: EIP1193Provider;
   }
 }
 

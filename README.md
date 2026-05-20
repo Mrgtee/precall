@@ -30,13 +30,27 @@ npm run contracts:build
 npm run contracts:test
 ```
 
+
+## Agora / Arc Setup
+
+This repo uses the Canteen ARC CLI for hackathon RPC access and Arc context. The short path is:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" arc-canteen login
+PATH="$HOME/.local/bin:$PATH" arc-canteen context sync
+PATH="$HOME/.local/bin:$PATH" arc-canteen rpc eth_chainId
+PATH="$HOME/.local/bin:$PATH" arc-canteen rpc-url
+```
+
+Set the returned tokenized RPC URL as `ARC_TESTNET_RPC_URL` in `.env` only. Do not expose it through `NEXT_PUBLIC_*` variables. Full setup and deployment notes are in [`docs/AGORA_ARC_SETUP.md`](docs/AGORA_ARC_SETUP.md).
+
 ## Required Real Services
 
 Set these before running production agent cycles:
 
 - `DATABASE_URL` - Supabase Postgres connection string.
 - `OPENAI_API_KEY` - required for agent reasoning. The worker fails if missing.
-- `ARC_TESTNET_RPC_URL` - Arc Testnet RPC.
+- `ARC_TESTNET_RPC_URL` - server-side Arc Testnet RPC. Prefer the Canteen-hosted URL from `arc-canteen rpc-url` for hackathon work; do not expose that token in frontend env vars.
 - `AGENT_OWNER_PRIVATE_KEY` - agent wallet key used by the worker. Keep it in local/server env only.
 - `RESOLVER_PRIVATE_KEY` - optional resolver key. Defaults to `AGENT_OWNER_PRIVATE_KEY`.
 - `PRECALL_REGISTRY_ADDRESS` - deployed `PrecallRegistry` address.

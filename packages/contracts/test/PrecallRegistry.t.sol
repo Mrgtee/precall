@@ -54,8 +54,8 @@ contract Actor {
             6100,
             7500,
             uint64(block.timestamp + 7 days),
-            bytes32("thesis"),
-            bytes32("evidence"),
+            keccak256("thesis"),
+            keccak256("evidence"),
             1_000_000,
             50_000
         );
