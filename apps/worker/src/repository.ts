@@ -119,6 +119,13 @@ export async function recordAgentRun(input: {
   return row;
 }
 
+
+export async function getAgentRunById(id: number) {
+  return db().query.agentRuns.findFirst({
+    where: eq(agentRuns.id, id),
+  });
+}
+
 export async function insertPublishedCall(input: {
   agentId: number;
   onchainCallId: number | undefined;

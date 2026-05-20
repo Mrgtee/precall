@@ -16,6 +16,7 @@ import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds } from
 import { runAgentCouncil } from "@precall/shared/agents/council";
 import {
   ensureCouncilAgent,
+  getAgentRunById,
   getOpenPublishedCalls,
   insertPublishedCall,
   insertResolution,
@@ -155,6 +156,68 @@ export async function runOnce() {
   }
 
   return { checked: markets.length, published, skipped };
+}
+
+export async function publishStoredRun(runId: number) {
+  if (!Number.isFinite(runId) || runId <= 0) {
+    throw new Error("Usage: npm run worker -- publish-run <agentRunId>");
+  }
+
+  const sourceRun = await getAgentRunById(runId);
+  if (!sourceRun) throw new Error(`Agent run ${runId} was not found.`);
+
+  const output = sourceRun.outputs as { call?: unknown } | null;
+  const call = output?.call as ReturnType<typeof aggregateVotes> | undefined;
+  if (!call) throw new Error(`Agent run ${runId} does not contain a call output.`);
+  if (call.action === "WATCH") throw new Error(`Agent run ${runId} is WATCH-only and cannot be published.`);
+
+  const onchainAgentId = Number(optionalEnv("DEFAULT_ONCHAIN_AGENT_ID", "0"));
+  if (!Number.isFinite(onchainAgentId) || onchainAgentId <= 0) {
+    throw new Error("DEFAULT_ONCHAIN_AGENT_ID is required. Run `npm run worker -- register-agent` first.");
+  }
+
+  const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "1");
+  const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
+  const council = await ensureCouncilAgent({
+    onchainAgentId,
+    ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000"),
+  });
+
+  const onchain = await publishAggregatedCallOnchain({
+    call,
+    onchainAgentId: BigInt(onchainAgentId),
+    bondAmountUsdc: bondAmount,
+    unlockPriceUsdc: unlockPrice,
+  });
+
+  const row = await insertPublishedCall({
+    agentId: council.id,
+    onchainCallId: onchain.onchainCallId ? Number(onchain.onchainCallId) : undefined,
+    txHash: onchain.txHash,
+    call,
+    bondAmount,
+    unlockPrice,
+    copyUrl: polymarketCopyUrl(call.market),
+  });
+
+  await recordAgentRun({
+    status: "published-stored",
+    model: sourceRun.model,
+    inputs: { sourceAgentRunId: runId },
+    outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)) },
+    publishedCallId: row.id,
+  });
+
+  return {
+    id: row.id,
+    sourceAgentRunId: runId,
+    onchainCallId: onchain.onchainCallId,
+    market: call.market.title,
+    action: call.action,
+    edgeBps: call.edgeBps,
+    confidenceBps: call.confidenceBps,
+    txHash: onchain.txHash,
+  };
 }
 
 function realizedPnlBps(action: string, entryPriceBps: number, outcomeYes: boolean) {
