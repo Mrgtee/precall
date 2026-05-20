@@ -1,18 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { createPublicClient, custom, http, parseUnits, type EIP1193Provider } from "viem";
-import { useAccount, useChainId, useConnect, useSwitchChain, useWriteContract } from "wagmi";
+import { createPublicClient, http, parseUnits } from "viem";
+import { getWalletClient } from "@wagmi/core";
+import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } from "wagmi";
 import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { LockKeyhole, Unlock } from "lucide-react";
 import { usdc } from "../lib/format";
 
-declare global {
-  interface Window {
-    ethereum?: EIP1193Provider;
-  }
-}
 
 export function UnlockThesis({
   callId,
@@ -26,7 +22,7 @@ export function UnlockThesis({
   const registry = process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS as `0x${string}` | undefined;
   const usdcAddress = process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS as `0x${string}` | undefined;
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const config = useConfig();
   const { connect, connectors } = useConnect();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
@@ -52,6 +48,11 @@ export function UnlockThesis({
     return String(error);
   }
 
+  async function getConnectedWalletChainId() {
+    const walletClient = await getWalletClient(config, { account: address, assertChainId: false });
+    return walletClient.getChainId();
+  }
+
   async function unlock() {
     if (!registry || !usdcAddress) {
       setStatus("Missing registry or USDC address in public env.");
@@ -67,23 +68,21 @@ export function UnlockThesis({
     }
 
     try {
-      if (chainId !== arcTestnet.id) {
-        setStatus("Your wallet is on the wrong network. Switch to Arc Testnet when prompted.");
+      let activeChainId = await getConnectedWalletChainId();
+      if (activeChainId !== arcTestnet.id) {
+        setStatus("Your connected wallet is on the wrong network. Switch to Arc Testnet when prompted.");
         await switchChainAsync({ chainId: arcTestnet.id });
+        activeChainId = await getConnectedWalletChainId();
       }
 
-      const activeChainId = await window.ethereum?.request({ method: "eth_chainId" });
-      if (activeChainId !== `0x${arcTestnet.id.toString(16)}`) {
-        setStatus("Wallet is still not on Arc Testnet. Please switch from Ethereum/Mainnet to Arc Testnet and try again.");
+      if (activeChainId !== arcTestnet.id) {
+        setStatus(`Connected wallet reports chain ${activeChainId}, not Arc Testnet (${arcTestnet.id}). Open the wallet connected to this site, switch it to Arc Testnet, then try again.`);
         return;
       }
 
       const publicClient = createPublicClient({
         chain: arcTestnet,
-        transport:
-          typeof window !== "undefined" && window.ethereum
-            ? custom(window.ethereum)
-            : http(arcTestnet.rpcUrls.default.http[0]),
+        transport: http(arcTestnet.rpcUrls.default.http[0]),
       });
 
       setStatus("Approve the USDC spend in your wallet...");
