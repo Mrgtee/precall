@@ -60,14 +60,21 @@ textarea {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  color: var(--ink);
-  background: var(--lime);
+  overflow: hidden;
+  background: #fff;
   border: 2px solid var(--ink);
-  border-radius: 6px;
+  border-radius: 10px;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .nav {

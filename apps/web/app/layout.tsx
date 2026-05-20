@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
-import { Activity, RadioTower } from "lucide-react";
+import { Activity } from "lucide-react";
 import { WalletProvider } from "../components/wallet-provider";
 import "./globals.css";
 
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WalletProvider>
           <header className="shell header">
             <Link className="brand" href="/">
-              <span className="brand-mark"><RadioTower size={19} /></span>
+              <span className="brand-mark">
+                <Image alt="Precall logo" className="brand-logo" src="/precall-logo.jpg" width={38} height={38} priority />
+              </span>
               Precall
             </Link>
             <nav className="nav">
