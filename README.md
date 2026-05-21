@@ -83,6 +83,17 @@ OPENAI_MODEL=gpt-5.4-mini
 
 Use FreeModel's OpenAI-compatible API endpoint for this app. The Claude Code endpoint (`https://cc.freemodel.dev`) is Anthropic Messages API compatible and is not used by the Precall worker.
 
+## Production Automation
+
+Precall includes protected Vercel Cron endpoints for production runs:
+
+- `/api/cron/agent-run` runs `npm run worker -- run-once` daily.
+- `/api/cron/resolve` runs `npm run worker -- resolve` daily.
+
+Set `CRON_SECRET` in the deployment environment. Vercel Cron sends it as a bearer token; manual calls should use `Authorization: Bearer $CRON_SECRET`.
+
+The app also persists wallet follows and post-unlock feedback so traction can be shown as real user demand, not screenshots.
+
 ## Worker Commands
 
 ```bash

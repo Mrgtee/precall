@@ -8,6 +8,7 @@ import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { LockKeyhole, Unlock } from "lucide-react";
 import { usdc } from "../lib/format";
+import { FeedbackCapture } from "./feedback-capture";
 
 
 export function UnlockThesis({
@@ -148,6 +149,7 @@ export function UnlockThesis({
       <section className="panel">
         <h3><Unlock size={18} /> Full thesis</h3>
         <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{thesis}</p>
+        <FeedbackCapture callId={callId} context="post-unlock" />
       </section>
     );
   }

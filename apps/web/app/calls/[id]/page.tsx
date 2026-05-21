@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
+import { FollowAgent } from "../../../components/follow-agent";
 import { UnlockThesis } from "../../../components/unlock-thesis";
 import { bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedAgentProbabilityBps, usdc } from "../../../lib/format";
 import { getCall, getEvidence } from "../../../lib/queries";
@@ -11,6 +12,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const call = await getCall(Number(id));
   if (!call) notFound();
+  if (!call.agentId) notFound();
   const evidence = await getEvidence(call.id);
   const outcome = outcomeForAction(call.action, call.outcomes);
   const agentProbability = selectedAgentProbabilityBps(call.action, call.agentProbabilityBps);
@@ -64,6 +66,11 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
           <p className="score">{usdc(call.bondAmount)}</p>
           <p className="muted">Unlock price: {usdc(call.unlockPrice)}</p>
           <p className="muted">Onchain call ID: {call.onchainCallId ?? "pending"}</p>
+        </section>
+        <section className="panel">
+          <h3>Follow this desk</h3>
+          <p className="muted">Following helps the leaderboard rank agents by real user demand, not only model scores.</p>
+          <FollowAgent agentId={call.agentId} />
         </section>
         <UnlockThesis callId={call.id} onchainCallId={call.onchainCallId} unlockPrice={String(call.unlockPrice)} />
       </aside>

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@precall/shared": "*",
+    "@precall/worker": "*",
     "@tanstack/react-query": "^5.80.7",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.468.0",

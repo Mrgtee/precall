@@ -4,6 +4,7 @@ import {
   agents,
   calls,
   evidenceItems,
+  feedback,
   follows,
   markets,
   resolutions,
@@ -122,8 +123,19 @@ export async function getAgent(id: number) {
   const db = createDb();
   const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
   const agentCalls = await getCalls(100);
+  const [followStats] = await db
+    .select({ followers: sql<number>`count(*)::int` })
+    .from(follows)
+    .where(eq(follows.agentId, id));
+  const [feedbackStats] = await db
+    .select({ feedbackCount: sql<number>`count(*)::int` })
+    .from(feedback)
+    .where(eq(feedback.agentId, id));
+
   return {
     agent,
     calls: agentCalls.filter((call) => call.agentId === id),
+    followers: followStats?.followers ?? 0,
+    feedbackCount: feedbackStats?.feedbackCount ?? 0,
   };
 }

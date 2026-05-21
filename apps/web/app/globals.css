@@ -255,6 +255,45 @@ textarea {
   background: #fffdf2;
 }
 
+
+.mini-stack {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
+.compact {
+  margin: 10px 0;
+}
+
+.option-pill {
+  cursor: pointer;
+}
+
+.option-pill.active {
+  background: var(--lime);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.feedback-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.feedback-box textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--white);
+  padding: 12px;
+  color: var(--ink);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

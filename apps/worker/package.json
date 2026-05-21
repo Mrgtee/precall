@@ -16,5 +16,15 @@
   },
   "devDependencies": {
     "typescript": "^5.8.3"
+  },
+  "exports": {
+    "./run-cycle": {
+      "types": "./src/run-cycle.ts",
+      "import": "./src/run-cycle.ts"
+    },
+    "./repository": {
+      "types": "./src/repository.ts",
+      "import": "./src/repository.ts"
+    }
   }
 }

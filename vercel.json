@@ -2,5 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "apps/web/.next"
+  "outputDirectory": "apps/web/.next",
+  "crons": [
+    {
+      "path": "/api/cron/agent-run",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/resolve",
+      "schedule": "30 8 * * *"
+    }
+  ]
 }

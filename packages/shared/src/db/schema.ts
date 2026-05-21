@@ -161,3 +161,22 @@ export const follows = pgTable(
     followIdx: uniqueIndex("follows_wallet_agent_idx").on(table.userWallet, table.agentId),
   }),
 );
+
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: serial("id").primaryKey(),
+    callId: integer("call_id"),
+    agentId: integer("agent_id"),
+    userWallet: text("user_wallet"),
+    sentiment: text("sentiment").notNull(),
+    comment: text("comment").notNull().default(""),
+    context: text("context").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    callIdx: index("feedback_call_idx").on(table.callId),
+    agentIdx: index("feedback_agent_idx").on(table.agentId),
+  }),
+);
+

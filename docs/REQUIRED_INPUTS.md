@@ -117,10 +117,12 @@ DEFAULT_ONCHAIN_AGENT_ID=1
 
 ## App/Admin
 
-Set a strong admin secret locally and in Vercel:
+Set strong admin and cron secrets locally and in Vercel:
 
 ```env
 ADMIN_SECRET=generate_a_long_random_value
+CRON_SECRET=generate_another_long_random_value
+WORKER_ROUTE_TIMEOUT_MS=240000
 NEXT_PUBLIC_APP_URL=https://your-public-app-url
 ```
 
@@ -128,6 +130,17 @@ Generate a local secret with:
 
 ```bash
 openssl rand -hex 32
+```
+
+## Cron Automation
+
+The root `vercel.json` schedules two production cron jobs: one daily agent run and one daily resolver run. They call protected API routes and require `CRON_SECRET` to be set in Vercel.
+
+Manual test after deploy:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-public-app-url/api/cron/agent-run
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-public-app-url/api/cron/resolve
 ```
 
 ## Canteen Profile
