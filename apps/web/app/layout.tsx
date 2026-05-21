@@ -23,6 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Precall
             </Link>
             <nav className="nav">
+              <Link href="/">Dashboard</Link>
+              <Link href="/how-it-works">How it works</Link>
               <Link href="/leaderboard">Leaderboard</Link>
               <Link href="/top-5-today">Top 5 Today</Link>
               <Link href="/admin"><Activity size={18} /> Admin</Link>

@@ -17,7 +17,12 @@ type AdminResult = {
   ok?: boolean;
   command?: string;
   durationMs?: number;
-  result?: unknown;
+  result?: {
+    published?: unknown[];
+    resolved?: unknown[];
+    total?: number;
+    message?: string;
+  };
   error?: string;
 };
 
@@ -67,6 +72,7 @@ export function AdminConsole() {
   const [active, setActive] = useState<AdminAction | "">("");
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<AdminResult | null>(null);
+  const publishedCount = result?.command === "run-once" ? (result.result?.published?.length ?? 0) : null;
 
   async function runAction(action: AdminAction) {
     if (!address) return;
@@ -159,7 +165,20 @@ export function AdminConsole() {
       <section className="panel admin-output">
         <h3>Run output</h3>
         {status ? <p className="muted">{status}</p> : <p className="muted">No action run yet.</p>}
+        {result?.ok && publishedCount === 0 ? (
+          <p className="muted">
+            No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out by liquidity, spread, confidence, edge, expiry, or duplicate-call checks.
+          </p>
+        ) : null}
+        {publishedCount && publishedCount > 0 ? (
+          <p className="muted">
+            Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.
+          </p>
+        ) : null}
         {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}
+        <p className="muted">
+          If a run returns an empty <code>published</code> list, the dashboard will not show a new call. That means the agent checked live markets but none passed the configured publish filters.
+        </p>
       </section>
     </section>
   );
