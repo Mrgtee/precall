@@ -123,6 +123,7 @@ Set strong admin and cron secrets locally and in Vercel:
 ADMIN_SECRET=generate_a_long_random_value
 CRON_SECRET=generate_another_long_random_value
 WORKER_ROUTE_TIMEOUT_MS=240000
+DISABLE_SCHEDULED_WORKERS=true
 NEXT_PUBLIC_APP_URL=https://your-public-app-url
 ```
 
@@ -134,7 +135,7 @@ openssl rand -hex 32
 
 ## Cron Automation
 
-The root `vercel.json` schedules two production cron jobs: one daily agent run and one daily resolver run. They call protected API routes and require `CRON_SECRET` to be set in Vercel.
+The root `vercel.json` schedules two production cron jobs: one daily agent run and one daily resolver run. They call protected API routes and require `CRON_SECRET` to be set in Vercel. If private publishing/resolver keys are not stored on Vercel, set `DISABLE_SCHEDULED_WORKERS=true` and run the bonded worker from a separate secure machine.
 
 Manual test after deploy:
 

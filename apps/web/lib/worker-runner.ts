@@ -16,6 +16,16 @@ function errorMessage(error: unknown) {
 export async function runWorkerCommand(command: WorkerCommand) {
   const startedAt = Date.now();
 
+  if (process.env.DISABLE_SCHEDULED_WORKERS === "true") {
+    return {
+      ok: true,
+      command,
+      disabled: true,
+      durationMs: Date.now() - startedAt,
+      result: "Scheduled worker execution is disabled for this deployment.",
+    };
+  }
+
   try {
     const result = command === "run-once" ? await runOnce() : await resolveMatureCalls();
     return {

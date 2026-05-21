@@ -92,6 +92,8 @@ Precall includes protected Vercel Cron endpoints for production runs:
 
 Set `CRON_SECRET` in the deployment environment. Vercel Cron sends it as a bearer token; manual calls should use `Authorization: Bearer $CRON_SECRET`.
 
+For a public site deployment that should not hold private keys, set `DISABLE_SCHEDULED_WORKERS=true`. The public app will still serve calls, unlocks, follows, and feedback while bonded publishing/resolution runs from a separate secure worker.
+
 The app also persists wallet follows and post-unlock feedback so traction can be shown as real user demand, not screenshots.
 
 ## Worker Commands
