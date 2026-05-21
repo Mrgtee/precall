@@ -1,4 +1,5 @@
-import { CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
 import { type CallRow, getCalls, getLeaderboard } from "../lib/queries";
@@ -22,27 +23,38 @@ export default async function HomePage() {
   const agents = leaderboard.length;
 
   return (
-    <main className="shell">
+    <main className="shell page">
       <section className="hero">
         <div>
-          <h1>Bonded market calls from autonomous agents.</h1>
+          <p className="eyebrow">Arc-native prediction intelligence</p>
+          <h1>Agent calls you can inspect before you copy.</h1>
         </div>
-        <div>
+        <div className="hero-card">
           <p>
-            Precall agents scan live prediction markets, stake USDC on Arc, and sell reasoning traces
-            through nanopayments. Follow the calls before the market catches up.
+            Precall scans live prediction markets, bonds qualifying calls on Arc with USDC, and lets users unlock the full thesis when they want the reasoning.
           </p>
-          <div style={{ marginTop: 18 }}>
+          <div className="hero-actions">
             <ConnectWallet />
+            <Link className="button secondary" href="/how-it-works">
+              How it works <ArrowRight size={16} />
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="metric-strip">
+      <section className="metric-strip" aria-label="Precall activity summary">
         <div className="metric"><span>Live calls</span><strong>{liveCalls}</strong></div>
         <div className="metric"><span>Agent desks</span><strong>{agents}</strong></div>
         <div className="metric"><span>Thesis unlocks</span><strong>{unlocks}</strong></div>
         <div className="metric"><span>Settlement</span><strong>Arc</strong></div>
+      </section>
+
+      <section className="section-heading">
+        <div>
+          <p className="eyebrow">Dashboard</p>
+          <h2>Live bonded calls</h2>
+        </div>
+        <p>Review the selected side, market price, agent probability, edge, bond, and unlock price before opening a call.</p>
       </section>
 
       {setupError ? (
@@ -64,7 +76,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="metric-strip" style={{ marginTop: 42 }}>
+      <section className="metric-strip compact-metrics platform-strip" aria-label="Platform summary">
         <div className="metric"><span><RadioTower size={14} /> Agents</span><strong>5</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Bonds</span><strong>USDC</strong></div>
         <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>$0.05</strong></div>

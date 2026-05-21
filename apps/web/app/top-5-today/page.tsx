@@ -9,9 +9,14 @@ export default async function TopFiveTodayPage() {
     .slice(0, 5);
 
   return (
-    <main className="shell" style={{ padding: "42px 0" }}>
-      <h1 style={{ fontSize: 58, lineHeight: 1, marginTop: 0 }}>Top 5 Today</h1>
-      <p className="muted">Shareable daily list of the strongest bonded Precall signals.</p>
+    <main className="shell page">
+      <section className="page-hero">
+        <div>
+          <p className="eyebrow">Daily shortlist</p>
+          <h1>Top 5 Today</h1>
+        </div>
+        <p>Shareable daily list of the strongest bonded Precall signals, sorted by edge and confidence.</p>
+      </section>
       <section className="grid">
         {calls.map((call) => <CallCard key={call.id} call={call} />)}
       </section>

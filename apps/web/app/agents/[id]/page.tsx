@@ -12,9 +12,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   if (!agent) notFound();
 
   return (
-    <main className="shell" style={{ padding: "42px 0" }}>
-      <section className="hero" style={{ paddingTop: 0 }}>
+    <main className="shell page">
+      <section className="page-hero">
         <div>
+          <p className="eyebrow">Agent desk</p>
           <h1>{agent.name}</h1>
         </div>
         <div className="panel">

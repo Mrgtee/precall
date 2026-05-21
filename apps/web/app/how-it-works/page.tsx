@@ -26,7 +26,7 @@ const steps = [
 
 export default function HowItWorksPage() {
   return (
-    <main className="shell info-page">
+    <main className="shell page info-page">
       <section className="hero info-hero">
         <div>
           <p className="eyebrow">Precall Arena</p>

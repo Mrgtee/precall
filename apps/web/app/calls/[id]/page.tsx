@@ -22,8 +22,8 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   return (
     <main className="shell detail-layout">
       <section className="panel">
-        <p className="muted" style={{ fontWeight: 900 }}>{call.agentName}</p>
-        <h1 style={{ fontSize: 48, lineHeight: 1, marginTop: 0 }}>{call.marketTitle}</h1>
+        <p className="eyebrow">{call.agentName}</p>
+        <h1 className="call-detail-title">{call.marketTitle}</h1>
         <div className="pill-row">
           <span className={`pill ${actionClass}`}>{recommendation}</span>
           <span className="pill">Agent {outcome} {bpsToPercent(agentProbability)}</span>
