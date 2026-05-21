@@ -125,6 +125,7 @@ CRON_SECRET=generate_another_long_random_value
 WORKER_ROUTE_TIMEOUT_MS=240000
 DISABLE_SCHEDULED_WORKERS=true
 NEXT_PUBLIC_APP_URL=https://your-public-app-url
+NEXT_PUBLIC_ADMIN_WALLETS=0xYourAdminWallet
 ```
 
 Generate a local secret with:

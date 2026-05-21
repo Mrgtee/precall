@@ -1,21 +1,19 @@
-import { Terminal } from "lucide-react";
+import { AdminConsole } from "../../components/admin-console";
+
+export const dynamic = "force-dynamic";
 
 export default function AdminPage() {
   return (
     <main className="shell" style={{ padding: "42px 0" }}>
-      <h1 style={{ fontSize: 58, lineHeight: 1, marginTop: 0 }}>Admin runner</h1>
-      <section className="panel">
-        <h2><Terminal size={20} /> Real agent cycle</h2>
-        <p className="muted">
-          The production path is the worker CLI so secrets stay server-side and failures are visible.
-        </p>
-        <pre>{`npm run worker -- health
-npm run worker -- register-agent
-npm run worker -- run-once`}</pre>
+      <section className="hero" style={{ paddingTop: 0 }}>
+        <div>
+          <h1>Admin arena.</h1>
+        </div>
         <p>
-          After registering the onchain council agent, set <code>DEFAULT_ONCHAIN_AGENT_ID</code> in <code>.env</code>.
+          Operate live Precall agents from a whitelisted wallet. Actions are signed in your wallet and executed server-side with production secrets.
         </p>
       </section>
+      <AdminConsole />
     </main>
   );
 }

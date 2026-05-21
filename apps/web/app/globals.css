@@ -294,6 +294,51 @@ textarea {
   color: var(--ink);
 }
 
+
+.admin-console {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-gate {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.admin-gate.success {
+  background: #f6ffe3;
+}
+
+.admin-gate.warning,
+.admin-action.danger {
+  background: #fff6ef;
+}
+
+.admin-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-action {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.admin-action h3,
+.admin-output h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-output pre {
+  max-height: 520px;
+  overflow: auto;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -328,6 +373,7 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .admin-actions,
   .metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
