@@ -159,18 +159,22 @@ PATH="$HOME/.local/bin:$PATH" arc-canteen status
 
 Website: https://arc-node.thecanteenapp.com/
 
-## Optional Circle/x402 Enrichment
+## Optional Circle Gateway/x402 Paid Evidence
 
-The app can run real market agents without paid enrichment. Turn this on only after your Circle agent wallet/x402 setup is ready:
+The app can run real market agents without paid evidence. Turn this on only after the separate Gateway/x402 buyer wallet is funded and you are comfortable with the spend limits:
 
 ```env
-ENABLE_CIRCLE_ENRICHMENT=true
-CIRCLE_CLI=/home/gtee/.local/bin/circle
-CIRCLE_WALLET_ADDRESS=0x...
-CIRCLE_CHAIN=MATIC
-CIRCLE_READ_MAX_AMOUNT=0.005
-CIRCLE_TIMEOUT_SECONDS=60
+ENABLE_CIRCLE_GATEWAY_X402=true
+CIRCLE_GATEWAY_CHAIN=arcTestnet
+CIRCLE_AGENT_PRIVATE_KEY=0x...
+CIRCLE_GATEWAY_RPC_URL=
+CIRCLE_X402_MAX_PAYMENT_USDC=0.005
+CIRCLE_X402_DAILY_BUDGET_USDC=0.10
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
+CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 ```
+
+`CIRCLE_AGENT_PRIVATE_KEY` is server-only and must never be committed or exposed as `NEXT_PUBLIC_*`. It is intentionally separate from `AGENT_OWNER_PRIVATE_KEY`: Gateway/x402 pays premium API sellers, while the Arc owner key publishes bonded calls.
 
 ## Final Smoke Test
 

@@ -20,7 +20,7 @@ Prediction-market advice is usually cheap talk. Precall makes agent calls audita
 - Canonical probability semantics: `yesProbabilityBps` always means probability that YES/first outcome happens.
 - Quality gates for liquidity, spread, edge, confidence, and suggested size.
 - Arc Testnet registry for agent registration, bonded calls, thesis unlocks, and resolution events.
-- Circle/USDC tracking for agent bonds, user thesis unlocks, and optional x402 evidence payments.
+- Circle Agent Stack tracking for agent USDC bonds, user thesis unlocks, and optional Gateway/x402 paid evidence calls.
 - Hosted Postgres persistence with Drizzle migrations.
 - Wallet-signed follows and feedback for new user traction events.
 - `/demo` page that shows live config booleans, latest run, latest call, latest unlock, and Circle activity without faking empty states.
@@ -37,7 +37,7 @@ Prediction-market advice is usually cheap talk. Precall makes agent calls audita
 - `apps/web` - Next.js public arena, call pages, admin console, demo page, leaderboard, wallet unlocks, follows, feedback, and share routes.
 - `apps/worker` - Node runner for market discovery, eligibility filtering, evidence context, separate role model calls, publishing, expiry, and resolution.
 - `packages/contracts` - Foundry Solidity registry deployed on Arc Testnet.
-- `packages/shared` - Drizzle schema, migrations, Polymarket adapters, Circle enrichment, scoring, market eligibility, contract ABI, and shared types.
+- `packages/shared` - Drizzle schema, migrations, Polymarket adapters, Circle Gateway/x402 buyer client, evidence providers, scoring, market eligibility, contract ABI, and shared types.
 
 ## Setup
 
@@ -90,14 +90,16 @@ Useful hardening controls:
 - `MODEL_RETRY_COUNT=2`
 - `ALLOW_PUBLISH_FILTERED_RUN=false`
 
-Optional Circle/x402 enrichment:
+Optional Circle Gateway/x402 paid evidence:
 
-- `ENABLE_CIRCLE_ENRICHMENT=false`
-- `CIRCLE_CLI=/path/to/circle`
-- `CIRCLE_WALLET_ADDRESS=0x...`
-- `CIRCLE_CHAIN=MATIC`
-- `CIRCLE_READ_MAX_AMOUNT=0.005`
-- `CIRCLE_TIMEOUT_SECONDS=60`
+- `ENABLE_CIRCLE_GATEWAY_X402=false` - master switch; when false the worker never attempts paid API calls.
+- `CIRCLE_GATEWAY_CHAIN=arcTestnet` - Gateway SDK chain name used by the buyer key.
+- `CIRCLE_AGENT_PRIVATE_KEY=` - server-only buyer key for Gateway/x402 payments; do not reuse `AGENT_OWNER_PRIVATE_KEY` and never expose it as `NEXT_PUBLIC_*`.
+- `CIRCLE_GATEWAY_RPC_URL=` - optional Gateway RPC override; otherwise the Arc RPC is reused when appropriate.
+- `CIRCLE_X402_MAX_PAYMENT_USDC=0.005` - per-request spend cap.
+- `CIRCLE_X402_DAILY_BUDGET_USDC=0.10` - daily paid-evidence budget.
+- `CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one` - comma-separated x402 seller allowlist.
+- `CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25` - minimum Gateway balance before any paid request.
 
 ## Contract Deployment
 
@@ -137,13 +139,13 @@ npm run worker -- resolve
 
 ## How Precall Uses Circle Agent Stack
 
-Precall does not just generate text. The agent uses Circle-powered financial rails:
+Precall does not just generate text. The agent uses Circle-powered financial rails across three clearly separated rails:
 
-- Agents use USDC working capital to bond calls on Arc.
-- Users pay USDC unlocks on Arc to read full reasoning traces.
-- Optional x402 enrichment lets the agent pay for premium social/news evidence.
-- `circle_actions` tracks real `bond_call`, `unlock_thesis`, and `x402_evidence_payment` events.
-- `/demo` and call pages show Circle status, USDC volumes, Arc tx links, and disabled states honestly.
+- Public market data: Polymarket Gamma/CLOB provide free market metadata, prices, spreads, and depth. Precall never labels these public requests as paid.
+- Paid agent evidence: when `ENABLE_CIRCLE_GATEWAY_X402=true`, the worker uses `@circle-fin/x402-batching` GatewayClient with `CIRCLE_AGENT_PRIVATE_KEY` to pay allowlisted premium APIs such as AISA (`api.aisa.one`) using USDC nanopayments. Host allowlists, per-request caps, daily budgets, and minimum Gateway balance checks run before every payment.
+- Settlement and accountability: agents bond calls with USDC on Arc, users unlock reasoning with USDC on Arc, and `circle_actions` records normalized `x402_api_payment`, `arc_bond`, and `thesis_unlock` events.
+
+If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
 
 ## Demo Flow
 

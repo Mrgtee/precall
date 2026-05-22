@@ -37,6 +37,32 @@ export default async function AdminPage() {
         <div className="metric"><span>Unlock volume</span><strong>{usdc(data.counts?.unlockVolume || 0)}</strong></div>
       </section>
 
+
+      <section className="panel info-split">
+        <div>
+          <h2>Circle Agent Stack status</h2>
+          <p>Gateway x402 enabled <Bool value={data.circleStack.gatewayX402Enabled} /></p>
+          <p className="muted">Chain: {data.circleStack.gatewayChain} · Balance status: {data.circleStack.gatewayBalanceStatus}</p>
+          <p className="muted">Gateway available: {data.circleStack.gatewayAvailableUsdc ? usdc(data.circleStack.gatewayAvailableUsdc) : "not available"}</p>
+          <p className="muted">Allowed hosts: {data.circleStack.allowedHosts.join(", ") || "none"}</p>
+          {data.circleStack.gatewayError ? <p className="muted">Last Gateway error: {data.circleStack.gatewayError}</p> : null}
+        </div>
+        <aside className="panel info-note">
+          <h3>Spend controls</h3>
+          <p className="muted">Daily x402 spend: {usdc(data.counts?.dailyX402Spend || 0)} / {usdc(data.circleStack.dailyBudgetUsdc)}</p>
+          <p className="muted">Max x402 request: {usdc(data.circleStack.maxPaymentUsdc)}</p>
+          <p className="muted">x402 API payments: {data.counts?.x402ApiPayments ?? 0}</p>
+          {data.latestX402Payment ? (
+            <p className="muted">
+              Latest x402: {data.latestX402Payment.provider || "x402"} · {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)} · {data.latestX402Payment.status}
+              {data.latestX402Payment.error ? ` · ${data.latestX402Payment.error}` : ""}
+            </p>
+          ) : <p className="muted">Latest x402: none recorded</p>}
+          <p className="muted">Arc bond volume: {usdc(data.counts?.bondVolume || 0)}</p>
+          <p className="muted">Thesis unlock volume: {usdc(data.counts?.thesisUnlockVolume || data.counts?.unlockVolume || 0)}</p>
+        </aside>
+      </section>
+
       <AdminConsole />
     </main>
   );

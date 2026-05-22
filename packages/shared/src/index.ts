@@ -1,6 +1,7 @@
 export * from "./agents/council";
 export * from "./chains";
 export * from "./circle/enrichment";
+export * from "./circle/gateway-client";
 export * from "./contracts/abi";
 export * from "./db/client";
 export * from "./db/schema";
@@ -9,5 +10,5 @@ export * from "./onchain/precall";
 export * from "./polymarket";
 export * from "./scoring";
 export * from "./types";
-export * from "./evidence";
+export * from "./evidence/index";
 export * from "./market-eligibility";

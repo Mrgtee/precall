@@ -4,7 +4,7 @@ import { ArrowRight, BadgeDollarSign, Bot, ChartCandlestick, ExternalLink, LockK
 const steps = [
   {
     title: "Agents scan live markets",
-    body: "Precall reads live Polymarket market data, prices, liquidity, spreads, and public evidence. It does not use fake fixtures for published calls.",
+    body: "Precall reads free public Polymarket market data, prices, liquidity, and spreads. If Gateway/x402 is enabled, the agent can also pay allowlisted premium APIs for extra evidence before it reasons.",
     icon: <ChartCandlestick size={22} />,
   },
   {
@@ -19,7 +19,7 @@ const steps = [
   },
   {
     title: "Users unlock the thesis",
-    body: "Anyone can browse the headline signal for free. To see the full reasoning trace, evidence, counterarguments, and sizing logic, users pay a tiny USDC unlock on Arc. Optional x402-paid evidence is labeled only when real enrichment is enabled.",
+    body: "Anyone can browse the headline signal for free. To see the full reasoning trace, evidence, counterarguments, and sizing logic, users pay a tiny USDC unlock on Arc. x402-paid evidence is labeled only when a real Gateway payment succeeded.",
     icon: <LockKeyhole size={22} />,
   },
 ];
@@ -70,6 +70,8 @@ export default function HowItWorksPage() {
           <p className="muted">Browsing is free. Unlocking a thesis requires a wallet on Arc Testnet with USDC.</p>
           <h3><BadgeDollarSign size={18} /> What you pay</h3>
           <p className="muted">Each thesis shows its unlock price before you sign. Current unlocks are tiny USDC nanopayments.</p>
+          <h3><ShieldCheck size={18} /> What agents pay</h3>
+          <p className="muted">Agents can spend capped Gateway/x402 USDC on premium evidence, then bond only quality-passing calls on Arc.</p>
         </aside>
       </section>
 

@@ -8,10 +8,19 @@ export type EvidenceSourceType =
   | "polymarket_market"
   | "polymarket_orderbook"
   | "circle_x402_social"
-  | "verified_web"
-  | "manual_admin_note";
+  | "circle_x402_news"
+  | "free_web"
+  | "admin_note";
 
-export type CircleActionType = "bond_call" | "unlock_thesis" | "x402_evidence_payment";
+export type CircleActionType =
+  | "x402_api_payment"
+  | "arc_bond"
+  | "thesis_unlock"
+  | "gateway_deposit"
+  | "gateway_withdrawal"
+  | "bond_call"
+  | "unlock_thesis"
+  | "x402_evidence_payment";
 
 export interface PolymarketMarket {
   source: "polymarket";
@@ -50,11 +59,18 @@ export interface MarketResolution {
 export interface EvidenceItemInput {
   evidenceId: string;
   sourceType: EvidenceSourceType;
+  provider: string;
   sourceUrl: string;
   title: string;
   excerpt: string;
   credibilityScore: number;
+  fetchedAt: string;
   capturedAt: string;
+  paid: boolean;
+  paymentAmountUsdc?: string | undefined;
+  paymentNetwork?: string | undefined;
+  paymentRef?: string | undefined;
+  txHash?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
 }
 

@@ -16,11 +16,13 @@ Precall directly targets the hackathon theme: agents as market participants. The
 
 ## Circle / Arc Usage
 
-- Arc Testnet is the settlement and reputation layer.
-- Arc USDC is used for call bonds and thesis unlock payments.
+- Public market data comes from free Polymarket Gamma/CLOB endpoints and is not presented as paid.
+- Paid agent evidence uses Circle Gateway/x402 through `@circle-fin/x402-batching` with a separate server-only `CIRCLE_AGENT_PRIVATE_KEY`. The first configured seller provider is AISA social evidence on `api.aisa.one`.
+- Spending controls run before every paid request: seller host allowlist, per-request max, daily USDC budget, and minimum Gateway balance.
+- Arc Testnet is the settlement and reputation layer. Arc USDC is used for call bonds and thesis unlock payments.
 - The registry emits call, unlock, resolution, bond-return, and bond-slash events.
-- `circle_actions` tracks real Circle-powered actions: `bond_call`, `unlock_thesis`, and `x402_evidence_payment`.
-- Optional Circle/x402 enrichment is visible in health/demo/status panels and disabled honestly when not configured.
+- `circle_actions` tracks real Circle-powered actions: `x402_api_payment`, `arc_bond`, and `thesis_unlock`, while legacy rows are still summarized safely.
+- If Gateway/x402 is disabled or fails, Precall shows that honestly, records the failure when applicable, and continues with free evidence only.
 
 ## Agentic Sophistication
 
@@ -33,6 +35,12 @@ Precall runs separate role prompts for:
 - `Skeptic` - adversarial review.
 
 Publishing requires Skeptic plus at least four valid votes. Every vote must reference supplied evidence IDs. Unknown evidence IDs are rejected. The model cannot invent source URLs.
+
+## How Precall Uses Circle Agent Stack
+
+The demo line is: "The agent does not just generate text. It uses Circle-powered financial rails: it pays for signal through Gateway/x402 when enabled, bonds its call with USDC on Arc, and sells reasoning access through USDC unlocks."
+
+For judges, show the `/demo` Circle proof section. It displays Gateway enabled status, chain, allowed hosts, daily x402 spend, latest x402 payment/error, latest Arc bond tx, latest thesis unlock tx, and total Circle-powered activity. Empty states are real, not filler.
 
 ## Product Honesty
 
@@ -61,7 +69,7 @@ Frame these as real testnet activity, not inflated production traction.
 
 ## Three-Minute Video Script
 
-1. Open `/demo` and show system status: DB, model, Arc registry, Circle/x402, counts, latest run, and latest unlock.
+1. Open `/demo` and show system status: DB, model, Arc registry, Circle Gateway/x402, counts, latest run, latest paid evidence payment, latest Arc bond, and latest unlock.
 2. Open `/admin`, connect the whitelisted wallet, run health, then run the agent.
 3. If a call publishes, show the Arc bond tx and the call page. If no call publishes, show filtered reasons and explain quality gates.
 4. On the call page, explain YES probability versus selected-side probability, evidence IDs, confidence, edge, and suggested size.
@@ -97,7 +105,7 @@ GitHub: https://github.com/Mrgtee/precall
 ## Known Limitations
 
 - Only strict YES/NO markets are supported in V1.
-- x402 is optional and only visible as active when real credentials are configured and calls succeed.
+- Gateway/x402 is optional and only visible as active when real credentials are configured and paid API calls succeed.
 - User trade execution is manual through Polymarket links.
 - A new `PrecallRegistry` deployment is required for V2 bond slashing/treasury behavior.
 - Existing historical calls can remain as legacy rows with their original registry address.

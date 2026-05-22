@@ -55,12 +55,28 @@
       "import": "./src/types.ts"
     },
     "./evidence": {
-      "types": "./src/evidence.ts",
-      "import": "./src/evidence.ts"
+      "types": "./src/evidence/index.ts",
+      "import": "./src/evidence/index.ts"
     },
     "./market-eligibility": {
       "types": "./src/market-eligibility.ts",
       "import": "./src/market-eligibility.ts"
+    },
+    "./circle/gateway-client": {
+      "types": "./src/circle/gateway-client.ts",
+      "import": "./src/circle/gateway-client.ts"
+    },
+    "./evidence/evidence-context": {
+      "types": "./src/evidence/evidence-context.ts",
+      "import": "./src/evidence/evidence-context.ts"
+    },
+    "./evidence/providers/polymarket-provider": {
+      "types": "./src/evidence/providers/polymarket-provider.ts",
+      "import": "./src/evidence/providers/polymarket-provider.ts"
+    },
+    "./evidence/providers/x402-provider": {
+      "types": "./src/evidence/providers/x402-provider.ts",
+      "import": "./src/evidence/providers/x402-provider.ts"
     }
   },
   "scripts": {
@@ -68,6 +84,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@circle-fin/x402-batching": "^3.0.4",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.7",
     "viem": "^2.31.3"

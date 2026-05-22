@@ -70,9 +70,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           await db
             .insert(circleActions)
             .values({
-              actionType: "unlock_thesis",
+              actionType: "thesis_unlock",
               walletAddress,
               amount,
+              amountUsdc: amount,
               chain: "Arc Testnet",
               txHash: latestLog.transactionHash,
               relatedCallId: call.id,

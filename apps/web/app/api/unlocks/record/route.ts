@@ -59,9 +59,10 @@ export async function POST(request: Request) {
     })
     .onConflictDoNothing();
   await db.insert(circleActions).values({
-    actionType: "unlock_thesis",
+    actionType: "thesis_unlock",
     walletAddress: body.wallet,
     amount,
+    amountUsdc: amount,
     chain: "Arc Testnet",
     txHash: body.txHash,
     relatedCallId: body.callId,

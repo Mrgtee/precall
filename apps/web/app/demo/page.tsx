@@ -36,9 +36,34 @@ export default async function DemoPage() {
 
       <section className="info-grid">
         <article className="panel info-card"><h2>System status</h2><p>DB <Bool value={data.config.database} /></p><p>Model <Bool value={data.config.model} /></p><p>Arc registry <Bool value={data.config.registry} /></p></article>
-        <article className="panel info-card"><h2>Circle stack</h2><p>x402 enrichment <Bool value={data.config.circleEnrichment} /></p><p>Circle wallet <Bool value={data.config.circleWallet} /></p><p>Unlock volume {usdc(data.counts?.unlockVolume || 0)}</p></article>
+        <article className="panel info-card"><h2>Circle stack</h2><p>Gateway x402 <Bool value={data.circleStack.gatewayX402Enabled} /></p><p>Agent key <Bool value={data.circleStack.gatewayWalletConfigured} /></p><p>x402 spend {usdc(data.counts?.x402Spend || 0)}</p></article>
         <article className="panel info-card"><h2>Resolution</h2><p>Resolved calls: {data.counts?.resolvedCalls ?? 0}</p><p>Awaiting: {data.awaitingResolution.length}</p><p className="muted">Reputation activates after resolved markets.</p></article>
         <article className="panel info-card"><h2>Latest run</h2><p>Status: {latestRun?.status || "none"}</p><p>Model: {latestRun?.model || "none"}</p><p>{latestRun?.failure ? "Failure recorded" : "No latest failure"}</p></article>
+      </section>
+
+
+      <section className="panel info-split">
+        <div>
+          <h2>Circle Agent Stack proof</h2>
+          <p className="muted">Public market data comes from Polymarket Gamma/CLOB. Paid agent evidence comes from Circle Gateway/x402 providers. Settlement uses USDC on Arc.</p>
+          {data.circleStack.gatewayX402Enabled ? (
+            <div className="pill-row">
+              <span className="pill">Gateway {data.circleStack.gatewayChain}</span>
+              <span className="pill">Daily x402 {usdc(data.counts?.dailyX402Spend || 0)} / {usdc(data.circleStack.dailyBudgetUsdc)}</span>
+              <span className="pill">Allowed {data.circleStack.allowedHosts.join(", ")}</span>
+            </div>
+          ) : (
+            <p className="muted">x402 paid evidence disabled — enable ENABLE_CIRCLE_GATEWAY_X402 and configure Circle Gateway env to activate paid API evidence.</p>
+          )}
+        </div>
+        <aside className="panel info-note">
+          <h3>Latest paid evidence</h3>
+          {data.latestX402Payment ? <p>{data.latestX402Payment.provider || "x402"} · {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)} · {data.latestX402Payment.status}</p> : <p className="muted">No x402 evidence payment recorded yet.</p>}
+          <h3>Latest Arc bond</h3>
+          {data.latestArcBond?.txHash ? <p>{usdc(data.latestArcBond.amountUsdc || data.latestArcBond.amount)} <Link href={`https://testnet.arcscan.app/tx/${data.latestArcBond.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No Arc bond action recorded yet.</p>}
+          <h3>Latest thesis unlock</h3>
+          {data.latestThesisUnlock?.txHash ? <p>{usdc(data.latestThesisUnlock.amountUsdc || data.latestThesisUnlock.amount)} <Link href={`https://testnet.arcscan.app/tx/${data.latestThesisUnlock.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No thesis unlock action recorded yet.</p>}
+        </aside>
       </section>
 
       <section className="panel info-split">

@@ -40,11 +40,14 @@ const evidence: EvidenceItemInput[] = [
   {
     evidenceId: "pm-market",
     sourceType: "polymarket_market",
+    provider: "polymarket_gamma",
     sourceUrl: "https://polymarket.com/event/will-bitcoin-hit-150k",
     title: "Market metadata",
     excerpt: "Market terms and current prices.",
     credibilityScore: 80,
+    fetchedAt: new Date().toISOString(),
     capturedAt: new Date().toISOString(),
+    paid: false,
   },
 ];
 

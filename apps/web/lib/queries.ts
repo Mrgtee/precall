@@ -1,5 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { createDb } from "@precall/shared/db/client";
+import { getGatewayBalances, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import {
   agents,
   agentRuns,
@@ -138,7 +139,11 @@ export async function getDemoData() {
     feedback: sql<number>`(select count(*)::int from ${feedback})`,
     uniqueWallets: sql<number>`(select count(distinct wallet_address)::int from ${users})`,
     unlockVolume: sql<string>`(select coalesce(sum(amount), 0)::text from ${thesisUnlocks})`,
-    bondVolume: sql<string>`(select coalesce(sum(amount), 0)::text from ${circleActions} where action_type = 'bond_call')`,
+    thesisUnlockVolume: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('thesis_unlock', 'unlock_thesis'))`,
+    bondVolume: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('arc_bond', 'bond_call'))`,
+    x402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success')`,
+    dailyX402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success' and created_at >= date_trunc('day', now()))`,
+    x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 
@@ -146,6 +151,11 @@ export async function getDemoData() {
   const latestCalls = await getCalls(10);
   const latestUnlocks = await db.query.thesisUnlocks.findMany({ orderBy: desc(thesisUnlocks.createdAt), limit: 5 });
   const latestCircleActions = await db.query.circleActions.findMany({ orderBy: desc(circleActions.createdAt), limit: 8 });
+  const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment')`, orderBy: desc(circleActions.createdAt) });
+  const latestArcBond = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('arc_bond', 'bond_call')`, orderBy: desc(circleActions.createdAt) });
+  const latestThesisUnlock = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('thesis_unlock', 'unlock_thesis')`, orderBy: desc(circleActions.createdAt) });
+  const gatewayConfig = gatewayRuntimeConfig();
+  const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
 
   return {
     counts,
@@ -155,12 +165,27 @@ export async function getDemoData() {
     resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],
     latestCircleActions,
+    latestX402Payment,
+    latestArcBond,
+    latestThesisUnlock,
+    circleStack: {
+      gatewayX402Enabled: gatewayConfig.enabled,
+      gatewayChain: gatewayConfig.chain,
+      gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
+      allowedHosts: gatewayConfig.allowedHosts,
+      maxPaymentUsdc: gatewayConfig.maxPaymentUsdc,
+      dailyBudgetUsdc: gatewayConfig.dailyBudgetUsdc,
+      minGatewayBalanceUsdc: gatewayConfig.minGatewayBalanceUsdc,
+      gatewayBalanceStatus: gatewayBalance?.status || "disabled",
+      gatewayAvailableUsdc: gatewayBalance && "gatewayAvailableUsdc" in gatewayBalance ? gatewayBalance.gatewayAvailableUsdc : undefined,
+      gatewayError: gatewayBalance?.error,
+    },
     config: {
       database: Boolean(process.env.DATABASE_URL),
       registry: Boolean(process.env.PRECALL_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS),
       model: Boolean(process.env.OPENAI_API_KEY),
-      circleEnrichment: process.env.ENABLE_CIRCLE_ENRICHMENT === "true",
-      circleWallet: Boolean(process.env.CIRCLE_WALLET_ADDRESS),
+      circleEnrichment: gatewayConfig.enabled,
+      circleWallet: Boolean(gatewayConfig.privateKey),
     },
   };
 }

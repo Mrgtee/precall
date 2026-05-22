@@ -52,14 +52,27 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <section style={{ marginTop: 28 }}>
           <h2>Verified public evidence</h2>
           <div className="grid">
-            {evidence.map((item) => (
-              <article className="panel" key={item.id}>
-                <strong>{item.title}</strong>
-                <p className="muted"><span className="status-chip">{item.sourceType}</span> Score {item.credibilityScore} · {new Date(item.capturedAt).toLocaleString()}</p>
-                <p className="muted">{item.excerpt}</p>
-                <Link href={item.sourceUrl} target="_blank">Source <ExternalLink size={14} /></Link>
-              </article>
-            ))}
+            {evidence.map((item) => {
+              const observedAt = item.fetchedAt || item.capturedAt;
+              return (
+                <article className="panel" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <p className="muted">
+                    <span className="status-chip">{item.sourceType}</span>
+                    {item.paid ? <span className="status-chip">x402-paid evidence</span> : null}
+                    Provider {item.provider || "unknown"} · Score {item.credibilityScore} · {new Date(observedAt).toLocaleString()}
+                  </p>
+                  <p className="muted">{item.excerpt}</p>
+                  {item.paid ? (
+                    <p className="muted">
+                      Paid {usdc(item.paymentAmountUsdc)} via {item.paymentNetwork || "Circle Gateway/x402"}
+                      {item.paymentRef ? ` · reference ${item.paymentRef.slice(0, 10)}...` : ""}
+                    </p>
+                  ) : null}
+                  <Link href={item.sourceUrl} target="_blank">Source <ExternalLink size={14} /></Link>
+                </article>
+              );
+            })}
           </div>
         </section>
       </section>

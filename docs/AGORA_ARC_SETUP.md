@@ -83,4 +83,4 @@ After deployment, set `PRECALL_REGISTRY_ADDRESS`, `NEXT_PUBLIC_PRECALL_REGISTRY_
 - Provide an `OPENAI_API_KEY` from OpenAI or an OpenAI-compatible provider. For FreeModel also set `OPENAI_BASE_URL=https://api.freemodel.dev/v1` and a FreeModel model such as `gpt-5.4-mini`.
 - Create or choose a deployer/agent wallet, fund it with Arc Testnet USDC, and import it as `precall-deployer`.
 - Deploy the hardened `PrecallRegistry` with USDC and protocol treasury constructor args, then set the registry address in local and hosting environment variables.
-- Optional: provide Circle wallet/x402 credentials if paid enrichment should be enabled for live demos.
+- Optional: provide a separate Circle Gateway/x402 buyer key and spend limits if paid AISA evidence should be enabled for live demos.

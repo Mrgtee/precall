@@ -180,7 +180,14 @@ export async function insertEvidenceItems(callId: number, evidence: EvidenceItem
       credibilityScore: item.credibilityScore,
       evidenceId: item.evidenceId,
       sourceType: item.sourceType,
+      provider: item.provider,
+      fetchedAt: new Date(item.fetchedAt),
       capturedAt: new Date(item.capturedAt),
+      paid: item.paid,
+      paymentAmountUsdc: item.paymentAmountUsdc,
+      paymentNetwork: item.paymentNetwork,
+      paymentRef: item.paymentRef,
+      txHash: item.txHash,
       metadata: item.metadata,
     });
   }
@@ -222,34 +229,67 @@ export async function insertResolution(input: {
   await db().update(calls).set({ status: "resolved", statusReason: "Resolved with supported YES/NO market outcome." }).where(eq(calls.id, input.callId));
 }
 
-export async function recordCircleAction(input: {
+export type CircleActionInput = {
   actionType: CircleActionType;
+  provider?: string | undefined;
+  url?: string | undefined;
   walletAddress?: string | undefined;
   amount?: string | undefined;
+  amountUsdc?: string | undefined;
   chain?: string | undefined;
   txHash?: string | undefined;
   paymentReference?: string | undefined;
+  paymentRef?: string | undefined;
+  relatedMarketId?: string | undefined;
   relatedCallId?: number | undefined;
   agentRunId?: number | undefined;
+  relatedAgentRunId?: number | undefined;
   status?: string | undefined;
+  error?: string | undefined;
   metadata?: unknown;
-}) {
+};
+
+export function normalizeCircleActionInput(input: CircleActionInput) {
+  const amount = input.amountUsdc || input.amount || "0";
+  const paymentRef = input.paymentRef || input.paymentReference;
+  const relatedAgentRunId = input.relatedAgentRunId ?? input.agentRunId;
+  return {
+    actionType: input.actionType,
+    provider: input.provider || "",
+    url: input.url,
+    walletAddress: input.walletAddress || "",
+    amount,
+    amountUsdc: amount,
+    chain: input.chain || "Arc Testnet",
+    txHash: input.txHash,
+    paymentReference: paymentRef,
+    paymentRef,
+    relatedMarketId: input.relatedMarketId,
+    relatedCallId: input.relatedCallId,
+    agentRunId: relatedAgentRunId,
+    relatedAgentRunId,
+    status: input.status || "success",
+    error: input.error,
+    metadata: input.metadata,
+  };
+}
+
+export async function recordCircleAction(input: CircleActionInput) {
   const [row] = await db()
     .insert(circleActions)
-    .values({
-      actionType: input.actionType,
-      walletAddress: input.walletAddress || "",
-      amount: input.amount || "0",
-      chain: input.chain || "Arc Testnet",
-      txHash: input.txHash,
-      paymentReference: input.paymentReference,
-      relatedCallId: input.relatedCallId,
-      agentRunId: input.agentRunId,
-      status: input.status || "success",
-      metadata: input.metadata,
-    })
+    .values(normalizeCircleActionInput(input))
     .returning();
   return row;
+}
+
+export async function getTodayX402SpendUsdc(now = new Date()) {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  const [row] = await db()
+    .select({ total: sql<string>`coalesce(sum(${circleActions.amountUsdc}), 0)::text` })
+    .from(circleActions)
+    .where(and(eq(circleActions.actionType, "x402_api_payment"), eq(circleActions.status, "success"), sql`${circleActions.createdAt} >= ${start}`));
+  return row?.total || "0";
 }
 
 export async function adminSummary() {

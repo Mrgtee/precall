@@ -1,6 +1,7 @@
 import { buildEvidenceContext } from "@precall/shared/evidence";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
-import { fetchCircleSocialEvidence, circleEnrichmentStatus } from "@precall/shared/circle/enrichment";
+import { getGatewayBalances, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
+import { fetchAisaX402SocialEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
 import { evaluateMarketEligibility, summarizeSkipReasons } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
@@ -23,12 +24,14 @@ import {
   markExpiredCalls,
   recordAgentRun,
   recordCircleAction,
+  getTodayX402SpendUsdc,
   upsertMarket,
 } from "./repository";
 
 export async function health() {
   const thresholds = publishThresholds();
-  const circleStatus = circleEnrichmentStatus();
+  const gatewayConfig = gatewayRuntimeConfig();
+  const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
   const base = {
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -38,8 +41,16 @@ export async function health() {
     modelRetryCount: numberEnv("MODEL_RETRY_COUNT", 2),
     registryAddress: Boolean(process.env.PRECALL_REGISTRY_ADDRESS),
     circle: {
-      ...circleStatus,
-      walletConfigured: Boolean(circleStatus.walletAddress),
+      gatewayX402Enabled: gatewayConfig.enabled,
+      gatewayChain: gatewayConfig.chain,
+      gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
+      allowedHosts: gatewayConfig.allowedHosts,
+      maxPaymentUsdc: gatewayConfig.maxPaymentUsdc,
+      dailyBudgetUsdc: gatewayConfig.dailyBudgetUsdc,
+      minGatewayBalanceUsdc: gatewayConfig.minGatewayBalanceUsdc,
+      gatewayBalanceStatus: gatewayBalance?.status || "disabled",
+      gatewayAvailableUsdc: gatewayBalance && "gatewayAvailableUsdc" in gatewayBalance ? gatewayBalance.gatewayAvailableUsdc : undefined,
+      gatewayError: gatewayBalance?.error,
     },
     thresholds,
   };
@@ -119,6 +130,33 @@ export async function registerCouncilAgent() {
   return { message: "Registered Precall Council on Arc. Set DEFAULT_ONCHAIN_AGENT_ID to this value.", ...result };
 }
 
+function shouldRecordX402(result: X402EvidenceProviderResult | undefined) {
+  return Boolean(result && result.status !== "disabled");
+}
+
+async function recordX402CircleAction(input: { result: X402EvidenceProviderResult; marketId: string; agentRunId?: number | undefined }) {
+  if (!shouldRecordX402(input.result)) return;
+  await recordCircleAction({
+    actionType: "x402_api_payment",
+    provider: input.result.provider,
+    url: input.result.url,
+    amountUsdc: input.result.paymentAmountUsdc || "0",
+    chain: input.result.paymentNetwork || optionalEnv("CIRCLE_GATEWAY_CHAIN", "arcTestnet"),
+    paymentRef: input.result.paymentRef,
+    txHash: input.result.txHash,
+    relatedMarketId: input.marketId,
+    relatedAgentRunId: input.agentRunId,
+    status: input.result.status === "success" ? "success" : input.result.status,
+    error: input.result.error,
+    metadata: { evidenceCount: input.result.evidence.length },
+  });
+}
+
+function addUsdc(left: string | number, right: string | number | undefined) {
+  const total = Number(left || 0) + Number(right || 0);
+  return Number.isFinite(total) ? total.toFixed(6) : String(left);
+}
+
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
@@ -139,6 +177,7 @@ export async function runOnce() {
   });
 
   const markets = await discoverPolymarketMarkets(maxMarkets);
+  let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
   const published = [];
   const skipped = [];
   const failed = [];
@@ -168,9 +207,11 @@ export async function runOnce() {
     }
     analyzed += 1;
 
+    let x402Result: X402EvidenceProviderResult | undefined;
     try {
-      const circle = fetchCircleSocialEvidence(`${market.title} Polymarket`);
-      const evidenceContext = buildEvidenceContext({ market, snapshot, circle });
+      x402Result = await fetchAisaX402SocialEvidence({ market, snapshot, dailySpendUsdc: dailyX402SpendUsdc });
+      if (x402Result.status === "success") dailyX402SpendUsdc = addUsdc(dailyX402SpendUsdc, x402Result.paymentAmountUsdc);
+      const evidenceContext = buildEvidenceContext({ market, snapshot, x402: x402Result });
       const councilResult = await runAgentCouncilDetailed({ market, snapshot, evidence: evidenceContext });
       const call = aggregateVotes(market, snapshot, councilResult.votes, evidenceContext);
       const thresholdFailures = publishThresholdFailures(call, thresholds);
@@ -185,18 +226,7 @@ export async function runOnce() {
         latencyMs: councilResult.totalLatencyMs,
       });
 
-      if (circle.enabled) {
-        await recordCircleAction({
-          actionType: "x402_evidence_payment",
-          walletAddress: circle.walletAddress,
-          amount: circle.amount || "0",
-          chain: circle.chain || "x402",
-          paymentReference: circle.paymentReference,
-          agentRunId: candidateRun?.id,
-          status: circle.status,
-          metadata: { maxAmount: circle.maxAmount, error: circle.error, evidenceCount: circle.evidence.length },
-        });
-      }
+      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
 
       if (!publishable) {
         skipped.push({ marketId: market.marketId, title: market.title, reasons: thresholdFailures, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps, suggestedSizeBps: call.suggestedSizeBps });
@@ -224,7 +254,7 @@ export async function runOnce() {
 
       if (txHash) {
         await recordCircleAction({
-          actionType: "bond_call",
+          actionType: "arc_bond",
           walletAddress: optionalEnv("AGENT_OWNER_WALLET", ""),
           amount: bondAmount,
           chain: "Arc Testnet",
@@ -248,7 +278,8 @@ export async function runOnce() {
       published.push({ id: row.id, onchainCallId, market: market.title, txHash, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot }, failure: message });
+      const failedRun = await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot }, failure: message });
+      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
       failed.push({ marketId: market.marketId, title: market.title, stage: "analysis_or_publish", error: message });
       continue;
     }
@@ -283,7 +314,7 @@ export async function publishStoredRun(runId: number) {
   const onchain = await publishAggregatedCallOnchain({ call, onchainAgentId: BigInt(onchainAgentId), bondAmountUsdc: bondAmount, unlockPriceUsdc: unlockPrice });
   const row = await insertPublishedCall({ agentId: council.id, onchainCallId: onchain.onchainCallId ? Number(onchain.onchainCallId) : undefined, txHash: onchain.txHash, registryAddress, call, bondAmount, unlockPrice, copyUrl: polymarketCopyUrl(call.market) });
 
-  await recordCircleAction({ actionType: "bond_call", walletAddress: optionalEnv("AGENT_OWNER_WALLET", ""), amount: bondAmount, chain: "Arc Testnet", txHash: onchain.txHash, relatedCallId: row.id, status: "success", metadata: { sourceAgentRunId: runId, onchainCallId: onchain.onchainCallId?.toString(), registryAddress } });
+  await recordCircleAction({ actionType: "arc_bond", walletAddress: optionalEnv("AGENT_OWNER_WALLET", ""), amount: bondAmount, chain: "Arc Testnet", txHash: onchain.txHash, relatedCallId: row.id, status: "success", metadata: { sourceAgentRunId: runId, onchainCallId: onchain.onchainCallId?.toString(), registryAddress } });
   await recordAgentRun({ status: "published-stored", model: sourceRun.model, inputs: { sourceAgentRunId: runId }, outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)) }, publishedCallId: row.id });
   return { id: row.id, sourceAgentRunId: runId, onchainCallId: onchain.onchainCallId, market: call.market.title, action: call.action, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps, txHash: onchain.txHash };
 }

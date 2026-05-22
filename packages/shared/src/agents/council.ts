@@ -149,7 +149,7 @@ function buildPrompt(input: {
   agent: { name: AgentName; role: string };
 }) {
   const evidence = input.evidence
-    .map((item) => `- ${item.evidenceId} [${item.sourceType}, score ${item.credibilityScore}, ${item.capturedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
+    .map((item) => `- ${item.evidenceId} [${item.sourceType}, provider ${item.provider}, paid ${item.paid ? "yes" : "no"}, score ${item.credibilityScore}, ${item.fetchedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
     .join("\n");
 
   return `
