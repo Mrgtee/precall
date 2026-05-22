@@ -14,6 +14,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
+  if (process.env.DISABLE_SCHEDULED_WORKERS === "true") {
+    return NextResponse.json({ ok: true, disabled: true, result: "Vercel cron is disabled because Railway owns scheduled worker execution." });
+  }
+
   const result = await runWorkerCommand("resolve");
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

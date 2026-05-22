@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "TMPDIR=/tmp tsx src/index.ts",
+    "serve": "TMPDIR=/tmp tsx src/server.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

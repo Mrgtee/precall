@@ -186,6 +186,8 @@ export async function getDemoData() {
       model: Boolean(process.env.OPENAI_API_KEY),
       circleEnrichment: gatewayConfig.enabled,
       circleWallet: Boolean(gatewayConfig.privateKey),
+      workerTriggerConfigured: Boolean(process.env.WORKER_TRIGGER_URL && process.env.WORKER_TRIGGER_SECRET),
+      scheduledWorkersDisabled: process.env.DISABLE_SCHEDULED_WORKERS === "true",
     },
   };
 }

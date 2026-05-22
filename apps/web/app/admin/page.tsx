@@ -28,6 +28,7 @@ export default async function AdminPage() {
         <div className="metric"><span>Model</span><strong><Bool value={data.config.model} /></strong></div>
         <div className="metric"><span>Arc registry</span><strong><Bool value={data.config.registry} /></strong></div>
         <div className="metric"><span>x402</span><strong><Bool value={data.config.circleEnrichment} /></strong></div>
+        <div className="metric"><span>Railway trigger</span><strong><Bool value={data.config.workerTriggerConfigured} /></strong></div>
       </section>
 
       <section className="metric-strip compact-metrics">
@@ -44,6 +45,7 @@ export default async function AdminPage() {
           <p>Gateway x402 enabled <Bool value={data.circleStack.gatewayX402Enabled} /></p>
           <p className="muted">Chain: {data.circleStack.gatewayChain} · Balance status: {data.circleStack.gatewayBalanceStatus}</p>
           <p className="muted">Gateway available: {data.circleStack.gatewayAvailableUsdc ? usdc(data.circleStack.gatewayAvailableUsdc) : "not available"}</p>
+          <p className="muted">Worker execution: {data.config.workerTriggerConfigured ? "proxied to Railway" : data.config.scheduledWorkersDisabled ? "disabled on Vercel" : "local Vercel runtime"}</p>
           <p className="muted">Allowed hosts: {data.circleStack.allowedHosts.join(", ") || "none"}</p>
           {data.circleStack.gatewayError ? <p className="muted">Last Gateway error: {data.circleStack.gatewayError}</p> : null}
         </div>
