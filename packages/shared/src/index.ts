@@ -9,3 +9,5 @@ export * from "./onchain/precall";
 export * from "./polymarket";
 export * from "./scoring";
 export * from "./types";
+export * from "./evidence";
+export * from "./market-eligibility";

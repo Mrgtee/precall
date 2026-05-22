@@ -1,54 +1,139 @@
-import { optionalEnv, requireEnv } from "../env";
-import type { AgentName, AgentVote, MarketSnapshot, PolymarketMarket } from "../types";
+import { numberEnv, optionalEnv, requireEnv } from "../env";
+import { validateEvidenceIds } from "../evidence";
+import type { AgentCouncilResult, AgentFailure, AgentName, AgentVote, EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../types";
+import { clampBps } from "../scoring";
 
-const AGENTS: { name: AgentName; role: string }[] = [
+const AGENTS: { name: AgentName; role: string; required?: boolean }[] = [
   { name: "MacroScout", role: "macro, policy, rates, elections, and public-event priors" },
   { name: "NewsHawk", role: "fresh news and event-catalyst interpretation" },
   { name: "CrowdPulse", role: "social narrative and attention-cycle analysis" },
   { name: "BookWatcher", role: "market microstructure, liquidity, spread, and price action" },
-  { name: "Skeptic", role: "adversarial review and reasons the trade is wrong" },
+  { name: "Skeptic", role: "adversarial review and reasons the trade is wrong", required: true },
 ];
 
 export async function runAgentCouncil(input: {
   market: PolymarketMarket;
   snapshot: MarketSnapshot;
-  extraEvidence?: string[];
+  evidence: EvidenceItemInput[];
 }): Promise<AgentVote[]> {
-  const apiKey = requireEnv("OPENAI_API_KEY");
+  return (await runAgentCouncilDetailed(input)).votes;
+}
+
+export async function runAgentCouncilDetailed(input: {
+  market: PolymarketMarket;
+  snapshot: MarketSnapshot;
+  evidence: EvidenceItemInput[];
+}): Promise<AgentCouncilResult> {
   const model = optionalEnv("OPENAI_MODEL", "gpt-4.1-mini");
   const baseUrl = optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
-  const prompt = buildPrompt(input);
+  const startedAt = Date.now();
+  const votes: AgentVote[] = [];
+  const failures: AgentFailure[] = [];
 
-  const response = await fetch(chatCompletionsUrl(baseUrl), {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.25,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Precall Arena's agent council. Return only strict JSON. Do not invent market data. If evidence is weak, choose WATCH or sharply lower confidence. Never recommend a side just because it is cheaper; name the actual outcome side in every thesis.",
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Model provider request failed ${response.status}: ${body.slice(0, 500)}`);
+  for (const agent of AGENTS) {
+    const agentStartedAt = Date.now();
+    try {
+      const vote = await runSingleAgent({ ...input, agent, model, baseUrl });
+      votes.push(vote);
+    } catch (error) {
+      failures.push({
+        agent: agent.name,
+        error: error instanceof Error ? error.message : String(error),
+        latencyMs: Date.now() - agentStartedAt,
+        retryCount: numberEnv("MODEL_RETRY_COUNT", 2),
+      });
+    }
   }
 
-  const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Model provider returned no content.");
-  return validateVotes(JSON.parse(content) as unknown, input.market);
+  if (!votes.some((vote) => vote.agent === "Skeptic")) {
+    throw new Error(`Skeptic agent failed; refusing to publish. Failures: ${JSON.stringify(failures)}`);
+  }
+  if (votes.length < 4) {
+    throw new Error(`Only ${votes.length} valid agent votes returned; refusing to publish. Failures: ${JSON.stringify(failures)}`);
+  }
+
+  return {
+    votes,
+    failures,
+    model,
+    baseUrl,
+    totalLatencyMs: Date.now() - startedAt,
+  };
+}
+
+async function runSingleAgent(input: {
+  market: PolymarketMarket;
+  snapshot: MarketSnapshot;
+  evidence: EvidenceItemInput[];
+  agent: { name: AgentName; role: string };
+  model: string;
+  baseUrl: string;
+}) {
+  const apiKey = requireEnv("OPENAI_API_KEY");
+  const retries = numberEnv("MODEL_RETRY_COUNT", 2);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const startedAt = Date.now();
+    try {
+      const content = await requestAgentVote(input, apiKey, attempt);
+      return validateVote(JSON.parse(content) as unknown, input.agent.name, input.evidence, Date.now() - startedAt, attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) await delay(Math.min(2_000 * 2 ** attempt, 8_000));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function requestAgentVote(input: {
+  market: PolymarketMarket;
+  snapshot: MarketSnapshot;
+  evidence: EvidenceItemInput[];
+  agent: { name: AgentName; role: string };
+  model: string;
+  baseUrl: string;
+}, apiKey: string, attempt: number) {
+  const timeoutMs = numberEnv("MODEL_TIMEOUT_MS", 45_000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(chatCompletionsUrl(input.baseUrl), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: input.model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are one specialized Precall market agent. Return strict JSON only. Do not invent source URLs or market data. Use only supplied evidence IDs. yesProbabilityBps always means probability that the first listed/YES outcome happens, even if action is BUY_NO. If evidence is weak, choose WATCH or lower confidence.",
+          },
+          { role: "user", content: buildPrompt(input) },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Model provider request failed ${response.status} on attempt ${attempt + 1}: ${body.slice(0, 500)}`);
+    }
+
+    const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Model provider returned no content.");
+    return content;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function chatCompletionsUrl(baseUrl: string) {
@@ -60,104 +145,72 @@ function chatCompletionsUrl(baseUrl: string) {
 function buildPrompt(input: {
   market: PolymarketMarket;
   snapshot: MarketSnapshot;
-  extraEvidence?: string[];
+  evidence: EvidenceItemInput[];
+  agent: { name: AgentName; role: string };
 }) {
-  const agentList = AGENTS.map((agent) => `- ${agent.name}: ${agent.role}`).join("\n");
-  const primaryOutcome = input.market.outcomes[0] || "YES";
-  const secondaryOutcome = input.market.outcomes[1] || "NO";
+  const evidence = input.evidence
+    .map((item) => `- ${item.evidenceId} [${item.sourceType}, score ${item.credibilityScore}, ${item.capturedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
+    .join("\n");
+
   return `
-Analyze this live prediction market. Produce exactly one vote for each agent below.
+You are ${input.agent.name}: ${input.agent.role}.
 
-Important action mapping:
-- BUY_YES means buy the first listed outcome: ${primaryOutcome}
-- BUY_NO means buy the second listed outcome: ${secondaryOutcome}
-- WATCH means no trade because the evidence, edge, liquidity, spread, or confidence is not good enough
-For non-Yes/No markets, do not write YES or NO in the thesis unless those are the actual outcome names. Name the side: ${primaryOutcome} or ${secondaryOutcome}.
+Analyze this STRICT YES/NO prediction market. If it is not a clean YES/NO market, return WATCH.
 
-Agents:
-${agentList}
+Canonical probability rule:
+- yesProbabilityBps must always mean probability that YES / first outcome happens.
+- BUY_YES means YES is underpriced.
+- BUY_NO means NO is underpriced, but yesProbabilityBps must still be the YES probability.
+- Never return selected-side probability as yesProbabilityBps for BUY_NO.
 
 Market:
 Title: ${input.market.title}
 Description: ${input.market.description || "No description provided"}
 URL: ${input.market.url}
 Outcomes: ${input.market.outcomes.join(", ")}
-Current ${primaryOutcome} price bps: ${input.snapshot.yesPriceBps}
-Current ${secondaryOutcome} price bps: ${input.snapshot.noPriceBps}
+Current YES price bps: ${input.snapshot.yesPriceBps}
+Current NO price bps: ${input.snapshot.noPriceBps}
 Spread bps: ${input.snapshot.spreadBps}
 Liquidity USD: ${input.market.liquidityUsd}
 Volume 24h USD: ${input.market.volume24hUsd}
 Close time: ${input.market.closeTime || "unknown"}
-Extra evidence:
-${(input.extraEvidence || []).map((item) => `- ${item}`).join("\n") || "- none"}
+
+Verified evidence. Use only these evidence IDs. Do not create URLs:
+${evidence}
 
 Return JSON with this exact shape:
 {
-  "votes": [
-    {
-      "agent": "MacroScout",
-      "probabilityBps": 0-10000,
-      "confidenceBps": 0-10000,
-      "action": "BUY_YES" | "BUY_NO" | "WATCH",
-      "thesis": "specific concise thesis",
-      "risks": ["specific risk"],
-      "evidence": [{"sourceUrl":"url","title":"source title","excerpt":"why it matters","credibilityScore":0-100}]
-    }
-  ]
+  "agent": "${input.agent.name}",
+  "yesProbabilityBps": 0-10000,
+  "confidenceBps": 0-10000,
+  "action": "BUY_YES" | "BUY_NO" | "WATCH",
+  "thesis": "specific concise thesis tied to evidence IDs",
+  "risks": ["specific risk"],
+  "evidenceIds": ["pm-market", "pm-orderbook"]
 }
 `;
 }
 
-function validateVotes(payload: unknown, market: PolymarketMarket): AgentVote[] {
-  const votes = (payload as { votes?: unknown[] }).votes;
-  if (!Array.isArray(votes)) throw new Error("Agent council response missing votes array.");
+function validateVote(payload: unknown, agent: AgentName, evidence: EvidenceItemInput[], latencyMs: number, retryCount: number): AgentVote {
+  const raw = payload as Partial<AgentVote> & { probabilityBps?: number };
+  if (raw.agent !== agent) throw new Error(`Agent response must be from ${agent}.`);
+  const evidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).slice(0, 8) : [];
+  if (evidenceIds.length === 0) throw new Error(`${agent} did not reference any supplied evidence IDs.`);
+  if (!validateEvidenceIds(evidenceIds, evidence)) throw new Error(`${agent} referenced unknown evidence IDs: ${evidenceIds.join(", ")}`);
 
-  const byAgent = new Map<string, AgentVote>();
-  for (const raw of votes) {
-    const vote = raw as Partial<AgentVote>;
-    if (!vote.agent || !AGENTS.some((agent) => agent.name === vote.agent)) continue;
-    byAgent.set(vote.agent, {
-      agent: vote.agent,
-      probabilityBps: clamp(Number(vote.probabilityBps)),
-      confidenceBps: clamp(Number(vote.confidenceBps)),
-      action: vote.action === "BUY_NO" || vote.action === "BUY_YES" ? vote.action : "WATCH",
-      thesis: String(vote.thesis || "").slice(0, 1_500),
-      risks: Array.isArray(vote.risks) ? vote.risks.map(String).slice(0, 5) : [],
-      evidence: normalizeEvidence(vote.evidence, market),
-    });
-  }
-
-  for (const agent of AGENTS) {
-    if (!byAgent.has(agent.name)) {
-      throw new Error(`Agent council response missing ${agent.name}.`);
-    }
-  }
-
-  return AGENTS.map((agent) => byAgent.get(agent.name)!);
+  return {
+    agent,
+    yesProbabilityBps: clampBps(Number(raw.yesProbabilityBps ?? raw.probabilityBps)),
+    confidenceBps: clampBps(Number(raw.confidenceBps)),
+    action: raw.action === "BUY_NO" || raw.action === "BUY_YES" ? raw.action : "WATCH",
+    thesis: String(raw.thesis || "").slice(0, 1_500),
+    risks: Array.isArray(raw.risks) ? raw.risks.map(String).slice(0, 5) : [],
+    evidenceIds,
+    latencyMs,
+    retryCount,
+  };
 }
 
-function normalizeEvidence(value: unknown, market: PolymarketMarket) {
-  if (!Array.isArray(value) || value.length === 0) {
-    return [
-      {
-        sourceUrl: market.url,
-        title: market.title,
-        excerpt: "Live Polymarket market metadata and price snapshot.",
-        credibilityScore: 70,
-      },
-    ];
-  }
-  return value.slice(0, 4).map((item) => {
-    const row = item as Record<string, unknown>;
-    return {
-      sourceUrl: String(row.sourceUrl || market.url),
-      title: String(row.title || market.title).slice(0, 180),
-      excerpt: String(row.excerpt || "").slice(0, 500),
-      credibilityScore: Math.max(0, Math.min(100, Number(row.credibilityScore) || 50)),
-    };
-  });
-}
-
-function clamp(value: number) {
-  return Math.max(0, Math.min(10_000, Math.round(Number.isFinite(value) ? value : 0)));
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

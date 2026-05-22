@@ -15,12 +15,14 @@ export function UnlockThesis({
   callId,
   onchainCallId,
   unlockPrice,
+  registryAddress,
 }: {
   callId: number;
   onchainCallId: number | null;
   unlockPrice: string;
+  registryAddress?: string | null;
 }) {
-  const registry = process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS as `0x${string}` | undefined;
+  const registry = (registryAddress || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS) as `0x${string}` | undefined;
   const usdcAddress = process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS as `0x${string}` | undefined;
   const { address, isConnected } = useAccount();
   const config = useConfig();

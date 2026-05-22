@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getCall } from "../../../lib/queries";
-import { bpsToPercent, outcomeForAction, recommendationLabel, selectedAgentProbabilityBps } from "../../../lib/format";
+import { bpsToPercent, outcomeForAction, recommendationLabel, selectedProbabilityForAction } from "../../../lib/format";
 
 export const size = {
   width: 1200,
@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const { id } = await params;
   const call = await getCall(Number(id));
   const outcome = outcomeForAction(call?.action || "WATCH", call?.outcomes);
-  const agentProbability = selectedAgentProbabilityBps(call?.action || "WATCH", call?.agentProbabilityBps || 0);
+  const agentProbability = selectedProbabilityForAction(call?.action || "WATCH", call?.yesProbabilityBps || call?.agentProbabilityBps || 0);
   const recommendation = call
     ? recommendationLabel(call.action, call.outcomes, call.confidenceBps, call.suggestedSizeBps)
     : "LIVE CALL";

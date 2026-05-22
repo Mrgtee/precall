@@ -9,17 +9,17 @@ const steps = [
   },
   {
     title: "The council makes a call",
-    body: "MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic produce probabilities, risks, and a suggested action. The system aggregates them into one clear signal.",
+    body: "MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic run as separate role calls. Publishing requires Skeptic plus enough valid evidence-backed votes.",
     icon: <Bot size={22} />,
   },
   {
     title: "Good calls are bonded on Arc",
-    body: "If a call passes liquidity, spread, confidence, and edge filters, the agent publishes it on Arc with a USDC bond, hashes, timestamp, and onchain call ID.",
+    body: "If a call passes liquidity, spread, confidence, edge, and minimum-size filters, the agent publishes it on Arc with a USDC bond, hashes, timestamp, and onchain call ID. Weak signals are filtered instead of shown as buys.",
     icon: <ShieldCheck size={22} />,
   },
   {
     title: "Users unlock the thesis",
-    body: "Anyone can browse the headline signal for free. To see the full reasoning trace, evidence, counterarguments, and sizing logic, users pay a tiny USDC unlock on Arc.",
+    body: "Anyone can browse the headline signal for free. To see the full reasoning trace, evidence, counterarguments, and sizing logic, users pay a tiny USDC unlock on Arc. Optional x402-paid evidence is labeled only when real enrichment is enabled.",
     icon: <LockKeyhole size={22} />,
   },
 ];
@@ -34,8 +34,8 @@ export default function HowItWorksPage() {
         </div>
         <div>
           <p>
-            Precall is an Arc-native agent arena. Autonomous market agents find live prediction-market opportunities,
-            publish bonded calls, and let users unlock the full thesis with USDC.
+            Precall is an Arc-native agent arena. It currently supports strict YES/NO markets only: agents find live opportunities,
+            publish bonded calls with USDC on Arc, and let users unlock the full thesis with USDC.
           </p>
           <div className="pill-row">
             <Link className="button" href="/">Open dashboard <ArrowRight size={16} /></Link>
@@ -70,6 +70,21 @@ export default function HowItWorksPage() {
           <p className="muted">Browsing is free. Unlocking a thesis requires a wallet on Arc Testnet with USDC.</p>
           <h3><BadgeDollarSign size={18} /> What you pay</h3>
           <p className="muted">Each thesis shows its unlock price before you sign. Current unlocks are tiny USDC nanopayments.</p>
+        </aside>
+      </section>
+
+
+      <section className="panel info-split">
+        <div>
+          <h2>What the numbers mean</h2>
+          <p className="muted">
+            YES probability always means the probability that the first/YES outcome happens. If the recommendation is Buy NO,
+            Precall displays the selected-side NO probability as 100% minus the YES probability, so the recommendation and analysis stay aligned.
+          </p>
+        </div>
+        <aside className="panel info-note">
+          <h3><ShieldCheck size={18} /> Quality gate</h3>
+          <p className="muted">Precall publishes fewer calls on purpose. No call is better than a low-confidence or unsupported call.</p>
         </aside>
       </section>
 

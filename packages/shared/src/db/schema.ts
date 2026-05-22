@@ -78,6 +78,7 @@ export const calls = pgTable(
     action: text("action").notNull(),
     marketPriceBps: integer("market_price_bps").notNull(),
     agentProbabilityBps: integer("agent_probability_bps").notNull(),
+    yesProbabilityBps: integer("yes_probability_bps").notNull().default(0),
     edgeBps: integer("edge_bps").notNull(),
     confidenceBps: integer("confidence_bps").notNull(),
     suggestedSizeBps: integer("suggested_size_bps").notNull(),
@@ -88,6 +89,10 @@ export const calls = pgTable(
     bondAmount: numeric("bond_amount", { precision: 18, scale: 6 }).notNull(),
     unlockPrice: numeric("unlock_price", { precision: 18, scale: 6 }).notNull(),
     status: text("status").notNull().default("draft"),
+    statusReason: text("status_reason").notNull().default(""),
+    marketType: text("market_type").notNull().default("strict_yes_no"),
+    registryAddress: text("registry_address").notNull().default(""),
+    legacy: boolean("legacy").notNull().default(false),
     txHash: text("tx_hash"),
     copyUrl: text("copy_url").notNull().default(""),
     publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
@@ -106,6 +111,10 @@ export const evidenceItems = pgTable("evidence_items", {
   title: text("title").notNull(),
   excerpt: text("excerpt").notNull(),
   credibilityScore: integer("credibility_score").notNull(),
+  evidenceId: text("evidence_id").notNull().default(""),
+  sourceType: text("source_type").notNull().default("polymarket_market"),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull(),
+  metadata: jsonb("metadata"),
 });
 
 export const thesisUnlocks = pgTable(
@@ -135,6 +144,9 @@ export const agentRuns = pgTable("agent_runs", {
   costs: jsonb("costs"),
   failure: text("failure"),
   publishedCallId: integer("published_call_id"),
+  evidenceContext: jsonb("evidence_context"),
+  retryCount: integer("retry_count").notNull().default(0),
+  latencyMs: integer("latency_ms").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -155,6 +167,9 @@ export const follows = pgTable(
     id: serial("id").primaryKey(),
     userWallet: text("user_wallet").notNull(),
     agentId: integer("agent_id").notNull(),
+    signature: text("signature"),
+    signedMessage: text("signed_message"),
+    signatureStatus: text("signature_status").notNull().default("legacy_unsigned"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -172,6 +187,9 @@ export const feedback = pgTable(
     sentiment: text("sentiment").notNull(),
     comment: text("comment").notNull().default(""),
     context: text("context").notNull().default(""),
+    signature: text("signature"),
+    signedMessage: text("signed_message"),
+    signatureStatus: text("signature_status").notNull().default("legacy_unsigned"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -180,3 +198,25 @@ export const feedback = pgTable(
   }),
 );
 
+
+export const circleActions = pgTable(
+  "circle_actions",
+  {
+    id: serial("id").primaryKey(),
+    actionType: text("action_type").notNull(),
+    walletAddress: text("wallet_address").notNull().default(""),
+    amount: numeric("amount", { precision: 18, scale: 6 }).notNull().default("0"),
+    chain: text("chain").notNull().default("Arc Testnet"),
+    txHash: text("tx_hash"),
+    paymentReference: text("payment_reference"),
+    relatedCallId: integer("related_call_id"),
+    agentRunId: integer("agent_run_id"),
+    status: text("status").notNull().default("success"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    actionTypeIdx: index("circle_actions_action_type_idx").on(table.actionType),
+    callIdx: index("circle_actions_call_idx").on(table.relatedCallId),
+  }),
+);

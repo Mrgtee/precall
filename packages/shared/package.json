@@ -53,6 +53,14 @@
     "./types": {
       "types": "./src/types.ts",
       "import": "./src/types.ts"
+    },
+    "./evidence": {
+      "types": "./src/evidence.ts",
+      "import": "./src/evidence.ts"
+    },
+    "./market-eligibility": {
+      "types": "./src/market-eligibility.ts",
+      "import": "./src/market-eligibility.ts"
     }
   },
   "scripts": {

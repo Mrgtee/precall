@@ -62,10 +62,10 @@ PATH="$HOME/.foundry/bin:$PATH" forge create src/PrecallRegistry.sol:PrecallRegi
   --rpc-url "$ARC_TESTNET_RPC_URL" \
   --account precall-deployer \
   --broadcast \
-  --constructor-args 0x3600000000000000000000000000000000000000
+  --constructor-args "$ARC_USDC_ADDRESS" "$PROTOCOL_TREASURY_ADDRESS"
 ```
 
-After deployment, set both `PRECALL_REGISTRY_ADDRESS` and `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS` to the deployed contract address.
+After deployment, set `PRECALL_REGISTRY_ADDRESS`, `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS`, and keep `PROTOCOL_TREASURY_ADDRESS` documented for the V2 treasury/slashing flow.
 
 ## Current Local Setup Status
 
@@ -82,5 +82,5 @@ After deployment, set both `PRECALL_REGISTRY_ADDRESS` and `NEXT_PUBLIC_PRECALL_R
 - Provide Supabase Postgres `DATABASE_URL`.
 - Provide an `OPENAI_API_KEY` from OpenAI or an OpenAI-compatible provider. For FreeModel also set `OPENAI_BASE_URL=https://api.freemodel.dev/v1` and a FreeModel model such as `gpt-5.4-mini`.
 - Create or choose a deployer/agent wallet, fund it with Arc Testnet USDC, and import it as `precall-deployer`.
-- Deploy `PrecallRegistry`, then set the registry address in local and hosting environment variables.
+- Deploy the hardened `PrecallRegistry` with USDC and protocol treasury constructor args, then set the registry address in local and hosting environment variables.
 - Optional: provide Circle wallet/x402 credentials if paid enrichment should be enabled for live demos.

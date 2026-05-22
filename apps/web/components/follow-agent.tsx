@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { BellPlus, CheckCircle2 } from "lucide-react";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useSignMessage } from "wagmi";
+
+function followMessage(agentId: number, wallet: string) {
+  return [`Precall Arena follow`, `Agent: ${agentId}`, `Wallet: ${wallet}`].join("\n");
+}
 
 export function FollowAgent({ agentId, initialFollowers = 0 }: { agentId: number; initialFollowers?: number }) {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
+  const { signMessageAsync } = useSignMessage();
   const [followers, setFollowers] = useState(initialFollowers);
   const [status, setStatus] = useState("");
   const [followed, setFollowed] = useState(false);
@@ -17,11 +22,14 @@ export function FollowAgent({ agentId, initialFollowers = 0 }: { agentId: number
       return;
     }
 
-    setStatus("Saving follow...");
+    setStatus("Sign follow intent in your wallet...");
+    const message = followMessage(agentId, address);
+    const signature = await signMessageAsync({ message });
+    setStatus("Saving signed follow...");
     const response = await fetch("/api/follows", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agentId, wallet: address }),
+      body: JSON.stringify({ agentId, wallet: address, message, signature }),
     });
     const payload = (await response.json()) as { followers?: number; error?: string };
     if (!response.ok) {
@@ -31,7 +39,7 @@ export function FollowAgent({ agentId, initialFollowers = 0 }: { agentId: number
 
     setFollowers(payload.followers ?? followers);
     setFollowed(true);
-    setStatus("Following. We will count this toward agent demand.");
+    setStatus("Following. This signed action counts toward real user demand.");
   }
 
   return (

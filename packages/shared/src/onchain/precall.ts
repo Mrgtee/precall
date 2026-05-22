@@ -85,7 +85,7 @@ export async function publishAggregatedCallOnchain(input: {
       input.call.market.marketId,
       direction,
       input.call.marketPriceBps,
-      input.call.agentProbabilityBps,
+      input.call.yesProbabilityBps,
       input.call.confidenceBps,
       expiry,
       hashText(input.call.thesis),

@@ -1,100 +1,125 @@
 # Precall Arena
 
-Precall Arena is an Arc-native prediction-market intelligence arena for autonomous market agents. Agents scan live prediction markets, publish bonded calls on Arc Testnet, sell reasoning traces through USDC unlocks, and build public onchain reputations from resolved outcomes.
+Precall is an Arc-native prediction-market intelligence arena for the Agora Agents Hackathon. Separate market-agent roles scan live Polymarket YES/NO markets, produce accountable probabilities, publish only quality-passing calls with USDC bonds on Arc Testnet, let users unlock the full thesis with USDC, and build public reputation after outcomes resolve.
 
-This repository is built for the Agora Agents Hackathon and intentionally avoids mock market data. Worker runs use live Polymarket APIs, real LLM analysis, real Arc Testnet transactions, and persistent Postgres storage.
+The core proof loop is:
+
+```text
+live market -> verified evidence -> agent YES probability -> market edge -> bonded Arc call -> USDC thesis unlock -> resolution -> leaderboard reputation
+```
+
+## Why It Matters
+
+Prediction-market advice is usually cheap talk. Precall makes agent calls auditable: every public recommendation has a timestamped market, supplied evidence IDs, an Arc call ID, a USDC bond, a thesis hash, an unlock trail, and a lifecycle state. The product does not custody user trading funds and does not claim to place trades. It gives non-custodial copy signals and links users to the current market page.
+
+## What Is Real Today
+
+- Live Polymarket discovery through Gamma and CLOB/public market data adapters.
+- Strict V1 eligibility for active, future, binary YES/NO markets only.
+- Five separate role calls: `MacroScout`, `NewsHawk`, `CrowdPulse`, `BookWatcher`, and `Skeptic`.
+- Canonical probability semantics: `yesProbabilityBps` always means probability that YES/first outcome happens.
+- Quality gates for liquidity, spread, edge, confidence, and suggested size.
+- Arc Testnet registry for agent registration, bonded calls, thesis unlocks, and resolution events.
+- Circle/USDC tracking for agent bonds, user thesis unlocks, and optional x402 evidence payments.
+- Hosted Postgres persistence with Drizzle migrations.
+- Wallet-signed follows and feedback for new user traction events.
+- `/demo` page that shows live config booleans, latest run, latest call, latest unlock, and Circle activity without faking empty states.
+
+## Intentionally Not Supported Yet
+
+- Non-YES/NO markets such as team-vs-team markets. V1 skips them until generalized resolution is safe.
+- Custody or automated trade execution for users. Precall links to markets for manual copying.
+- Fake social/news enrichment. x402 evidence is shown only when real Circle/x402 enrichment is enabled and succeeds.
+- Overclaimed reputation. The leaderboard is honest when no resolved calls exist.
 
 ## Architecture
 
-- `apps/web` - Next.js public arena, call pages, leaderboards, wallet actions, and share cards.
-- `apps/worker` - Node runner for live market discovery, agent analysis, publishing, indexing, and resolution updates.
-- `packages/contracts` - Foundry Solidity contracts for bonded calls, thesis unlocks, and reputation events on Arc Testnet.
-- `packages/shared` - Drizzle schema, Polymarket adapters, agent scoring, chain config, contract ABI, and shared types.
+- `apps/web` - Next.js public arena, call pages, admin console, demo page, leaderboard, wallet unlocks, follows, feedback, and share routes.
+- `apps/worker` - Node runner for market discovery, eligibility filtering, evidence context, separate role model calls, publishing, expiry, and resolution.
+- `packages/contracts` - Foundry Solidity registry deployed on Arc Testnet.
+- `packages/shared` - Drizzle schema, migrations, Polymarket adapters, Circle enrichment, scoring, market eligibility, contract ABI, and shared types.
 
-## Quick Start
+## Setup
 
 ```bash
 npm install
 cp .env.example .env
 npm run db:migrate
-npm run contracts:build # requires Foundry/forge
+npm run contracts:build
 npm run dev
 ```
 
-`npm run build` verifies the web app, worker, and shared package. Contract builds/tests are explicit because they require Foundry:
+Install the Canteen ARC CLI for hackathon RPC/context:
 
 ```bash
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-npm run contracts:build
-npm run contracts:test
-```
-
-
-## Agora / Arc Setup
-
-This repo uses the Canteen ARC CLI for hackathon RPC access and Arc context. The short path is:
-
-```bash
+PATH="$HOME/.local/bin:$PATH" uv tool install git+https://github.com/the-canteen-dev/ARC-cli
 PATH="$HOME/.local/bin:$PATH" arc-canteen login
 PATH="$HOME/.local/bin:$PATH" arc-canteen context sync
-PATH="$HOME/.local/bin:$PATH" arc-canteen rpc eth_chainId
 PATH="$HOME/.local/bin:$PATH" arc-canteen rpc-url
 ```
 
-Set the returned tokenized RPC URL as `ARC_TESTNET_RPC_URL` in `.env` only. Do not expose it through `NEXT_PUBLIC_*` variables. Full setup and deployment notes are in [`docs/AGORA_ARC_SETUP.md`](docs/AGORA_ARC_SETUP.md).
+Set the returned RPC URL as server-side `ARC_TESTNET_RPC_URL`. Never expose the tokenized Canteen RPC through `NEXT_PUBLIC_*`.
 
-## Required Real Services
+## Environment Variables
 
-Set these before running production agent cycles:
+Required for a real run:
 
-- `DATABASE_URL` - Supabase Postgres connection string.
-- `OPENAI_API_KEY` - required for agent reasoning. This can be an OpenAI key or a key from an OpenAI-compatible provider such as FreeModel.
-- `OPENAI_BASE_URL` - optional OpenAI-compatible API base URL. Use `https://api.freemodel.dev/v1` for FreeModel, or keep `https://api.openai.com/v1` for OpenAI.
-- `OPENAI_MODEL` - model ID for the selected provider. FreeModel currently exposes IDs such as `gpt-5.4-mini` on its OpenAI-compatible route.
-- `ARC_TESTNET_RPC_URL` - server-side Arc Testnet RPC. Prefer the Canteen-hosted URL from `arc-canteen rpc-url` for hackathon work; do not expose that token in frontend env vars.
-- `AGENT_OWNER_PRIVATE_KEY` - agent wallet key used by the worker. Keep it in local/server env only.
-- `RESOLVER_PRIVATE_KEY` - optional resolver key. Defaults to `AGENT_OWNER_PRIVATE_KEY`.
-- `PRECALL_REGISTRY_ADDRESS` - deployed `PrecallRegistry` address.
-- `CIRCLE_*` values - optional x402 enrichment when `ENABLE_CIRCLE_ENRICHMENT=true`.
+- `DATABASE_URL` - Postgres connection string.
+- `OPENAI_API_KEY` - OpenAI-compatible provider key. FreeModel works with `OPENAI_BASE_URL=https://api.freemodel.dev/v1`.
+- `OPENAI_MODEL` - chat-completions model ID.
+- `ARC_TESTNET_RPC_URL` - server-side Arc Testnet RPC.
+- `PRECALL_REGISTRY_ADDRESS` and `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS` - active registry address.
+- `ARC_USDC_ADDRESS` and `NEXT_PUBLIC_ARC_USDC_ADDRESS` - Arc ERC-20 USDC address, currently `0x3600000000000000000000000000000000000000`.
+- `AGENT_OWNER_PRIVATE_KEY` - secure worker key for bonded publishing.
+- `AGENT_OWNER_WALLET` - public address for the agent wallet.
+- `RESOLVER_PRIVATE_KEY` - secure resolver key, or omit to use the agent key.
+- `PROTOCOL_TREASURY_ADDRESS` - treasury receiving slashed wrong-call bonds in V2 deployments.
+- `DEFAULT_ONCHAIN_AGENT_ID` - onchain agent ID after `register-agent`.
+- `ADMIN_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_ADMIN_WALLETS` - admin and automation protection.
 
-Deploy `PrecallRegistry` to Arc Testnet after funding the deployer with Arc Testnet USDC:
+Useful hardening controls:
+
+- `MIN_LIQUIDITY_USD=10000`
+- `MIN_EDGE_BPS=650`
+- `MAX_SPREAD_BPS=900`
+- `MIN_CONFIDENCE_BPS=5200`
+- `MIN_SUGGESTED_SIZE_BPS=100`
+- `MAX_MARKETS_PER_RUN=8`
+- `MAX_ANALYZED_MARKETS_PER_RUN=4`
+- `MODEL_TIMEOUT_MS=45000`
+- `MODEL_RETRY_COUNT=2`
+- `ALLOW_PUBLISH_FILTERED_RUN=false`
+
+Optional Circle/x402 enrichment:
+
+- `ENABLE_CIRCLE_ENRICHMENT=false`
+- `CIRCLE_CLI=/path/to/circle`
+- `CIRCLE_WALLET_ADDRESS=0x...`
+- `CIRCLE_CHAIN=MATIC`
+- `CIRCLE_READ_MAX_AMOUNT=0.005`
+- `CIRCLE_TIMEOUT_SECONDS=60`
+
+## Contract Deployment
+
+The hardened registry constructor is:
+
+```solidity
+constructor(address usdc_, address protocolTreasury_)
+```
+
+Deploy with a funded Arc Testnet account:
 
 ```bash
-cast wallet import precall-deployer --interactive
-forge create src/PrecallRegistry.sol:PrecallRegistry \
+PATH="$HOME/.foundry/bin:$PATH" cast wallet import precall-deployer --interactive
+PATH="$HOME/.foundry/bin:$PATH" forge create src/PrecallRegistry.sol:PrecallRegistry \
   --root packages/contracts \
   --rpc-url "$ARC_TESTNET_RPC_URL" \
   --account precall-deployer \
   --broadcast \
-  --constructor-args 0x3600000000000000000000000000000000000000
+  --constructor-args "$ARC_USDC_ADDRESS" "$PROTOCOL_TREASURY_ADDRESS"
 ```
 
-
-## AI Provider Setup
-
-Precall uses an OpenAI-compatible chat completions API for the agent council. OpenAI is the default, but FreeModel works by changing environment values only:
-
-```env
-OPENAI_API_KEY=your_freemodel_key
-OPENAI_BASE_URL=https://api.freemodel.dev/v1
-OPENAI_MODEL=gpt-5.4-mini
-```
-
-Use FreeModel's OpenAI-compatible API endpoint for this app. The Claude Code endpoint (`https://cc.freemodel.dev`) is Anthropic Messages API compatible and is not used by the Precall worker.
-
-## Production Automation
-
-Precall includes protected Vercel Cron endpoints for production runs:
-
-- `/api/cron/agent-run` runs `npm run worker -- run-once` daily.
-- `/api/cron/resolve` runs `npm run worker -- resolve` daily.
-
-Set `CRON_SECRET` in the deployment environment. Vercel Cron sends it as a bearer token; manual calls should use `Authorization: Bearer $CRON_SECRET`.
-
-For a public site deployment that should not hold private keys, set `DISABLE_SCHEDULED_WORKERS=true`. The public app will still serve calls, unlocks, follows, and feedback while bonded publishing/resolution runs from a separate secure worker.
-
-The app also persists wallet follows and post-unlock feedback so traction can be shown as real user demand, not screenshots.
+After deployment, update `PRECALL_REGISTRY_ADDRESS`, `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS`, and keep old call rows with their original `registryAddress` so legacy calls can still be verified.
 
 ## Worker Commands
 
@@ -104,20 +129,45 @@ npm run worker -- discover
 npm run worker -- register-agent
 npm run worker -- run-once
 npm run worker -- publish-run <agentRunId>
+npm run worker -- expire
 npm run worker -- resolve
 ```
 
-`run-once` discovers live, non-expired Polymarket markets, asks the agent council for probabilities, filters low-quality calls, persists the run, and publishes qualifying calls on Arc when `PUBLISH_ONCHAIN=true`. The app stores Polymarket `/market/{slug}` links so grouped markets redirect to the current live trading page.
+`run-once` checks live markets, skips unsupported markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 
-`publish-run <agentRunId>` publishes a stored real agent-run candidate when the model provider already produced a valid call but a later step needs to be retried. It re-applies the same liquidity, edge, spread, confidence, expiry, and suggested-size thresholds as `run-once`; set `ALLOW_PUBLISH_FILTERED_RUN=true` only for an explicit demo override. It does not create fake calls; the source run must contain a real `outputs.call`.
+## How Precall Uses Circle Agent Stack
 
-`resolve` checks published calls against live Polymarket resolution data, skips unresolved or ambiguous markets, records Brier/ROI, and submits the Arc resolver transaction when `RESOLVE_ONCHAIN=true`.
+Precall does not just generate text. The agent uses Circle-powered financial rails:
 
-## Hackathon Demo Flow
+- Agents use USDC working capital to bond calls on Arc.
+- Users pay USDC unlocks on Arc to read full reasoning traces.
+- Optional x402 enrichment lets the agent pay for premium social/news evidence.
+- `circle_actions` tracks real `bond_call`, `unlock_thesis`, and `x402_evidence_payment` events.
+- `/demo` and call pages show Circle status, USDC volumes, Arc tx links, and disabled states honestly.
 
-1. Run a live agent cycle.
-2. Publish a bonded call on Arc Testnet.
-3. Open the arena and view the call.
-4. Connect wallet and unlock the thesis with USDC.
-5. Show leaderboard and share card.
-6. Resolve a mature market and show reputation update.
+## Demo Flow
+
+1. Open `/demo` to show DB, model, Arc registry, Circle/x402 status, latest run, latest call, and latest unlock.
+2. Open `/admin`, connect the whitelisted admin wallet, and run health.
+3. Run the agent. If no call is published, show the filtered reasons instead of forcing a weak signal.
+4. Open a live call, inspect selected-side probability, YES probability, evidence IDs, and Arc bond transaction.
+5. Unlock the thesis with USDC on Arc.
+6. Return to `/demo` and `/leaderboard` to show unlock activity and reputation state.
+7. Run `resolve` for mature supported calls and show Brier/ROI after resolution.
+
+## Security Notes
+
+- Never commit `.env`, private keys, tokenized RPC URLs, admin secrets, cron secrets, or service-role database credentials.
+- Keep private keys in local/server env only. Browser env vars must be public addresses/config only.
+- New follows and feedback require wallet signatures. Existing unsigned rows are treated as legacy.
+- Vercel can host the app, but long-running bonded publishing is safest from a secure worker or protected admin action.
+
+## Verification
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm run contracts:test
+```

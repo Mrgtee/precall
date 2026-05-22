@@ -1,7 +1,7 @@
 import { closeRepository } from "@precall/worker/repository";
-import { health, resolveMatureCalls, runOnce } from "@precall/worker/run-cycle";
+import { expirePublishedCalls, health, resolveMatureCalls, runOnce } from "@precall/worker/run-cycle";
 
-export type WorkerCommand = "health" | "run-once" | "resolve";
+export type WorkerCommand = "health" | "run-once" | "resolve" | "expire";
 
 function serializeResult(value: unknown) {
   return JSON.parse(
@@ -27,7 +27,7 @@ export async function runWorkerCommand(command: WorkerCommand) {
   }
 
   try {
-    const result = command === "health" ? await health() : command === "run-once" ? await runOnce() : await resolveMatureCalls();
+    const result = command === "health" ? await health() : command === "run-once" ? await runOnce() : command === "expire" ? await expirePublishedCalls() : await resolveMatureCalls();
     return {
       ok: true,
       command,

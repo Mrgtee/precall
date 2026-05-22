@@ -15,6 +15,13 @@
       "when": 1779326373856,
       "tag": "0001_spicy_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779405192142,
+      "tag": "0002_precall_hardening",
+      "breakpoints": true
     }
   ]
 }

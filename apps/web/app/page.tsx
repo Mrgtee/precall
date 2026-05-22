@@ -12,13 +12,15 @@ export default async function HomePage() {
   let setupError = "";
 
   try {
-    calls = await getCalls(20);
+    calls = await getCalls(30);
     leaderboard = await getLeaderboard();
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
 
-  const liveCalls = calls.filter((call) => call.status === "published").length;
+  const live = calls.filter((call) => call.status === "published" && !call.legacy);
+  const past = calls.filter((call) => call.status !== "published" || call.legacy);
+  const liveCalls = live.length;
   const unlocks = leaderboard.reduce((sum, row) => sum + Number(row.unlocks || 0), 0);
   const agents = leaderboard.length;
 
@@ -31,7 +33,7 @@ export default async function HomePage() {
         </div>
         <div className="hero-card">
           <p>
-            Precall scans live prediction markets, bonds qualifying calls on Arc with USDC, and lets users unlock the full thesis when they want the reasoning.
+            Precall scans live YES/NO prediction markets, bonds qualifying calls on Arc with USDC, and lets users unlock the full thesis when they want the reasoning.
           </p>
           <div className="hero-actions">
             <ConnectWallet />
@@ -54,7 +56,7 @@ export default async function HomePage() {
           <p className="eyebrow">Dashboard</p>
           <h2>Live bonded calls</h2>
         </div>
-        <p>Review the selected side, market price, agent probability, edge, bond, and unlock price before opening a call.</p>
+        <p>Only strict YES/NO markets that pass edge, confidence, liquidity, spread, and size gates appear here.</p>
       </section>
 
       {setupError ? (
@@ -63,21 +65,34 @@ export default async function HomePage() {
           <p className="muted">{setupError}</p>
           <p>Set `DATABASE_URL`, run migrations, then publish real calls with `npm run worker -- run-once`.</p>
         </section>
-      ) : calls.length === 0 ? (
+      ) : live.length === 0 ? (
         <section className="empty">
-          <h2>No calls published yet</h2>
-          <p className="muted">
-            Run the worker against live Polymarket data to publish bonded calls on Arc. This app does not ship with fake fixtures.
-          </p>
+          <h2>No live calls pass the hardened V1 gates yet</h2>
+          <p className="muted">Precall publishes fewer calls on purpose. No call is better than a weak call.</p>
         </section>
       ) : (
         <section className="grid">
-          {calls.map((call) => <CallCard key={call.id} call={call} />)}
+          {live.map((call) => <CallCard key={call.id} call={call} />)}
         </section>
       )}
 
+      {past.length > 0 ? (
+        <section style={{ marginTop: 34 }}>
+          <section className="section-heading">
+            <div>
+              <p className="eyebrow">Past and legacy calls</p>
+              <h2>Awaiting resolution or archived</h2>
+            </div>
+            <p>These remain visible for auditability but are not presented as live recommendations.</p>
+          </section>
+          <section className="grid">
+            {past.slice(0, 6).map((call) => <CallCard key={call.id} call={call} />)}
+          </section>
+        </section>
+      ) : null}
+
       <section className="metric-strip compact-metrics platform-strip" aria-label="Platform summary">
-        <div className="metric"><span><RadioTower size={14} /> Agents</span><strong>5</strong></div>
+        <div className="metric"><span><RadioTower size={14} /> Council</span><strong>5 roles</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Bonds</span><strong>USDC</strong></div>
         <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>$0.05</strong></div>
         <div className="metric"><span><Users size={14} /> Growth</span><strong>Arena</strong></div>

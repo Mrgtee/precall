@@ -70,6 +70,20 @@ export const precallRegistryAbi = [
   },
   {
     type: "function",
+    name: "protocolTreasury",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "setProtocolTreasury",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "protocolTreasury_", type: "address" }],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "resolveCall",
     stateMutability: "nonpayable",
     inputs: [
@@ -122,5 +136,29 @@ export const precallRegistryAbi = [
       { name: "brierScoreBps", type: "uint16", indexed: false },
       { name: "bondReturned", type: "bool", indexed: false },
     ],
+  },
+  {
+    type: "event",
+    name: "BondReturned",
+    inputs: [
+      { name: "callId", type: "uint256", indexed: true },
+      { name: "publisher", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "BondSlashed",
+    inputs: [
+      { name: "callId", type: "uint256", indexed: true },
+      { name: "publisher", type: "address", indexed: true },
+      { name: "treasury", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "ProtocolTreasurySet",
+    inputs: [{ name: "protocolTreasury", type: "address", indexed: true }],
   },
 ] as const;

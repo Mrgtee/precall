@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { FollowAgent } from "../../../components/follow-agent";
 import { UnlockThesis } from "../../../components/unlock-thesis";
-import { bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedAgentProbabilityBps, usdc } from "../../../lib/format";
+import { bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedProbabilityForAction, statusLabel, usdc } from "../../../lib/format";
 import { getCall, getEvidence } from "../../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +15,20 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   if (!call.agentId) notFound();
   const evidence = await getEvidence(call.id);
   const outcome = outcomeForAction(call.action, call.outcomes);
-  const agentProbability = selectedAgentProbabilityBps(call.action, call.agentProbabilityBps);
+  const yesProbability = Number(call.yesProbabilityBps || call.agentProbabilityBps || 0);
+  const selectedProbability = selectedProbabilityForAction(call.action, yesProbability);
   const recommendation = recommendationLabel(call.action, call.outcomes, call.confidenceBps, call.suggestedSizeBps);
   const actionClass = call.action === "BUY_YES" ? "buy" : call.action === "BUY_NO" ? "no" : "";
 
   return (
     <main className="shell detail-layout">
       <section className="panel">
-        <p className="eyebrow">{call.agentName}</p>
+        <p className="eyebrow">{call.agentName} · {statusLabel(call.status, call.legacy)}</p>
         <h1 className="call-detail-title">{call.marketTitle}</h1>
         <div className="pill-row">
           <span className={`pill ${actionClass}`}>{recommendation}</span>
-          <span className="pill">Agent {outcome} {bpsToPercent(agentProbability)}</span>
+          <span className="pill">Agent {outcome} {bpsToPercent(selectedProbability)}</span>
+          <span className="pill">YES probability {bpsToPercent(yesProbability)}</span>
           <span className="pill">Market {outcome} {bpsToPercent(call.marketPriceBps)}</span>
           <span className="pill">Edge {bpsToPercent(call.edgeBps)}</span>
           <span className="pill">Confidence {bpsToPercent(call.confidenceBps)}</span>
@@ -35,6 +37,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <p className="muted">
           {recommendationHelp(call.action, call.confidenceBps, call.suggestedSizeBps)} Precall does not place trades for users; it links out with the suggested action and size.
         </p>
+        {call.statusReason ? <p className="muted"><strong>Status note:</strong> {call.statusReason}</p> : null}
         <div className="pill-row">
           <Link className="button" href={call.copyUrl || call.marketUrl || "#"} target="_blank">
             Open current market <ExternalLink size={16} />
@@ -47,11 +50,12 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <section style={{ marginTop: 28 }}>
-          <h2>Public evidence</h2>
+          <h2>Verified public evidence</h2>
           <div className="grid">
             {evidence.map((item) => (
               <article className="panel" key={item.id}>
                 <strong>{item.title}</strong>
+                <p className="muted"><span className="status-chip">{item.sourceType}</span> Score {item.credibilityScore} · {new Date(item.capturedAt).toLocaleString()}</p>
                 <p className="muted">{item.excerpt}</p>
                 <Link href={item.sourceUrl} target="_blank">Source <ExternalLink size={14} /></Link>
               </article>
@@ -62,17 +66,19 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
 
       <aside className="grid">
         <section className="panel">
-          <h3><ShieldCheck size={18} /> Bonded on Arc</h3>
+          <h3><ShieldCheck size={18} /> USDC bonded on Arc</h3>
           <p className="score">{usdc(call.bondAmount)}</p>
           <p className="muted">Unlock price: {usdc(call.unlockPrice)}</p>
           <p className="muted">Onchain call ID: {call.onchainCallId ?? "pending"}</p>
+          <p className="muted">Registry: {call.registryAddress ? `${call.registryAddress.slice(0, 6)}...${call.registryAddress.slice(-4)}` : "legacy/unknown"}</p>
+          {call.finalOutcome ? <p className="muted">Resolved {call.finalOutcome} · ROI {bpsToPercent(call.roiBps)} · Brier {bpsToPercent(call.brierScoreBps)}</p> : null}
         </section>
         <section className="panel">
           <h3>Follow this desk</h3>
           <p className="muted">Following helps the leaderboard rank agents by real user demand, not only model scores.</p>
           <FollowAgent agentId={call.agentId} />
         </section>
-        <UnlockThesis callId={call.id} onchainCallId={call.onchainCallId} unlockPrice={String(call.unlockPrice)} />
+        <UnlockThesis callId={call.id} onchainCallId={call.onchainCallId} registryAddress={call.registryAddress} unlockPrice={String(call.unlockPrice)} />
       </aside>
     </main>
   );

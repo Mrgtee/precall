@@ -79,7 +79,7 @@ PATH="$HOME/.foundry/bin:$PATH" forge create src/PrecallRegistry.sol:PrecallRegi
   --rpc-url "$ARC_TESTNET_RPC_URL" \
   --account precall-deployer \
   --broadcast \
-  --constructor-args 0x3600000000000000000000000000000000000000
+  --constructor-args "$ARC_USDC_ADDRESS" "$PROTOCOL_TREASURY_ADDRESS"
 ```
 
 After deployment, add the contract address to `.env` and Vercel:
@@ -87,6 +87,7 @@ After deployment, add the contract address to `.env` and Vercel:
 ```env
 PRECALL_REGISTRY_ADDRESS=0x...
 NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS=0x...
+PROTOCOL_TREASURY_ADDRESS=0x...
 ```
 
 ## Worker Agent Wallet
@@ -185,3 +186,18 @@ npm run build
 ```
 
 A complete real demo has: live Polymarket markets in the database, a deployed Arc registry address, a registered onchain agent ID, at least one bonded call transaction, and a public web deployment with env vars set.
+
+## Hardened Agent Controls
+
+```env
+MODEL_TIMEOUT_MS=45000
+MODEL_RETRY_COUNT=2
+MAX_ANALYZED_MARKETS_PER_RUN=4
+MIN_LIQUIDITY_USD=10000
+MIN_EDGE_BPS=650
+MAX_SPREAD_BPS=900
+MIN_CONFIDENCE_BPS=5200
+MIN_SUGGESTED_SIZE_BPS=100
+```
+
+These defaults intentionally publish fewer calls. No call is better than a weak call.

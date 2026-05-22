@@ -21,7 +21,8 @@
     "arc:status": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen status",
     "arc:rpc": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen rpc-url",
     "arc:chain-id": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen rpc eth_chainId",
-    "arc:context": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen context sync"
+    "arc:context": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen context sync",
+    "test": "TMPDIR=/tmp node --import tsx --test packages/shared/src/*.test.ts apps/web/lib/*.test.ts"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.1",

@@ -3,7 +3,7 @@ import { createPublicClient, formatUnits, getAddress, http, parseAbiItem, type A
 import { arcTestnet } from "@precall/shared/chains";
 import { precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { createDb } from "@precall/shared/db/client";
-import { thesisUnlocks, users } from "@precall/shared/db/schema";
+import { circleActions, thesisUnlocks, users } from "@precall/shared/db/schema";
 import { getCall, hasUnlock } from "../../../../../lib/queries";
 
 const thesisUnlockedEvent = parseAbiItem(
@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!call) return NextResponse.json({ error: "Call not found." }, { status: 404 });
 
   let unlocked = await hasUnlock(call.id, walletAddress);
-  const registry = (process.env.PRECALL_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS) as
+  const registry = (call.registryAddress || process.env.PRECALL_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS) as
     | Address
     | undefined;
 
@@ -56,14 +56,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
         if (latestLog?.transactionHash) {
           const db = createDb();
+          const amount = formatUnits(latestLog.args.amount ?? 0n, 6);
           await db.insert(users).values({ walletAddress }).onConflictDoNothing();
           await db
             .insert(thesisUnlocks)
             .values({
               callId: call.id,
               userWallet: walletAddress,
-              amount: formatUnits(latestLog.args.amount ?? 0n, 6),
+              amount,
               txHash: latestLog.transactionHash,
+            })
+            .onConflictDoNothing();
+          await db
+            .insert(circleActions)
+            .values({
+              actionType: "unlock_thesis",
+              walletAddress,
+              amount,
+              chain: "Arc Testnet",
+              txHash: latestLog.transactionHash,
+              relatedCallId: call.id,
+              status: "success",
+              metadata: { onchainCallId: call.onchainCallId, registryAddress: registry },
             })
             .onConflictDoNothing();
         }

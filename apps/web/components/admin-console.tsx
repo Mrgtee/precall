@@ -5,7 +5,7 @@ import { Activity, Play, ShieldAlert, ShieldCheck, Stethoscope, Wallet } from "l
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { shortAddress } from "../lib/format";
 
-type AdminAction = "health" | "run-once" | "resolve";
+type AdminAction = "health" | "run-once" | "resolve" | "expire";
 
 type ChallengeResponse = {
   challenge: unknown;
@@ -18,8 +18,14 @@ type AdminResult = {
   command?: string;
   durationMs?: number;
   result?: {
+    checked?: unknown[];
+    eligible?: unknown[];
+    analyzed?: unknown[];
     published?: unknown[];
+    skipped?: unknown[];
+    failed?: unknown[];
     resolved?: unknown[];
+    expired?: number;
     total?: number;
     message?: string;
   };
@@ -45,6 +51,13 @@ const actions: Array<{
     description: "Scan live markets, run the agent council, and publish qualifying bonded calls on Arc.",
     icon: <Play size={18} />,
     danger: true,
+  },
+
+  {
+    action: "expire",
+    title: "Mark expired calls",
+    description: "Move matured but unresolved published calls into the awaiting-resolution state without spending USDC.",
+    icon: <Activity size={18} />,
   },
   {
     action: "resolve",
@@ -73,6 +86,7 @@ export function AdminConsole() {
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<AdminResult | null>(null);
   const publishedCount = result?.command === "run-once" ? (result.result?.published?.length ?? 0) : null;
+  const skippedCount = result?.command === "run-once" ? (result.result?.skipped?.length ?? 0) : null;
 
   async function runAction(action: AdminAction) {
     if (!address) return;
@@ -173,6 +187,11 @@ export function AdminConsole() {
         {publishedCount && publishedCount > 0 ? (
           <p className="muted">
             Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.
+          </p>
+        ) : null}
+        {skippedCount && skippedCount > 0 ? (
+          <p className="muted">
+            Filtered {skippedCount} market{skippedCount === 1 ? "" : "s"}. This is expected when live markets fail V1 eligibility or quality gates.
           </p>
         ) : null}
         {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}

@@ -308,6 +308,32 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.status-chip.ok {
+  background: #f6ffe3;
+}
+
+.status-chip.warn {
+  background: #fff6ef;
+}
+
+.legacy-call {
+  background: rgba(255, 253, 242, 0.92);
+  box-shadow: 3px 3px 0 var(--muted);
+}
+
 .side-score {
   border-left: 2px solid var(--line);
   padding-left: 20px;

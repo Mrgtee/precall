@@ -1,9 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { getAddress, isAddress, verifyMessage, type Hex } from "viem";
 
-export type AdminAction = "health" | "run-once" | "resolve";
+export type AdminAction = "health" | "run-once" | "resolve" | "expire";
 
-const allowedActions = new Set<AdminAction>(["health", "run-once", "resolve"]);
+const allowedActions = new Set<AdminAction>(["health", "run-once", "resolve", "expire"]);
 const challengeTtlMs = 10 * 60 * 1000;
 
 export type AdminChallenge = {
