@@ -29,6 +29,13 @@
       "when": 1779437845247,
       "tag": "0003_circle_gateway_x402",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779443600000,
+      "tag": "0004_admin_wallets",
+      "breakpoints": true
     }
   ]
 }

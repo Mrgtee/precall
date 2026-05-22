@@ -170,6 +170,7 @@ export async function getDemoData() {
     latestThesisUnlock,
     circleStack: {
       gatewayX402Enabled: gatewayConfig.enabled,
+      gatewayX402Required: process.env.REQUIRE_CIRCLE_GATEWAY_X402 === "true",
       gatewayChain: gatewayConfig.chain,
       gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
       allowedHosts: gatewayConfig.allowedHosts,

@@ -556,6 +556,14 @@ textarea:focus-visible {
   border-radius: 12px;
 }
 
+.admin-input {
+  min-width: min(100%, 360px);
+  padding: 11px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--white);
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;

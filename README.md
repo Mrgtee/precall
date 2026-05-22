@@ -93,6 +93,7 @@ Useful hardening controls:
 Optional Circle Gateway/x402 paid evidence:
 
 - `ENABLE_CIRCLE_GATEWAY_X402=false` - master switch; when false the worker never attempts paid API calls.
+- `REQUIRE_CIRCLE_GATEWAY_X402=false` - set true on Railway production workers so admin-triggered runs refuse free-only evidence.
 - `CIRCLE_GATEWAY_CHAIN=arcTestnet` - Gateway SDK chain name used by the buyer key.
 - `CIRCLE_AGENT_PRIVATE_KEY=` - server-only buyer key for Gateway/x402 payments; do not reuse `AGENT_OWNER_PRIVATE_KEY` and never expose it as `NEXT_PUBLIC_*`.
 - `CIRCLE_GATEWAY_RPC_URL=` - optional Gateway RPC override; otherwise the Arc RPC is reused when appropriate.
@@ -145,7 +146,7 @@ Precall does not just generate text. The agent uses Circle-powered financial rai
 - Paid agent evidence: when `ENABLE_CIRCLE_GATEWAY_X402=true`, the worker uses `@circle-fin/x402-batching` GatewayClient with `CIRCLE_AGENT_PRIVATE_KEY` to pay allowlisted premium APIs such as AISA (`api.aisa.one`) using USDC nanopayments. Host allowlists, per-request caps, daily budgets, and minimum Gateway balance checks run before every payment.
 - Settlement and accountability: agents bond calls with USDC on Arc, users unlock reasoning with USDC on Arc, and `circle_actions` records normalized `x402_api_payment`, `arc_bond`, and `thesis_unlock` events.
 
-If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
+If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence unless `REQUIRE_CIRCLE_GATEWAY_X402=true`. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
 
 ## Demo Flow
 

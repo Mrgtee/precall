@@ -42,6 +42,7 @@ export async function health() {
     registryAddress: Boolean(process.env.PRECALL_REGISTRY_ADDRESS),
     circle: {
       gatewayX402Enabled: gatewayConfig.enabled,
+      gatewayX402Required: boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false),
       gatewayChain: gatewayConfig.chain,
       gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
       allowedHosts: gatewayConfig.allowedHosts,
@@ -166,6 +167,17 @@ export async function runOnce() {
   const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
   const thresholds = publishThresholds();
   const registryAddress = optionalEnv("PRECALL_REGISTRY_ADDRESS", "");
+  const requireX402 = boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false);
+  const gatewayConfig = gatewayRuntimeConfig();
+  if (requireX402 && !gatewayConfig.enabled) {
+    throw new Error("REQUIRE_CIRCLE_GATEWAY_X402=true but ENABLE_CIRCLE_GATEWAY_X402 is not enabled on the worker.");
+  }
+  if (requireX402 && !gatewayConfig.privateKey) {
+    throw new Error("REQUIRE_CIRCLE_GATEWAY_X402=true but CIRCLE_AGENT_PRIVATE_KEY is missing on the worker.");
+  }
+  if (requireX402 && gatewayConfig.allowedHosts.length === 0) {
+    throw new Error("REQUIRE_CIRCLE_GATEWAY_X402=true but CIRCLE_X402_ALLOWED_HOSTS is empty.");
+  }
   const onchainAgentId = Number(optionalEnv("DEFAULT_ONCHAIN_AGENT_ID", "0"));
   if (publishOnchain && (!Number.isFinite(onchainAgentId) || onchainAgentId <= 0)) {
     throw new Error("DEFAULT_ONCHAIN_AGENT_ID is required when PUBLISH_ONCHAIN=true. Run `npm run worker -- register-agent` first.");
@@ -211,6 +223,18 @@ export async function runOnce() {
     try {
       x402Result = await fetchAisaX402SocialEvidence({ market, snapshot, dailySpendUsdc: dailyX402SpendUsdc });
       if (x402Result.status === "success") dailyX402SpendUsdc = addUsdc(dailyX402SpendUsdc, x402Result.paymentAmountUsdc);
+      if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
+        const failure = x402Result.error || `Required Gateway/x402 evidence failed with status ${x402Result.status}.`;
+        const failedRun = await recordAgentRun({
+          status: "failed_x402_required",
+          model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+          inputs: { market, snapshot, requireX402: true },
+          failure,
+        });
+        await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+        failed.push({ marketId: market.marketId, title: market.title, stage: "x402_required", error: failure });
+        continue;
+      }
       const evidenceContext = buildEvidenceContext({ market, snapshot, x402: x402Result });
       const councilResult = await runAgentCouncilDetailed({ market, snapshot, evidence: evidenceContext });
       const call = aggregateVotes(market, snapshot, councilResult.votes, evidenceContext);

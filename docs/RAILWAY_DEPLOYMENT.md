@@ -15,7 +15,7 @@ When Railway owns worker execution, set `DISABLE_SCHEDULED_WORKERS=true` on Verc
 2. In Railway, create a new project from the GitHub repo `Mrgtee/precall`.
 3. Choose the root directory as the project root.
 4. Add a persistent HTTP worker service named `precall-worker-http`.
-5. Use the worker-only build and start commands below.
+5. Railway can use the committed `railway.json`, or you can manually enter the worker-only build and start commands below.
 6. Add the required environment variables from the sections below.
 7. Deploy the service and copy its public Railway URL.
 8. Add that URL to Vercel as `WORKER_TRIGGER_URL`.
@@ -76,7 +76,8 @@ DEFAULT_ONCHAIN_AGENT_ID=
 PUBLISH_ONCHAIN=true
 RESOLVE_ONCHAIN=true
 
-ENABLE_CIRCLE_GATEWAY_X402=false
+ENABLE_CIRCLE_GATEWAY_X402=true
+REQUIRE_CIRCLE_GATEWAY_X402=true
 CIRCLE_GATEWAY_CHAIN=arcTestnet
 CIRCLE_AGENT_PRIVATE_KEY=
 CIRCLE_GATEWAY_RPC_URL=
@@ -104,7 +105,7 @@ PORT=8080
 
 ## Required Vercel Env Vars For Railway Mode
 
-Keep public/web values on Vercel:
+Keep public/web values on Vercel. Private worker secrets have been removed from Vercel; Vercel should only proxy signed admin requests to Railway:
 
 ```env
 DATABASE_URL=
@@ -134,6 +135,16 @@ OPENAI_API_KEY=
 ```
 
 Vercel admin actions will call Railway through `WORKER_TRIGGER_URL` when both trigger env vars are configured. Vercel cron routes return a safe disabled result when `DISABLE_SCHEDULED_WORKERS=true`, so Railway cron should be the only scheduled executor. If trigger env vars are missing and `DISABLE_SCHEDULED_WORKERS=true`, Vercel returns a safe disabled result instead of trying to run private workers.
+
+
+## Admin Access
+
+The public header hides the Admin link until a connected wallet is confirmed as whitelisted. Admin membership has two layers:
+
+- Bootstrap admins from `NEXT_PUBLIC_ADMIN_WALLETS` / `ADMIN_WALLETS`.
+- Database overrides in `admin_wallets`, managed from the Admin page with signed wallet actions.
+
+A whitelisted admin can add or dewhitelist other admin wallets from `/admin`. The current signing wallet cannot dewhitelist itself, and the app refuses to remove the last active admin. Env-configured wallets can be disabled by adding a disabled database override row through the Admin page.
 
 ## Protected Worker Trigger Endpoints
 
@@ -189,6 +200,7 @@ The cron jobs can share the same Railway variables as the HTTP worker service. I
 
 ```env
 ENABLE_CIRCLE_GATEWAY_X402=true
+REQUIRE_CIRCLE_GATEWAY_X402=true
 CIRCLE_AGENT_PRIVATE_KEY=0x...
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
@@ -223,7 +235,20 @@ order by fetched_at desc
 limit 10;
 ```
 
-If x402 is disabled, blocked, over budget, underfunded, or unsupported by the seller endpoint, Precall records the failure when a payment attempt was made and continues with free Polymarket evidence only. It does not fake paid evidence.
+With `REQUIRE_CIRCLE_GATEWAY_X402=true`, admin-triggered `run-once` will not analyze or publish a candidate unless the required paid x402 evidence call succeeds and stores at least one paid evidence item. If x402 is disabled, blocked, over budget, underfunded, unsupported, or returns no usable evidence, Precall records the failure and refuses free-only publishing for that candidate. It does not fake paid evidence.
+
+
+## Final Railway Deployment Checklist
+
+1. Push this commit to GitHub.
+2. Create the Railway service from GitHub and let it use `railway.json`, or manually set the build/start commands above.
+3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=true`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
+4. Deploy the Railway HTTP worker and open `/healthz`.
+5. Copy the Railway URL into Vercel as `WORKER_TRIGGER_URL`.
+6. Add the same `WORKER_TRIGGER_SECRET` to Vercel.
+7. Redeploy Vercel after adding the trigger variables.
+8. From `/admin`, connect a whitelisted wallet and run `Check worker health`; the output should say `proxiedToRailway: true`.
+9. Run `Run agent now`; with required x402 enabled, candidates only proceed if the paid evidence API succeeds.
 
 ## Known Limitations
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Activity } from "lucide-react";
+import { AdminNavLink } from "../components/admin-nav-link";
 import { WalletProvider } from "../components/wallet-provider";
 import "./globals.css";
 
@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/demo">Demo</Link>
               <Link href="/leaderboard">Leaderboard</Link>
               <Link href="/top-5-today">Top 5 Today</Link>
-              <Link href="/admin"><Activity size={18} /> Admin</Link>
+              <AdminNavLink />
             </nav>
           </header>
           {children}

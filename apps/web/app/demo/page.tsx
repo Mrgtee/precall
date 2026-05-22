@@ -36,7 +36,7 @@ export default async function DemoPage() {
 
       <section className="info-grid">
         <article className="panel info-card"><h2>System status</h2><p>DB <Bool value={data.config.database} /></p><p>Model <Bool value={data.config.model} /></p><p>Arc registry <Bool value={data.config.registry} /></p><p>Railway trigger <Bool value={data.config.workerTriggerConfigured} /></p></article>
-        <article className="panel info-card"><h2>Circle stack</h2><p>Gateway x402 <Bool value={data.circleStack.gatewayX402Enabled} /></p><p>Agent key <Bool value={data.circleStack.gatewayWalletConfigured} /></p><p>x402 spend {usdc(data.counts?.x402Spend || 0)}</p></article>
+        <article className="panel info-card"><h2>Circle stack</h2><p>Gateway x402 <Bool value={data.circleStack.gatewayX402Enabled} /></p><p>Required <Bool value={Boolean(data.circleStack.gatewayX402Required)} /></p><p>Agent key <Bool value={data.circleStack.gatewayWalletConfigured} /></p><p>x402 spend {usdc(data.counts?.x402Spend || 0)}</p></article>
         <article className="panel info-card"><h2>Resolution</h2><p>Resolved calls: {data.counts?.resolvedCalls ?? 0}</p><p>Awaiting: {data.awaitingResolution.length}</p><p className="muted">Reputation activates after resolved markets.</p></article>
         <article className="panel info-card"><h2>Latest run</h2><p>Status: {latestRun?.status || "none"}</p><p>Model: {latestRun?.model || "none"}</p><p>{latestRun?.failure ? "Failure recorded" : "No latest failure"}</p></article>
       </section>

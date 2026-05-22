@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runWorkerCommand, type WorkerCommand } from "../../../../lib/worker-runner";
-import { isAdminAction, verifyAdminSignature, type AdminChallenge } from "../../../../lib/admin-auth";
+import { isWorkerAdminAction, verifyAdminSignature, type AdminChallenge } from "../../../../lib/admin-auth";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -11,8 +11,8 @@ export async function POST(request: Request) {
     challenge?: AdminChallenge;
   };
   const action = body.action || "run-once";
-  if (!isAdminAction(action)) {
-    return NextResponse.json({ error: "Valid admin action is required." }, { status: 400 });
+  if (!isWorkerAdminAction(action)) {
+    return NextResponse.json({ error: "Valid worker admin action is required." }, { status: 400 });
   }
 
   const secret = request.headers.get("x-admin-secret");

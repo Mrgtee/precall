@@ -205,6 +205,22 @@ export const feedback = pgTable(
   }),
 );
 
+export const adminWallets = pgTable(
+  "admin_wallets",
+  {
+    id: serial("id").primaryKey(),
+    walletAddress: text("wallet_address").notNull().unique(),
+    active: boolean("active").notNull().default(true),
+    label: text("label").notNull().default(""),
+    addedBy: text("added_by").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    walletIdx: uniqueIndex("admin_wallets_wallet_idx").on(table.walletAddress),
+    activeIdx: index("admin_wallets_active_idx").on(table.active),
+  }),
+);
 
 export const circleActions = pgTable(
   "circle_actions",
