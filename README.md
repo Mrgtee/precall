@@ -84,8 +84,8 @@ Useful hardening controls:
 - `MAX_SPREAD_BPS=900`
 - `MIN_CONFIDENCE_BPS=5200`
 - `MIN_SUGGESTED_SIZE_BPS=100`
-- `MAX_MARKETS_PER_RUN=8`
-- `MAX_ANALYZED_MARKETS_PER_RUN=4`
+- `DISCOVERY_MARKET_LIMIT=75` - Polymarket markets fetched before eligibility/ranking.
+- `MAX_ANALYZED_MARKETS_PER_RUN=8` - top ranked eligible candidates allowed to spend x402/LLM calls.
 - `MODEL_TIMEOUT_MS=45000`
 - `MODEL_RETRY_COUNT=2`
 - `ALLOW_PUBLISH_FILTERED_RUN=false`

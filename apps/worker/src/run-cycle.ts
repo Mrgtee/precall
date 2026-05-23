@@ -2,7 +2,7 @@ import { buildEvidenceContext } from "@precall/shared/evidence";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalances, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { fetchAisaX402SocialEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
-import { evaluateMarketEligibility, summarizeSkipReasons } from "@precall/shared/market-eligibility";
+import { evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
   discoverPolymarketMarkets,
@@ -11,6 +11,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
+import type { MarketSnapshot, PolymarketMarket } from "@precall/shared/types";
 import { runAgentCouncilDetailed } from "@precall/shared/agents/council";
 import {
   ensureCouncilAgent,
@@ -46,6 +47,10 @@ export async function health() {
     modelTimeoutMs: numberEnv("MODEL_TIMEOUT_MS", 45_000),
     modelRetryCount: numberEnv("MODEL_RETRY_COUNT", 2),
     registryAddress: Boolean(process.env.PRECALL_REGISTRY_ADDRESS),
+    discovery: {
+      marketLimit: discoveryMarketLimit(),
+      maxAnalyzedMarkets: maxAnalyzedMarketsPerRun(),
+    },
     database: {
       circleActions: circleActionsSchema,
     },
@@ -117,22 +122,153 @@ function publishThresholds(): PublishThresholds {
   };
 }
 
-export async function discover() {
-  const limit = numberEnv("MAX_MARKETS_PER_RUN", 8);
-  const thresholds = publishThresholds();
-  const markets = await discoverPolymarketMarkets(limit);
-  const skipped = [];
-  let eligible = 0;
+function discoveryMarketLimit() {
+  return numberEnv("DISCOVERY_MARKET_LIMIT", 75);
+}
+
+function maxAnalyzedMarketsPerRun() {
+  return numberEnv("MAX_ANALYZED_MARKETS_PER_RUN", 8);
+}
+
+type RunSkippedMarket = {
+  marketId: string;
+  title: string;
+  reasons: string[];
+  url?: string | undefined;
+  liquidityUsd?: number | undefined;
+  volume24hUsd?: number | undefined;
+  closeTime?: string | null | undefined;
+  spreadBps?: number | null | undefined;
+  yesPriceBps?: number | null | undefined;
+  candidateScore?: number | undefined;
+  edgeBps?: number | undefined;
+  confidenceBps?: number | undefined;
+  suggestedSizeBps?: number | undefined;
+};
+
+type RunFailedMarket = {
+  marketId: string;
+  title: string;
+  stage: string;
+  error: string;
+};
+
+type RankedDiscoveryCandidate = {
+  market: PolymarketMarket;
+  snapshot: MarketSnapshot;
+  candidateScore: MarketCandidateScore;
+};
+
+function candidateSummary(candidate: RankedDiscoveryCandidate) {
+  return {
+    marketId: candidate.market.marketId,
+    title: candidate.market.title,
+    url: candidate.market.url,
+    candidateScore: candidate.candidateScore.score,
+    spreadBps: candidate.snapshot.spreadBps,
+    liquidityUsd: candidate.market.liquidityUsd,
+    volume24hUsd: candidate.market.volume24hUsd,
+    closeTime: candidate.market.closeTime,
+    yesPriceBps: candidate.snapshot.yesPriceBps,
+    descriptionLength: candidate.candidateScore.descriptionLength,
+  };
+}
+
+function rejectedSummary(market: PolymarketMarket, reasons: string[], snapshot: MarketSnapshot | undefined, candidateScore: MarketCandidateScore): RunSkippedMarket {
+  return {
+    marketId: market.marketId,
+    title: market.title,
+    reasons,
+    url: market.url,
+    liquidityUsd: market.liquidityUsd,
+    volume24hUsd: market.volume24hUsd,
+    closeTime: market.closeTime,
+    spreadBps: snapshot?.spreadBps ?? candidateScore.spreadBps,
+    yesPriceBps: snapshot?.yesPriceBps ?? candidateScore.yesPriceBps,
+    candidateScore: candidateScore.score,
+  };
+}
+
+async function discoverRankedMarketPool(input: { thresholds: PublishThresholds; discoveryLimit: number; topLimit: number }) {
+  const markets = await discoverPolymarketMarkets(input.discoveryLimit);
+  const skipped: RunSkippedMarket[] = [];
+  const failed: RunFailedMarket[] = [];
+  const rejected: RunSkippedMarket[] = [];
+  const snapshotCandidates: { market: PolymarketMarket; snapshot: MarketSnapshot }[] = [];
 
   for (const market of markets) {
-    const snapshot = await fetchMarketSnapshot(market);
-    await upsertMarket(market);
-    await insertSnapshot(snapshot);
-    const eligibility = evaluateMarketEligibility(market, { snapshot, thresholds });
-    if (eligibility.eligible) eligible += 1;
-    else skipped.push({ marketId: market.marketId, title: market.title, reasons: eligibility.reasons });
+    try {
+      await upsertMarket(market);
+    } catch (error) {
+      failed.push({ marketId: market.marketId, title: market.title, stage: "market_upsert", error: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+
+    const preliminary = evaluateMarketEligibility(market, { thresholds: input.thresholds });
+    if (!preliminary.eligible) {
+      const summary = rejectedSummary(market, preliminary.reasons, undefined, scoreMarketCandidate(market));
+      skipped.push(summary);
+      rejected.push(summary);
+      continue;
+    }
+
+    let snapshot: MarketSnapshot;
+    try {
+      snapshot = await fetchMarketSnapshot(market);
+      await insertSnapshot(snapshot);
+    } catch (error) {
+      failed.push({ marketId: market.marketId, title: market.title, stage: "snapshot", error: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+
+    const eligibility = evaluateMarketEligibility(market, { snapshot, thresholds: input.thresholds });
+    if (!eligibility.eligible) {
+      const summary = rejectedSummary(market, eligibility.reasons, snapshot, scoreMarketCandidate(market, snapshot));
+      skipped.push(summary);
+      rejected.push(summary);
+      continue;
+    }
+
+    snapshotCandidates.push({ market, snapshot });
   }
-  return { checked: markets.length, eligible, skipped, skippedByReason: summarizeSkipReasons(skipped) };
+
+  const eligibleCandidates = rankMarketCandidates(snapshotCandidates) as RankedDiscoveryCandidate[];
+  const topRejectedMarkets = rejected
+    .sort((left, right) => (right.candidateScore || 0) - (left.candidateScore || 0) || (right.liquidityUsd || 0) - (left.liquidityUsd || 0))
+    .slice(0, 10);
+  const topEligibleCandidates = eligibleCandidates.slice(0, input.topLimit).map(candidateSummary);
+
+  return {
+    discoveryLimit: input.discoveryLimit,
+    discovered: markets.length,
+    checked: markets.length,
+    eligibleCandidates,
+    skipped,
+    failed,
+    topRejectedMarkets,
+    topEligibleCandidates,
+  };
+}
+
+export async function discover() {
+  const thresholds = publishThresholds();
+  const discovery = await discoverRankedMarketPool({
+    thresholds,
+    discoveryLimit: discoveryMarketLimit(),
+    topLimit: maxAnalyzedMarketsPerRun(),
+  });
+
+  return {
+    discoveryLimit: discovery.discoveryLimit,
+    discovered: discovery.discovered,
+    checked: discovery.checked,
+    eligible: discovery.eligibleCandidates.length,
+    skipped: discovery.skipped,
+    failed: discovery.failed,
+    skippedByReason: summarizeSkipReasons(discovery.skipped),
+    topRejectedMarkets: discovery.topRejectedMarkets,
+    topEligibleCandidates: discovery.topEligibleCandidates,
+  };
 }
 
 export async function registerCouncilAgent() {
@@ -170,8 +306,8 @@ function addUsdc(left: string | number, right: string | number | undefined) {
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
-  const maxMarkets = numberEnv("MAX_MARKETS_PER_RUN", 8);
-  const maxAnalyzedMarkets = numberEnv("MAX_ANALYZED_MARKETS_PER_RUN", 4);
+  const discoveryLimit = discoveryMarketLimit();
+  const maxAnalyzedMarkets = maxAnalyzedMarketsPerRun();
   const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "1");
   const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
   const thresholds = publishThresholds();
@@ -197,35 +333,20 @@ export async function runOnce() {
     ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000"),
   });
 
-  const markets = await discoverPolymarketMarkets(maxMarkets);
+  const discovery = await discoverRankedMarketPool({ thresholds, discoveryLimit, topLimit: maxAnalyzedMarkets });
   let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
   const published = [];
-  const skipped = [];
-  const failed = [];
+  const skipped: RunSkippedMarket[] = [...discovery.skipped];
+  const failed: RunFailedMarket[] = [...discovery.failed];
+  const candidatesForAnalysis = discovery.eligibleCandidates.slice(0, maxAnalyzedMarkets);
+  const analysisLimited = discovery.eligibleCandidates.slice(maxAnalyzedMarkets);
+  for (const candidate of analysisLimited) {
+    skipped.push({ ...candidateSummary(candidate), reasons: ["analysis_limit"] });
+  }
   let analyzed = 0;
-  let eligible = 0;
 
-  for (const market of markets) {
-    let snapshot;
-    try {
-      await upsertMarket(market);
-      snapshot = await fetchMarketSnapshot(market);
-      await insertSnapshot(snapshot);
-    } catch (error) {
-      failed.push({ marketId: market.marketId, title: market.title, stage: "snapshot", error: error instanceof Error ? error.message : String(error) });
-      continue;
-    }
-
-    const eligibility = evaluateMarketEligibility(market, { snapshot, thresholds });
-    if (!eligibility.eligible) {
-      skipped.push({ marketId: market.marketId, title: market.title, reasons: eligibility.reasons });
-      continue;
-    }
-    eligible += 1;
-    if (analyzed >= maxAnalyzedMarkets) {
-      skipped.push({ marketId: market.marketId, title: market.title, reasons: ["analysis_limit"] });
-      continue;
-    }
+  for (const candidate of candidatesForAnalysis) {
+    const { market, snapshot } = candidate;
     analyzed += 1;
 
     let x402Result: X402EvidenceProviderResult | undefined;
@@ -237,7 +358,7 @@ export async function runOnce() {
         const failedRun = await recordAgentRun({
           status: "failed_x402_required",
           model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
-          inputs: { market, snapshot, requireX402: true },
+          inputs: { market, snapshot, requireX402: true, candidateScore: candidate.candidateScore },
           failure,
         });
         await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
@@ -252,7 +373,7 @@ export async function runOnce() {
       const candidateRun = await recordAgentRun({
         status: publishable ? "candidate" : "filtered",
         model: councilResult.model,
-        inputs: { market, snapshot, thresholds, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
+        inputs: { market, snapshot, thresholds, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
         outputs: { call, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures },
         evidenceContext,
         retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
@@ -262,7 +383,13 @@ export async function runOnce() {
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
 
       if (!publishable) {
-        skipped.push({ marketId: market.marketId, title: market.title, reasons: thresholdFailures, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps, suggestedSizeBps: call.suggestedSizeBps });
+        skipped.push({
+          ...candidateSummary(candidate),
+          reasons: thresholdFailures,
+          edgeBps: call.edgeBps,
+          confidenceBps: call.confidenceBps,
+          suggestedSizeBps: call.suggestedSizeBps,
+        });
         continue;
       }
 
@@ -301,7 +428,7 @@ export async function runOnce() {
       await recordAgentRun({
         status: "published",
         model: councilResult.model,
-        inputs: { market, snapshot, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
+        inputs: { market, snapshot, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
         outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)) },
         evidenceContext,
         publishedCallId: row.id,
@@ -311,14 +438,27 @@ export async function runOnce() {
       published.push({ id: row.id, onchainCallId, market: market.title, txHash, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const failedRun = await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot }, failure: message });
+      const failedRun = await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot, candidateScore: candidate.candidateScore }, failure: message });
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
       failed.push({ marketId: market.marketId, title: market.title, stage: "analysis_or_publish", error: message });
       continue;
     }
   }
 
-  return { checked: markets.length, eligible, analyzed, published, skipped, failed, skippedByReason: summarizeSkipReasons(skipped) };
+  return {
+    discoveryLimit,
+    maxAnalyzedMarkets,
+    discovered: discovery.discovered,
+    checked: discovery.checked,
+    eligible: discovery.eligibleCandidates.length,
+    analyzed,
+    published,
+    skipped,
+    failed,
+    skippedByReason: summarizeSkipReasons(skipped),
+    topRejectedMarkets: discovery.topRejectedMarkets,
+    topEligibleCandidates: discovery.topEligibleCandidates,
+  };
 }
 
 export async function publishStoredRun(runId: number) {

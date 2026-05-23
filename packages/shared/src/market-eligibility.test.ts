@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateMarketEligibility, isEligibleBinaryMarket, summarizeSkipReasons } from "./market-eligibility";
+import { evaluateMarketEligibility, isEligibleBinaryMarket, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons } from "./market-eligibility";
 import type { PolymarketMarket } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -52,4 +52,34 @@ test("expired, non-binary, missing, invalid, low-liquidity and wide-spread reaso
 
 test("summarizeSkipReasons counts reasons for admin/health output", () => {
   assert.deepEqual(summarizeSkipReasons([{ reasons: ["expired", "not_yes_no"] }, { reasons: ["expired"] }]), { expired: 2, not_yes_no: 1 });
+});
+
+
+test("candidate ranking prefers tighter spread, liquidity, volume, balanced prices, and evidence depth", () => {
+  const weaker = {
+    market: market({
+      marketId: "wide",
+      title: "Wide market",
+      description: "thin",
+      liquidityUsd: 12_000,
+      volume24hUsd: 100,
+      outcomePrices: [0.97, 0.03],
+    }),
+    snapshot: { marketId: "wide", yesPriceBps: 9700, noPriceBps: 300, spreadBps: 850, depthUsd: 12_000, capturedAt: now.toISOString() },
+  };
+  const stronger = {
+    market: market({
+      marketId: "tight",
+      title: "Tight market",
+      description: "A detailed market description with clear resolution terms and enough context for evidence-based analysis.",
+      liquidityUsd: 80_000,
+      volume24hUsd: 25_000,
+      outcomePrices: [0.52, 0.48],
+    }),
+    snapshot: { marketId: "tight", yesPriceBps: 5200, noPriceBps: 4800, spreadBps: 120, depthUsd: 80_000, capturedAt: now.toISOString() },
+  };
+
+  const ranked = rankMarketCandidates([weaker, stronger]);
+  assert.equal(ranked[0]?.market.marketId, "tight");
+  assert.ok(scoreMarketCandidate(stronger.market, stronger.snapshot).score > scoreMarketCandidate(weaker.market, weaker.snapshot).score);
 });
