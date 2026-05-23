@@ -25,6 +25,7 @@ import {
   recordAgentRun,
   recordCircleAction,
   getTodayX402SpendUsdc,
+  checkCircleActionsSchemaHealth,
   upsertMarket,
 } from "./repository";
 
@@ -32,6 +33,7 @@ export async function health() {
   const thresholds = publishThresholds();
   const gatewayConfig = gatewayRuntimeConfig();
   const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
+  const circleActionsSchema = await checkCircleActionsSchemaHealth();
   const base = {
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -40,6 +42,9 @@ export async function health() {
     modelTimeoutMs: numberEnv("MODEL_TIMEOUT_MS", 45_000),
     modelRetryCount: numberEnv("MODEL_RETRY_COUNT", 2),
     registryAddress: Boolean(process.env.PRECALL_REGISTRY_ADDRESS),
+    database: {
+      circleActions: circleActionsSchema,
+    },
     circle: {
       gatewayX402Enabled: gatewayConfig.enabled,
       gatewayX402Required: boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false),

@@ -16,6 +16,70 @@ import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapsho
 let dbClient: PrecallDb | undefined;
 let closeDbClient: (() => Promise<void>) | undefined;
 
+
+const CIRCLE_ACTIONS_REQUIRED_COLUMNS = ["amount_usdc", "action_type", "status", "created_at"] as const;
+type CircleActionsRequiredColumn = typeof CIRCLE_ACTIONS_REQUIRED_COLUMNS[number];
+
+function rowsFromSqlResult<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    return Array.isArray(rows) ? rows as T[] : [];
+  }
+  return [];
+}
+
+export type CircleActionsSchemaHealth = {
+  tableExists: boolean;
+  columns: Record<CircleActionsRequiredColumn, boolean>;
+  legacyAmountColumnExists: boolean;
+  ok: boolean;
+  missingColumns: CircleActionsRequiredColumn[];
+  error?: string | undefined;
+};
+
+function circleActionsSchemaHealthBase(tableExists: boolean, presentColumns = new Set<string>()): CircleActionsSchemaHealth {
+  const columns = Object.fromEntries(CIRCLE_ACTIONS_REQUIRED_COLUMNS.map((column) => [column, presentColumns.has(column)])) as Record<CircleActionsRequiredColumn, boolean>;
+  const missingColumns = CIRCLE_ACTIONS_REQUIRED_COLUMNS.filter((column) => !columns[column]);
+  return {
+    tableExists,
+    columns,
+    legacyAmountColumnExists: presentColumns.has("amount"),
+    ok: tableExists && missingColumns.length === 0,
+    missingColumns,
+  };
+}
+
+export async function checkCircleActionsSchemaHealth(): Promise<CircleActionsSchemaHealth> {
+  try {
+    const tableResult = await db().execute(sql<{ exists: boolean }>`
+      select exists (
+        select 1
+        from information_schema.tables
+        where table_schema = current_schema()
+          and table_name = 'circle_actions'
+      ) as "exists"
+    `);
+    const tableRows = rowsFromSqlResult<{ exists: boolean }>(tableResult);
+    const tableExists = Boolean(tableRows[0]?.exists);
+
+    const columnResult = await db().execute(sql<{ column_name: string }>`
+      select column_name
+      from information_schema.columns
+      where table_schema = current_schema()
+        and table_name = 'circle_actions'
+        and column_name in ('amount_usdc', 'amount', 'action_type', 'status', 'created_at')
+    `);
+    const columnRows = rowsFromSqlResult<{ column_name: string }>(columnResult);
+    return circleActionsSchemaHealthBase(tableExists, new Set(columnRows.map((row) => row.column_name)));
+  } catch (error) {
+    return {
+      ...circleActionsSchemaHealthBase(false),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function db() {
   if (!dbClient) {
     const connection = createDbConnection();
@@ -285,11 +349,20 @@ export async function recordCircleAction(input: CircleActionInput) {
 export async function getTodayX402SpendUsdc(now = new Date()) {
   const start = new Date(now);
   start.setUTCHours(0, 0, 0, 0);
-  const [row] = await db()
-    .select({ total: sql<string>`coalesce(sum(${circleActions.amountUsdc}), 0)::text` })
-    .from(circleActions)
-    .where(and(eq(circleActions.actionType, "x402_api_payment"), eq(circleActions.status, "success"), sql`${circleActions.createdAt} >= ${start}`));
-  return row?.total || "0";
+  const health = await checkCircleActionsSchemaHealth();
+  if (!health.tableExists || !health.columns.action_type || !health.columns.status || !health.columns.created_at) return "0";
+  if (!health.columns.amount_usdc && !health.legacyAmountColumnExists) return "0";
+
+  const amountColumn = health.columns.amount_usdc ? sql.raw('"amount_usdc"') : sql.raw('"amount"');
+  const result = await db().execute(sql<{ total: string | null }>`
+    select coalesce(sum(coalesce(${amountColumn}, 0::numeric)), 0)::text as "total"
+    from "circle_actions"
+    where "action_type" = 'x402_api_payment'
+      and "status" = 'success'
+      and "created_at" >= ${start}
+  `);
+  const rows = rowsFromSqlResult<{ total: string | null }>(result);
+  return rows[0]?.total || "0";
 }
 
 export async function adminSummary() {
