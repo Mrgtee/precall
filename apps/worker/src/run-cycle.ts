@@ -1,6 +1,6 @@
 import { buildEvidenceContext } from "@precall/shared/evidence";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
-import { getGatewayBalances, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
+import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { fetchAisaX402SocialEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
 import { evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
@@ -33,7 +33,8 @@ import {
 export async function health() {
   const thresholds = publishThresholds();
   const gatewayConfig = gatewayRuntimeConfig();
-  const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
+  const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) }]) : [];
+  const primaryGatewayBalance = gatewayBalances.find((balance) => balance.chain === gatewayConfig.chain) || gatewayBalances[0];
   const circleActionsSchema = await checkCircleActionsSchemaHealth();
   const base = {
     worker: {
@@ -58,14 +59,21 @@ export async function health() {
       gatewayX402Enabled: gatewayConfig.enabled,
       gatewayX402Required: boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false),
       gatewayChain: gatewayConfig.chain,
+      x402ChainCandidates: gatewayConfig.chainCandidates,
       gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
       allowedHosts: gatewayConfig.allowedHosts,
       maxPaymentUsdc: gatewayConfig.maxPaymentUsdc,
       dailyBudgetUsdc: gatewayConfig.dailyBudgetUsdc,
       minGatewayBalanceUsdc: gatewayConfig.minGatewayBalanceUsdc,
-      gatewayBalanceStatus: gatewayBalance?.status || "disabled",
-      gatewayAvailableUsdc: gatewayBalance && "gatewayAvailableUsdc" in gatewayBalance ? gatewayBalance.gatewayAvailableUsdc : undefined,
-      gatewayError: gatewayBalance?.error,
+      gatewayBalanceStatus: primaryGatewayBalance?.status || "disabled",
+      gatewayAvailableUsdc: primaryGatewayBalance && "gatewayAvailableUsdc" in primaryGatewayBalance ? primaryGatewayBalance.gatewayAvailableUsdc : undefined,
+      gatewayBalancesByChain: gatewayBalances.map((balance) => ({
+        chain: balance.chain,
+        status: balance.status,
+        gatewayAvailableUsdc: "gatewayAvailableUsdc" in balance ? balance.gatewayAvailableUsdc : undefined,
+        error: balance.error,
+      })),
+      gatewayError: primaryGatewayBalance?.error,
     },
     thresholds,
   };
@@ -287,20 +295,42 @@ async function recordX402CircleAction(input: { result: X402EvidenceProviderResul
     provider: input.result.provider,
     url: input.result.url,
     amountUsdc: input.result.paymentAmountUsdc || "0",
-    chain: input.result.paymentNetwork || optionalEnv("CIRCLE_GATEWAY_CHAIN", "arcTestnet"),
+    chain: input.result.selectedChain || input.result.paymentNetwork || optionalEnv("CIRCLE_GATEWAY_CHAIN", "arcTestnet"),
     paymentRef: input.result.paymentRef,
     txHash: input.result.txHash,
     relatedMarketId: input.marketId,
     relatedAgentRunId: input.agentRunId,
     status: input.result.status === "success" ? "success" : input.result.status,
     error: input.result.error,
-    metadata: { evidenceCount: input.result.evidence.length },
+    metadata: {
+      evidenceCount: input.result.evidence.length,
+      selectedChain: input.result.selectedChain,
+      paymentNetwork: input.result.paymentNetwork,
+      supportChecks: input.result.supportChecks,
+      failureReason: input.result.failureReason,
+    },
   });
 }
 
 function addUsdc(left: string | number, right: string | number | undefined) {
   const total = Number(left || 0) + Number(right || 0);
   return Number.isFinite(total) ? total.toFixed(6) : String(left);
+}
+
+function x402Summary(result: X402EvidenceProviderResult | undefined) {
+  if (!result) return { enabled: false, status: "not_attempted" };
+  return {
+    enabled: result.enabled,
+    provider: result.provider,
+    status: result.status,
+    selectedChain: result.selectedChain,
+    paymentNetwork: result.paymentNetwork,
+    paymentAmountUsdc: result.paymentAmountUsdc,
+    supportChecks: result.supportChecks,
+    failureReason: result.failureReason,
+    error: result.error,
+    evidenceCount: result.evidence.length,
+  };
 }
 
 export async function runOnce() {
@@ -358,7 +388,7 @@ export async function runOnce() {
         const failedRun = await recordAgentRun({
           status: "failed_x402_required",
           model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
-          inputs: { market, snapshot, requireX402: true, candidateScore: candidate.candidateScore },
+          inputs: { market, snapshot, requireX402: true, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) },
           failure,
         });
         await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
@@ -373,8 +403,8 @@ export async function runOnce() {
       const candidateRun = await recordAgentRun({
         status: publishable ? "candidate" : "filtered",
         model: councilResult.model,
-        inputs: { market, snapshot, thresholds, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
-        outputs: { call, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures },
+        inputs: { market, snapshot, thresholds, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
+        outputs: { call, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
         evidenceContext,
         retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
         latencyMs: councilResult.totalLatencyMs,
@@ -428,8 +458,8 @@ export async function runOnce() {
       await recordAgentRun({
         status: "published",
         model: councilResult.model,
-        inputs: { market, snapshot, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId) },
-        outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)) },
+        inputs: { market, snapshot, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
+        outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)), x402: x402Summary(x402Result) },
         evidenceContext,
         publishedCallId: row.id,
         retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
@@ -438,7 +468,7 @@ export async function runOnce() {
       published.push({ id: row.id, onchainCallId, market: market.title, txHash, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const failedRun = await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot, candidateScore: candidate.candidateScore }, failure: message });
+      const failedRun = await recordAgentRun({ status: "failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, snapshot, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
       failed.push({ marketId: market.marketId, title: market.title, stage: "analysis_or_publish", error: message });
       continue;

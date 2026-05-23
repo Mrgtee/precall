@@ -65,14 +65,19 @@ type AdminSummary = {
     gatewayX402Enabled: boolean;
     gatewayX402Required?: boolean;
     gatewayChain: string;
+    x402ChainCandidates?: string[];
     gatewayBalanceStatus: string;
     gatewayAvailableUsdc?: string;
+    gatewayBalancesByChain?: Array<{ chain: string; status: string; gatewayAvailableUsdc?: string; error?: string }>;
     allowedHosts: string[];
+    latestX402SelectedChain?: string;
+    latestX402FailureReason?: string;
+    latestX402SupportChecks?: unknown;
     gatewayError?: string;
     dailyBudgetUsdc: string;
     maxPaymentUsdc: string;
   };
-  latestX402Payment?: { provider?: string; amountUsdc?: string; amount?: string; status?: string; error?: string } | null;
+  latestX402Payment?: { provider?: string; amountUsdc?: string; amount?: string; status?: string; error?: string; chain?: string } | null;
 };
 
 const actions: Array<{
@@ -295,10 +300,14 @@ export function AdminConsole() {
               <h2>Circle Agent Stack status</h2>
               <p>Gateway x402 enabled <Bool value={summary.circleStack.gatewayX402Enabled} /></p>
               <p>Gateway x402 required <Bool value={Boolean(summary.circleStack.gatewayX402Required)} /></p>
-              <p className="muted">Chain: {summary.circleStack.gatewayChain} · Balance status: {summary.circleStack.gatewayBalanceStatus}</p>
-              <p className="muted">Gateway available: {summary.circleStack.gatewayAvailableUsdc ? usdc(summary.circleStack.gatewayAvailableUsdc) : "not available"}</p>
+              <p className="muted">Settlement chain: Arc Testnet · Default Gateway chain: {summary.circleStack.gatewayChain}</p>
+              <p className="muted">x402 candidates: {(summary.circleStack.x402ChainCandidates || [summary.circleStack.gatewayChain]).join(", ")}</p>
+              <p className="muted">Gateway available: {summary.circleStack.gatewayAvailableUsdc ? usdc(summary.circleStack.gatewayAvailableUsdc) : "not available"} · Balance status: {summary.circleStack.gatewayBalanceStatus}</p>
+              {summary.circleStack.gatewayBalancesByChain?.length ? <p className="muted">Balances by chain: {summary.circleStack.gatewayBalancesByChain.map((balance) => `${balance.chain}: ${balance.gatewayAvailableUsdc ? usdc(balance.gatewayAvailableUsdc) : balance.status}`).join(" · ")}</p> : null}
               <p className="muted">Worker execution: {summary.config.workerTriggerConfigured ? "proxied to Railway" : summary.config.scheduledWorkersDisabled ? "disabled on Vercel" : "local Vercel runtime"}</p>
               <p className="muted">Allowed hosts: {summary.circleStack.allowedHosts.join(", ") || "none"}</p>
+              {summary.circleStack.latestX402SelectedChain ? <p className="muted">Latest selected x402 chain: {summary.circleStack.latestX402SelectedChain}</p> : null}
+              {summary.circleStack.latestX402FailureReason ? <p className="muted">Latest x402 failure: {summary.circleStack.latestX402FailureReason}</p> : null}
               {summary.circleStack.gatewayError ? <p className="muted">Last Gateway error: {summary.circleStack.gatewayError}</p> : null}
             </div>
             <aside className="panel info-note">
@@ -306,7 +315,7 @@ export function AdminConsole() {
               <p className="muted">Daily x402 spend: {usdc(summary.counts?.dailyX402Spend || 0)} / {usdc(summary.circleStack.dailyBudgetUsdc)}</p>
               <p className="muted">Max x402 request: {usdc(summary.circleStack.maxPaymentUsdc)}</p>
               <p className="muted">x402 API payments: {summary.counts?.x402ApiPayments ?? 0}</p>
-              {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
+              {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status}{summary.latestX402Payment.chain ? ` · ${summary.latestX402Payment.chain}` : ""}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
               <p className="muted">Arc bond volume: {usdc(summary.counts?.bondVolume || 0)}</p>
               <p className="muted">Thesis unlock volume: {usdc(summary.counts?.thesisUnlockVolume || summary.counts?.unlockVolume || 0)}</p>
             </aside>
@@ -319,7 +328,7 @@ export function AdminConsole() {
           <article className={`panel admin-action ${item.danger ? "danger" : ""}`} key={item.action}>
             <h3>{item.icon} {item.title}</h3>
             <p className="muted">{item.description}</p>
-            {item.action === "run-once" ? <p className="muted"><strong>Spend note:</strong> Railway must have Gateway/x402 enabled and required for production admin runs.</p> : null}
+            {item.action === "run-once" ? <p className="muted"><strong>Spend note:</strong> Railway should have Gateway/x402 enabled; keep x402 not-required until a provider/chain support check succeeds.</p> : null}
             <button className={item.danger ? "button" : "button secondary"} disabled={Boolean(active)} onClick={() => runAction(item.action)} type="button">
               {active === item.action ? "Running..." : item.title}
             </button>

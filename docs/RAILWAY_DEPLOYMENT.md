@@ -49,8 +49,10 @@ npm run worker:health
 npm run worker:run-once
 npm run worker:expire
 npm run worker:resolve
-npm run worker:gateway:balance
-npm run worker:gateway:deposit -- 1
+npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
+npm run worker:gateway:balance -- arcTestnet
+npm run worker:gateway:balance -- baseSepolia
+npm run worker:gateway:deposit -- baseSepolia 1
 ```
 
 The CLI commands close DB connections after completion and exit cleanly. The HTTP trigger server closes DB connections after every request and during SIGTERM/SIGINT shutdown.
@@ -79,8 +81,9 @@ PUBLISH_ONCHAIN=true
 RESOLVE_ONCHAIN=true
 
 ENABLE_CIRCLE_GATEWAY_X402=true
-REQUIRE_CIRCLE_GATEWAY_X402=true
+REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_GATEWAY_CHAIN=arcTestnet
+CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
 CIRCLE_AGENT_PRIVATE_KEY=
 CIRCLE_GATEWAY_RPC_URL=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
@@ -204,14 +207,16 @@ Gateway health can succeed while `gatewayAvailableUsdc` is `0`. That means the b
 Run these commands from Railway shell, a Railway one-off command, or locally with the same Railway env vars loaded. They never print the private key:
 
 ```bash
-npm run worker:gateway:balance
-npm run worker:gateway:deposit -- 1
-npm run worker:gateway:balance
+npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
+npm run worker:gateway:balance -- arcTestnet
+npm run worker:gateway:balance -- baseSepolia
+npm run worker:gateway:deposit -- baseSepolia 1
+npm run worker:gateway:balance -- baseSepolia
 ```
 
 Safety notes:
 
-- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has at least `1` USDC on `CIRCLE_GATEWAY_CHAIN`.
+- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has USDC on the chain you deposit from, and Gateway balance on at least one provider-supported `CIRCLE_X402_CHAIN_CANDIDATES` chain.
 - `ENABLE_CIRCLE_GATEWAY_X402=true` must be set, otherwise deposit returns a disabled result and moves no funds.
 - `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC` defaults to `10`; deposits above that cap are blocked before any transaction.
 - The deposit command uses the Circle Gateway SDK `deposit()` method, which approves the Gateway Wallet if needed, then deposits the requested USDC.
@@ -223,8 +228,9 @@ Safety notes:
 
 ```env
 ENABLE_CIRCLE_GATEWAY_X402=true
-REQUIRE_CIRCLE_GATEWAY_X402=true
+REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_AGENT_PRIVATE_KEY=0x...
+CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
@@ -258,14 +264,14 @@ order by fetched_at desc
 limit 10;
 ```
 
-With `REQUIRE_CIRCLE_GATEWAY_X402=true`, admin-triggered `run-once` will not analyze or publish a candidate unless the required paid x402 evidence call succeeds and stores at least one paid evidence item. If x402 is disabled, blocked, over budget, underfunded, unsupported, or returns no usable evidence, Precall records the failure and refuses free-only publishing for that candidate. It does not fake paid evidence.
+With `REQUIRE_CIRCLE_GATEWAY_X402=false`, admin-triggered `run-once` records paid-evidence failures and may continue with free Polymarket evidence if the market still passes normal quality gates. It does not fake paid evidence. After `worker:x402:supports -- <provider-url>` returns a supported chain and that chain has Gateway balance, you can deliberately switch required mode on to refuse free-only publishing for candidates.
 
 
 ## Final Railway Deployment Checklist
 
 1. Push this commit to GitHub.
 2. Create the Railway service from GitHub and let it use `railway.json`, or manually set the build/start commands above.
-3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=true`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
+3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=false`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
 4. Deploy the Railway HTTP worker and open `/healthz`.
 5. Copy the Railway URL into Vercel as `WORKER_TRIGGER_URL`.
 6. Add the same `WORKER_TRIGGER_SECRET` to Vercel.

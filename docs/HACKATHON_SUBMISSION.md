@@ -109,3 +109,8 @@ GitHub: https://github.com/Mrgtee/precall
 - User trade execution is manual through Polymarket links.
 - A new `PrecallRegistry` deployment is required for V2 bond slashing/treasury behavior.
 - Existing historical calls can remain as legacy rows with their original registry address.
+
+
+### x402 Chain Negotiation
+
+Precall keeps Arc Testnet as the settlement layer for bonded calls and thesis unlocks, while Gateway/x402 paid evidence can use Arc Testnet, Base Sepolia, Base, or any other seller-supported Gateway network. The worker checks candidate chains before paying, records the selected chain in `circle_actions`, and falls back honestly when paid evidence is unavailable unless required mode is deliberately enabled.

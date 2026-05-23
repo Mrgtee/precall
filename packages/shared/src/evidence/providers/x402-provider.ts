@@ -1,5 +1,5 @@
 import type { EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../../types";
-import { payX402Resource, supportsX402Resource, type PayX402ResourceResult } from "../../circle/gateway-client";
+import { payX402Resource, supportsX402Resource, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
 
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
 
@@ -13,6 +13,9 @@ export type X402EvidenceProviderResult = {
   evidence: EvidenceItemInput[];
   paymentAmountUsdc?: string | undefined;
   paymentNetwork?: string | undefined;
+  selectedChain?: string | undefined;
+  supportChecks?: GatewaySupportCheck[] | undefined;
+  failureReason?: string | undefined;
   paymentRef?: string | undefined;
   txHash?: string | undefined;
   error?: string | undefined;
@@ -65,10 +68,16 @@ function evidenceFromAisaTweets(input: {
         capturedAt: fetchedAt,
         paid: true,
         paymentAmountUsdc: input.payment.amountUsdc,
-        paymentNetwork: input.payment.paymentNetwork,
+        paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
         paymentRef: input.payment.paymentRef,
         txHash: input.payment.txHash,
-        metadata: { provider: "aisa_x402_social", endpoint: AISA_TWITTER_SEARCH_ENDPOINT, marketId: input.market.marketId },
+        metadata: {
+          provider: "aisa_x402_social",
+          endpoint: AISA_TWITTER_SEARCH_ENDPOINT,
+          marketId: input.market.marketId,
+          selectedChain: input.payment.selectedChain,
+          supportChecks: input.payment.supportChecks,
+        },
       };
     })
     .filter((item) => item.excerpt.length > 0);
@@ -97,6 +106,9 @@ export async function fetchAisaX402SocialEvidence(input: {
       evidence: [],
       paymentAmountUsdc: payment.amountUsdc,
       paymentNetwork: payment.paymentNetwork,
+      selectedChain: payment.selectedChain,
+      supportChecks: payment.supportChecks,
+      failureReason: payment.failureReason,
       paymentRef: payment.paymentRef,
       txHash: payment.txHash,
       error: payment.error,
@@ -111,6 +123,9 @@ export async function fetchAisaX402SocialEvidence(input: {
     evidence: evidenceFromAisaTweets({ data: payment.data, url, market: input.market, payment }),
     paymentAmountUsdc: payment.amountUsdc,
     paymentNetwork: payment.paymentNetwork,
+    selectedChain: payment.selectedChain,
+    supportChecks: payment.supportChecks,
+    failureReason: payment.failureReason,
     paymentRef: payment.paymentRef,
     txHash: payment.txHash,
   };

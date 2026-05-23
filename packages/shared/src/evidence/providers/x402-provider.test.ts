@@ -43,7 +43,8 @@ test("successful x402 payment becomes paid evidence", async () => {
       maxPaymentUsdc: "0.005",
       dailySpendUsdc: "0.000000",
       dailyBudgetUsdc: "0.10",
-      paymentNetwork: "eip155:5042002",
+      paymentNetwork: "eip155:84532",
+      selectedChain: "baseSepolia",
       paymentRef: "0xpayment",
       txHash: "0xpayment",
       data: { response: { tweets: [{ text: "BTC option flow is pricing upside.", url: "https://x.com/a/status/1", author: { userName: "analyst" } }] } } as T,
@@ -52,11 +53,14 @@ test("successful x402 payment becomes paid evidence", async () => {
 
   assert.equal(result.status, "success");
   assert.equal(result.paymentAmountUsdc, "0.005000");
+  assert.equal(result.selectedChain, "baseSepolia");
   assert.equal(result.evidence.length, 1);
   assert.equal(result.evidence[0]?.sourceType, "circle_x402_social");
   assert.equal(result.evidence[0]?.provider, "aisa_x402_social");
   assert.equal(result.evidence[0]?.paid, true);
   assert.equal(result.evidence[0]?.paymentRef, "0xpayment");
+  assert.equal(result.evidence[0]?.paymentNetwork, "eip155:84532");
+  assert.equal(result.evidence[0]?.metadata?.selectedChain, "baseSepolia");
 });
 
 test("failed x402 payment returns no paid evidence but keeps failure metadata", async () => {
@@ -81,4 +85,33 @@ test("failed x402 payment returns no paid evidence but keeps failure metadata", 
   assert.equal(result.evidence.length, 0);
   assert.equal(result.paymentAmountUsdc, "0.020000");
   assert.match(result.error || "", /exceeds cap/);
+});
+
+
+test("unsupported x402 chains return no paid evidence and keep unsupported_network reason", async () => {
+  const result = await fetchAisaX402SocialEvidence({
+    market,
+    snapshot,
+    payResource: async <T>() => ({
+      enabled: true,
+      status: "unsupported",
+      paid: false,
+      supported: false,
+      url: "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search",
+      maxPaymentUsdc: "0.005",
+      dailySpendUsdc: "0.000000",
+      dailyBudgetUsdc: "0.10",
+      failureReason: "unsupported_network",
+      supportChecks: [
+        { chain: "arcTestnet", status: "unsupported", supported: false, error: "No Gateway batching option available" },
+        { chain: "baseSepolia", status: "unsupported", supported: false, error: "No Gateway batching option available" },
+      ],
+      error: "unsupported_network: no Gateway batching option available for candidate chains arcTestnet, baseSepolia",
+    }),
+  });
+
+  assert.equal(result.status, "unsupported");
+  assert.equal(result.failureReason, "unsupported_network");
+  assert.equal(result.evidence.length, 0);
+  assert.equal(result.supportChecks?.length, 2);
 });

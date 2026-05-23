@@ -93,8 +93,9 @@ Useful hardening controls:
 Optional Circle Gateway/x402 paid evidence:
 
 - `ENABLE_CIRCLE_GATEWAY_X402=false` - master switch; when false the worker never attempts paid API calls.
-- `REQUIRE_CIRCLE_GATEWAY_X402=false` - set true on Railway production workers so admin-triggered runs refuse free-only evidence.
-- `CIRCLE_GATEWAY_CHAIN=arcTestnet` - Gateway SDK chain name used by the buyer key.
+- `REQUIRE_CIRCLE_GATEWAY_X402=false` - keep false until at least one provider/chain pair passes `worker:x402:supports`; when false, paid-evidence failures are recorded and the worker may continue with free evidence.
+- `CIRCLE_GATEWAY_CHAIN=arcTestnet` - default Gateway chain for balance/deposit commands; Arc Testnet still remains the settlement chain for bonds/unlocks.
+- `CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base` - ordered candidate chains tested against each x402 seller URL before payment.
 - `CIRCLE_AGENT_PRIVATE_KEY=` - server-only buyer key for Gateway/x402 payments; do not reuse `AGENT_OWNER_PRIVATE_KEY` and never expose it as `NEXT_PUBLIC_*`.
 - `CIRCLE_GATEWAY_RPC_URL=` - optional Gateway RPC override; otherwise the Arc RPC is reused when appropriate.
 - `CIRCLE_X402_MAX_PAYMENT_USDC=0.005` - per-request spend cap.
@@ -135,12 +136,14 @@ npm run worker -- run-once
 npm run worker -- publish-run <agentRunId>
 npm run worker -- expire
 npm run worker -- resolve
-npm run worker:gateway:balance
-npm run worker:gateway:deposit -- 1
-npm run worker:gateway:balance
+npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
+npm run worker:gateway:balance -- arcTestnet
+npm run worker:gateway:balance -- baseSepolia
+npm run worker:gateway:deposit -- baseSepolia 1
+npm run worker:gateway:balance -- baseSepolia
 ```
 
-`worker:gateway:balance` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY`. `worker:gateway:deposit -- 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. The command returns public tx hashes and before/after balances only; it never prints the private key.
+`worker:x402:supports -- <url>` checks each `CIRCLE_X402_CHAIN_CANDIDATES` entry and reports the first provider-supported chain. `worker:gateway:balance -- <chain>` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY` on that chain. `worker:gateway:deposit -- <chain> 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. Commands return public tx hashes and balances only; they never print the private key.
 
 `run-once` checks live markets, skips unsupported markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 
@@ -149,10 +152,10 @@ npm run worker:gateway:balance
 Precall does not just generate text. The agent uses Circle-powered financial rails across three clearly separated rails:
 
 - Public market data: Polymarket Gamma/CLOB provide free market metadata, prices, spreads, and depth. Precall never labels these public requests as paid.
-- Paid agent evidence: when `ENABLE_CIRCLE_GATEWAY_X402=true`, the worker uses `@circle-fin/x402-batching` GatewayClient with `CIRCLE_AGENT_PRIVATE_KEY` to pay allowlisted premium APIs such as AISA (`api.aisa.one`) using USDC nanopayments. Host allowlists, per-request caps, daily budgets, and minimum Gateway balance checks run before every payment.
+- Paid agent evidence: when `ENABLE_CIRCLE_GATEWAY_X402=true`, the worker uses `@circle-fin/x402-batching` GatewayClient with `CIRCLE_AGENT_PRIVATE_KEY` to pay allowlisted premium APIs such as AISA (`api.aisa.one`) using USDC nanopayments. The seller API decides which x402 networks it supports; Precall checks `CIRCLE_X402_CHAIN_CANDIDATES` in order, pays on the first supported Gateway chain, and records the selected chain in `circle_actions`. Host allowlists, per-request caps, daily budgets, and minimum Gateway balance checks run before every payment.
 - Settlement and accountability: agents bond calls with USDC on Arc, users unlock reasoning with USDC on Arc, and `circle_actions` records normalized `x402_api_payment`, `arc_bond`, and `thesis_unlock` events.
 
-If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence unless `REQUIRE_CIRCLE_GATEWAY_X402=true`. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
+If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence unless `REQUIRE_CIRCLE_GATEWAY_X402=true`. Do not set required=true until `worker:x402:supports -- <provider-url>` returns a supported chain and that chain has Gateway balance. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
 
 ## Demo Flow
 

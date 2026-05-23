@@ -39,3 +39,31 @@ test("Circle action normalizer records failed paid evidence metadata", () => {
   assert.equal(action.error, "Host is not allowlisted");
   assert.equal(action.amountUsdc, "0");
 });
+
+
+test("Circle action normalizer records selected x402 provider chain", () => {
+  const action = normalizeCircleActionInput({
+    actionType: "x402_api_payment",
+    provider: "aisa_x402_social",
+    url: "https://api.aisa.one/resource",
+    amountUsdc: "0.005",
+    chain: "baseSepolia",
+    status: "success",
+    metadata: {
+      selectedChain: "baseSepolia",
+      supportChecks: [
+        { chain: "arcTestnet", status: "unsupported", supported: false },
+        { chain: "baseSepolia", status: "success", supported: true },
+      ],
+    },
+  });
+
+  assert.equal(action.chain, "baseSepolia");
+  assert.deepEqual(action.metadata, {
+    selectedChain: "baseSepolia",
+    supportChecks: [
+      { chain: "arcTestnet", status: "unsupported", supported: false },
+      { chain: "baseSepolia", status: "success", supported: true },
+    ],
+  });
+});

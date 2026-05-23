@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { createDb } from "@precall/shared/db/client";
-import { getGatewayBalances, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
+import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import {
   agents,
   agentRuns,
@@ -17,6 +17,10 @@ import {
 } from "@precall/shared/db/schema";
 
 export type CallRow = Awaited<ReturnType<typeof getCalls>>[number];
+
+function objectMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
 const callSelect = {
   id: calls.id,
@@ -155,7 +159,9 @@ export async function getDemoData() {
   const latestArcBond = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('arc_bond', 'bond_call')`, orderBy: desc(circleActions.createdAt) });
   const latestThesisUnlock = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('thesis_unlock', 'unlock_thesis')`, orderBy: desc(circleActions.createdAt) });
   const gatewayConfig = gatewayRuntimeConfig();
-  const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
+  const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) }]) : [];
+  const primaryGatewayBalance = gatewayBalances.find((balance) => balance.chain === gatewayConfig.chain) || gatewayBalances[0];
+  const latestX402Metadata = objectMetadata(latestX402Payment?.metadata);
 
   return {
     counts,
@@ -172,14 +178,24 @@ export async function getDemoData() {
       gatewayX402Enabled: gatewayConfig.enabled,
       gatewayX402Required: process.env.REQUIRE_CIRCLE_GATEWAY_X402 === "true",
       gatewayChain: gatewayConfig.chain,
+      x402ChainCandidates: gatewayConfig.chainCandidates,
       gatewayWalletConfigured: Boolean(gatewayConfig.privateKey),
       allowedHosts: gatewayConfig.allowedHosts,
       maxPaymentUsdc: gatewayConfig.maxPaymentUsdc,
       dailyBudgetUsdc: gatewayConfig.dailyBudgetUsdc,
       minGatewayBalanceUsdc: gatewayConfig.minGatewayBalanceUsdc,
-      gatewayBalanceStatus: gatewayBalance?.status || "disabled",
-      gatewayAvailableUsdc: gatewayBalance && "gatewayAvailableUsdc" in gatewayBalance ? gatewayBalance.gatewayAvailableUsdc : undefined,
-      gatewayError: gatewayBalance?.error,
+      gatewayBalanceStatus: primaryGatewayBalance?.status || "disabled",
+      gatewayAvailableUsdc: primaryGatewayBalance && "gatewayAvailableUsdc" in primaryGatewayBalance ? primaryGatewayBalance.gatewayAvailableUsdc : undefined,
+      gatewayBalancesByChain: gatewayBalances.map((balance) => ({
+        chain: balance.chain,
+        status: balance.status,
+        gatewayAvailableUsdc: "gatewayAvailableUsdc" in balance ? balance.gatewayAvailableUsdc : undefined,
+        error: balance.error,
+      })),
+      latestX402SelectedChain: typeof latestX402Metadata.selectedChain === "string" ? latestX402Metadata.selectedChain : latestX402Payment?.chain,
+      latestX402FailureReason: typeof latestX402Metadata.failureReason === "string" ? latestX402Metadata.failureReason : latestX402Payment?.error,
+      latestX402SupportChecks: latestX402Metadata.supportChecks,
+      gatewayError: primaryGatewayBalance?.error,
     },
     config: {
       database: Boolean(process.env.DATABASE_URL),
