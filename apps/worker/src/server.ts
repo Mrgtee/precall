@@ -20,6 +20,14 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.stack || error.message : String(error);
 }
 
+
+function workerBuildInfo() {
+  return {
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "unknown",
+    schemaRepair: "0005_circle_actions_core_columns",
+  };
+}
+
 function authorized(headers: Headers) {
   const secret = process.env.WORKER_TRIGGER_SECRET;
   if (!secret) return false;
@@ -46,7 +54,7 @@ const server = createServer(async (req, res) => {
   const headers = new Headers(req.headers as Record<string, string>);
 
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/healthz")) {
-    jsonResponse(res, 200, { ok: true, service: "precall-worker", endpoints: ["/worker/health", "/worker/run-once", "/worker/expire", "/worker/resolve"] });
+    jsonResponse(res, 200, { ok: true, service: "precall-worker", worker: workerBuildInfo(), endpoints: ["/worker/health", "/worker/run-once", "/worker/expire", "/worker/resolve"] });
     return;
   }
 

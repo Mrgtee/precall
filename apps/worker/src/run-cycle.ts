@@ -35,6 +35,10 @@ export async function health() {
   const gatewayBalance = gatewayConfig.enabled ? await getGatewayBalances().catch((error) => ({ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) })) : undefined;
   const circleActionsSchema = await checkCircleActionsSchemaHealth();
   const base = {
+    worker: {
+      commitSha: optionalEnv("RAILWAY_GIT_COMMIT_SHA", optionalEnv("GIT_COMMIT_SHA", "unknown")),
+      schemaRepair: "0005_circle_actions_core_columns",
+    },
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
     modelBaseUrl: optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
