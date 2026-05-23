@@ -101,6 +101,7 @@ Optional Circle Gateway/x402 paid evidence:
 - `CIRCLE_X402_DAILY_BUDGET_USDC=0.10` - daily paid-evidence budget.
 - `CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one` - comma-separated x402 seller allowlist.
 - `CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25` - minimum Gateway balance before any paid request.
+- `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10` - safety cap for the worker Gateway deposit command.
 
 ## Contract Deployment
 
@@ -134,7 +135,12 @@ npm run worker -- run-once
 npm run worker -- publish-run <agentRunId>
 npm run worker -- expire
 npm run worker -- resolve
+npm run worker:gateway:balance
+npm run worker:gateway:deposit -- 1
+npm run worker:gateway:balance
 ```
+
+`worker:gateway:balance` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY`. `worker:gateway:deposit -- 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. The command returns public tx hashes and before/after balances only; it never prints the private key.
 
 `run-once` checks live markets, skips unsupported markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 

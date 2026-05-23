@@ -1,4 +1,4 @@
-import { GatewayClient, type Balances, type PayResult, type SupportedChainName, type SupportsResult } from "@circle-fin/x402-batching/client";
+import { GatewayClient, type Balances, type DepositResult, type PayResult, type SupportedChainName, type SupportsResult } from "@circle-fin/x402-batching/client";
 import { formatUnits, type Hex } from "viem";
 import { boolEnv, optionalEnv } from "../env";
 
@@ -8,6 +8,7 @@ type GatewayClientLike = {
   supports(url: string): Promise<SupportsResult>;
   pay<T = unknown>(url: string, options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown; headers?: Record<string, string> }): Promise<PayResult<T>>;
   getBalances(): Promise<Balances>;
+  deposit?(amount: string, options?: { approveAmount?: string; skipApprovalCheck?: boolean }): Promise<DepositResult>;
 };
 
 export type GatewayX402Status =
@@ -27,6 +28,7 @@ export type GatewayRuntimeConfig = {
   dailyBudgetUsdc: string;
   allowedHosts: string[];
   minGatewayBalanceUsdc: string;
+  maxDepositUsdc: string;
 };
 
 export type GatewayBalanceResult = {
@@ -37,6 +39,28 @@ export type GatewayBalanceResult = {
   balances?: Balances | undefined;
   gatewayAvailableUsdc?: string | undefined;
   error?: string | undefined;
+};
+
+export type GatewayDepositResult = {
+  enabled: boolean;
+  status: "disabled" | "success" | "blocked" | "insufficient_balance" | "failed";
+  chain: string;
+  address?: string | undefined;
+  amountUsdc: string;
+  maxDepositUsdc: string;
+  approvalTxHash?: string | undefined;
+  depositTxHash?: string | undefined;
+  gatewayAvailableUsdcBefore?: string | undefined;
+  gatewayAvailableUsdcAfter?: string | undefined;
+  walletBalanceUsdcBefore?: string | undefined;
+  walletBalanceUsdcAfter?: string | undefined;
+  error?: string | undefined;
+};
+
+export type DepositGatewayUsdcInput = {
+  amountUsdc: string;
+  client?: GatewayClientLike | undefined;
+  config?: Partial<GatewayRuntimeConfig> | undefined;
 };
 
 export type PayX402ResourceInput = {
@@ -70,6 +94,18 @@ export type PayX402ResourceResult<T = unknown> = {
 function toNumber(value: string | number | undefined, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeUsdcAmount(value: string | number | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!/^\d+(?:\.\d{1,6})?$/.test(raw)) {
+    return { ok: false as const, value: raw, error: "Amount must be a positive USDC decimal with up to 6 decimals." };
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return { ok: false as const, value: raw, error: "Amount must be greater than 0 USDC." };
+  }
+  return { ok: true as const, value: parsed.toFixed(6).replace(/\.?0+$/, "") };
 }
 
 function toUsdcFromAtomic(value: unknown) {
@@ -113,6 +149,7 @@ export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = 
     dailyBudgetUsdc: overrides.dailyBudgetUsdc ?? optionalEnv("CIRCLE_X402_DAILY_BUDGET_USDC", "0.10"),
     allowedHosts: overrides.allowedHosts ?? parseAllowedHosts(optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one")),
     minGatewayBalanceUsdc: overrides.minGatewayBalanceUsdc ?? optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25"),
+    maxDepositUsdc: overrides.maxDepositUsdc ?? optionalEnv("CIRCLE_GATEWAY_MAX_DEPOSIT_USDC", "10"),
   };
 }
 
@@ -165,6 +202,78 @@ export async function getGatewayBalances(input: { client?: GatewayClientLike; co
     };
   } catch (error) {
     return { enabled: true, status: "failed", chain: config.chain, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function depositGatewayUsdc(input: DepositGatewayUsdcInput): Promise<GatewayDepositResult> {
+  const config = gatewayRuntimeConfig(input.config);
+  const normalizedAmount = normalizeUsdcAmount(input.amountUsdc);
+  const normalizedMaxDeposit = normalizeUsdcAmount(config.maxDepositUsdc);
+  const amountUsdc = normalizedAmount.value;
+  const maxDepositUsdc = normalizedMaxDeposit.ok ? normalizedMaxDeposit.value : config.maxDepositUsdc;
+
+  if (!config.enabled) {
+    return { enabled: false, status: "disabled", chain: config.chain, amountUsdc, maxDepositUsdc, error: "Gateway x402 is disabled." };
+  }
+  if (!normalizedAmount.ok) {
+    return { enabled: true, status: "blocked", chain: config.chain, amountUsdc, maxDepositUsdc, error: normalizedAmount.error };
+  }
+  if (!normalizedMaxDeposit.ok) {
+    return { enabled: true, status: "blocked", chain: config.chain, amountUsdc, maxDepositUsdc, error: "CIRCLE_GATEWAY_MAX_DEPOSIT_USDC must be a positive USDC decimal with up to 6 decimals." };
+  }
+  if (toNumber(normalizedAmount.value) > toNumber(normalizedMaxDeposit.value)) {
+    return {
+      enabled: true,
+      status: "blocked",
+      chain: config.chain,
+      amountUsdc,
+      maxDepositUsdc,
+      error: `Deposit amount ${amountUsdc} USDC exceeds safety cap ${maxDepositUsdc} USDC.`,
+    };
+  }
+  if (!config.privateKey && !input.client) {
+    return { enabled: true, status: "failed", chain: config.chain, amountUsdc, maxDepositUsdc, error: "CIRCLE_AGENT_PRIVATE_KEY is required when Gateway x402 is enabled." };
+  }
+
+  try {
+    const client = await resolveClient(input.client, config);
+    if (!client) return { enabled: false, status: "disabled", chain: config.chain, amountUsdc, maxDepositUsdc, error: "Gateway x402 is disabled." };
+    if (!client.deposit) return { enabled: true, status: "failed", chain: config.chain, address: client.address, amountUsdc, maxDepositUsdc, error: "Gateway client does not support deposits." };
+
+    const before = await client.getBalances();
+    const walletBefore = toNumber(before.wallet.formatted);
+    if (walletBefore < toNumber(amountUsdc)) {
+      return {
+        enabled: true,
+        status: "insufficient_balance",
+        chain: config.chain,
+        address: client.address,
+        amountUsdc,
+        maxDepositUsdc,
+        gatewayAvailableUsdcBefore: before.gateway.formattedAvailable,
+        walletBalanceUsdcBefore: before.wallet.formatted,
+        error: `Wallet USDC balance ${before.wallet.formatted} is below requested deposit ${amountUsdc} USDC.`,
+      };
+    }
+
+    const deposit = await client.deposit(amountUsdc);
+    const after = await client.getBalances();
+    return {
+      enabled: true,
+      status: "success",
+      chain: config.chain,
+      address: client.address || deposit.depositor,
+      amountUsdc: deposit.formattedAmount || amountUsdc,
+      maxDepositUsdc,
+      approvalTxHash: deposit.approvalTxHash,
+      depositTxHash: deposit.depositTxHash,
+      gatewayAvailableUsdcBefore: before.gateway.formattedAvailable,
+      gatewayAvailableUsdcAfter: after.gateway.formattedAvailable,
+      walletBalanceUsdcBefore: before.wallet.formatted,
+      walletBalanceUsdcAfter: after.wallet.formatted,
+    };
+  } catch (error) {
+    return { enabled: true, status: "failed", chain: config.chain, amountUsdc, maxDepositUsdc, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

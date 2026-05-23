@@ -1,17 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { Balances, PayResult, SupportsResult } from "@circle-fin/x402-batching/client";
-import { getGatewayBalances, payX402Resource, supportsX402Resource } from "./gateway-client";
+import type { Balances, DepositResult, PayResult, SupportsResult } from "@circle-fin/x402-batching/client";
+import { depositGatewayUsdc, getGatewayBalances, payX402Resource, supportsX402Resource } from "./gateway-client";
 
-function balances(availableUsdc = "1.000000"): Balances {
-  const atomic = BigInt(Math.round(Number(availableUsdc) * 1_000_000));
+function atomicUsdc(value: string) {
+  return BigInt(Math.round(Number(value) * 1_000_000));
+}
+
+function formatUsdc(value: number) {
+  return value.toFixed(6);
+}
+
+function balances(availableUsdc = "1.000000", walletUsdc = "0"): Balances {
+  const gatewayAtomic = atomicUsdc(availableUsdc);
+  const walletAtomic = atomicUsdc(walletUsdc);
   return {
-    wallet: { balance: 0n, formatted: "0" },
+    wallet: { balance: walletAtomic, formatted: walletUsdc },
     gateway: {
-      total: atomic,
-      available: atomic,
+      total: gatewayAtomic,
+      available: gatewayAtomic,
       withdrawing: 0n,
-      withdrawable: atomic,
+      withdrawable: gatewayAtomic,
       formattedTotal: availableUsdc,
       formattedAvailable: availableUsdc,
       formattedWithdrawing: "0",
@@ -20,8 +29,11 @@ function balances(availableUsdc = "1.000000"): Balances {
   };
 }
 
-function mockClient(input: { amountAtomic?: string; availableUsdc?: string; supported?: boolean } = {}) {
+function mockClient(input: { amountAtomic?: string; availableUsdc?: string; walletUsdc?: string; supported?: boolean } = {}) {
   let payCalls = 0;
+  let depositCalls = 0;
+  let gatewayAvailable = input.availableUsdc || "1.000000";
+  let walletAvailable = input.walletUsdc || "0";
   const client = {
     address: "0x0000000000000000000000000000000000000001",
     chainName: "arcTestnet",
@@ -30,13 +42,27 @@ function mockClient(input: { amountAtomic?: string; availableUsdc?: string; supp
       return { supported: true, requirements: { amount: input.amountAtomic || "5000", network: "eip155:5042002" } };
     },
     async getBalances(): Promise<Balances> {
-      return balances(input.availableUsdc || "1.000000");
+      return balances(gatewayAvailable, walletAvailable);
     },
     async pay<T>(): Promise<PayResult<T>> {
       payCalls += 1;
       return { data: { ok: true } as T, amount: BigInt(input.amountAtomic || "5000"), formattedAmount: "0.005000", transaction: "0xpayment", status: 200 };
     },
+    async deposit(amount: string): Promise<DepositResult> {
+      depositCalls += 1;
+      const parsedAmount = Number(amount);
+      gatewayAvailable = formatUsdc(Number(gatewayAvailable) + parsedAmount);
+      walletAvailable = formatUsdc(Number(walletAvailable) - parsedAmount);
+      return {
+        approvalTxHash: "0xapproval",
+        depositTxHash: "0xdeposit",
+        amount: atomicUsdc(amount),
+        formattedAmount: formatUsdc(parsedAmount),
+        depositor: "0x0000000000000000000000000000000000000001",
+      };
+    },
     payCalls: () => payCalls,
+    depositCalls: () => depositCalls,
   };
   return client;
 }
@@ -48,6 +74,56 @@ test("x402 disabled does not attempt payment", async () => {
   assert.equal(result.status, "disabled");
   assert.equal(result.paid, false);
   assert.equal(client.payCalls(), 0);
+});
+
+test("Gateway deposit is disabled when x402 is disabled", async () => {
+  const client = mockClient({ walletUsdc: "2.000000", availableUsdc: "0.000000" });
+  const result = await depositGatewayUsdc({ amountUsdc: "1", client, config: { enabled: false } });
+
+  assert.equal(result.status, "disabled");
+  assert.equal(client.depositCalls(), 0);
+});
+
+test("Gateway deposit rejects invalid amounts before moving funds", async () => {
+  const client = mockClient({ walletUsdc: "2.000000", availableUsdc: "0.000000" });
+  const result = await depositGatewayUsdc({ amountUsdc: "1.0000001", client, config: { enabled: true, privateKey: "" } });
+
+  assert.equal(result.status, "blocked");
+  assert.match(result.error || "", /up to 6 decimals/i);
+  assert.equal(client.depositCalls(), 0);
+});
+
+test("Gateway deposit enforces the configured safety cap", async () => {
+  const client = mockClient({ walletUsdc: "20.000000", availableUsdc: "0.000000" });
+  const result = await depositGatewayUsdc({ amountUsdc: "11", client, config: { enabled: true, privateKey: "", maxDepositUsdc: "10" } });
+
+  assert.equal(result.status, "blocked");
+  assert.match(result.error || "", /exceeds safety cap/i);
+  assert.equal(client.depositCalls(), 0);
+});
+
+test("Gateway deposit reports insufficient wallet balance safely", async () => {
+  const client = mockClient({ walletUsdc: "0.500000", availableUsdc: "0.000000" });
+  const result = await depositGatewayUsdc({ amountUsdc: "1", client, config: { enabled: true, privateKey: "", maxDepositUsdc: "10" } });
+
+  assert.equal(result.status, "insufficient_balance");
+  assert.equal(result.walletBalanceUsdcBefore, "0.500000");
+  assert.equal(client.depositCalls(), 0);
+});
+
+test("Gateway deposit returns tx hashes and updated balances", async () => {
+  const client = mockClient({ walletUsdc: "2.000000", availableUsdc: "0.000000" });
+  const result = await depositGatewayUsdc({ amountUsdc: "1", client, config: { enabled: true, privateKey: "", maxDepositUsdc: "10" } });
+
+  assert.equal(result.status, "success");
+  assert.equal(result.amountUsdc, "1.000000");
+  assert.equal(result.approvalTxHash, "0xapproval");
+  assert.equal(result.depositTxHash, "0xdeposit");
+  assert.equal(result.gatewayAvailableUsdcBefore, "0.000000");
+  assert.equal(result.gatewayAvailableUsdcAfter, "1.000000");
+  assert.equal(result.walletBalanceUsdcBefore, "2.000000");
+  assert.equal(result.walletBalanceUsdcAfter, "1.000000");
+  assert.equal(client.depositCalls(), 1);
 });
 
 test("non-allowlisted x402 host is rejected before support/payment", async () => {

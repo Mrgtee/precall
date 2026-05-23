@@ -49,6 +49,8 @@ npm run worker:health
 npm run worker:run-once
 npm run worker:expire
 npm run worker:resolve
+npm run worker:gateway:balance
+npm run worker:gateway:deposit -- 1
 ```
 
 The CLI commands close DB connections after completion and exit cleanly. The HTTP trigger server closes DB connections after every request and during SIGTERM/SIGINT shutdown.
@@ -85,6 +87,7 @@ CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
+CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10
 
 MIN_LIQUIDITY_USD=10000
 MIN_EDGE_BPS=650
@@ -193,6 +196,26 @@ Create three Railway cron services from the same GitHub repo:
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 
 The cron jobs can share the same Railway variables as the HTTP worker service. If Railway lets you duplicate a service, duplicate `precall-worker-http`, replace the start command with the cron command, then attach the schedule.
+
+## Gateway Funding Commands
+
+Gateway health can succeed while `gatewayAvailableUsdc` is `0`. That means the buyer wallet is configured, but USDC has not yet been deposited into the Circle Gateway Wallet for gasless x402 payments.
+
+Run these commands from Railway shell, a Railway one-off command, or locally with the same Railway env vars loaded. They never print the private key:
+
+```bash
+npm run worker:gateway:balance
+npm run worker:gateway:deposit -- 1
+npm run worker:gateway:balance
+```
+
+Safety notes:
+
+- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has at least `1` USDC on `CIRCLE_GATEWAY_CHAIN`.
+- `ENABLE_CIRCLE_GATEWAY_X402=true` must be set, otherwise deposit returns a disabled result and moves no funds.
+- `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC` defaults to `10`; deposits above that cap are blocked before any transaction.
+- The deposit command uses the Circle Gateway SDK `deposit()` method, which approves the Gateway Wallet if needed, then deposits the requested USDC.
+- The JSON result includes public wallet address, before/after wallet and Gateway balances, and approval/deposit transaction hashes. It does not include or log the private key.
 
 ## How To Confirm x402 Evidence Was Paid And Stored
 
