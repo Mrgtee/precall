@@ -32,18 +32,20 @@ function rowsFromSqlResult<T>(result: unknown): T[] {
 export type CircleActionsSchemaHealth = {
   tableExists: boolean;
   columns: Record<CircleActionsRequiredColumn, boolean>;
+  columnTypes: Partial<Record<CircleActionsRequiredColumn | "amount", string>>;
   legacyAmountColumnExists: boolean;
   ok: boolean;
   missingColumns: CircleActionsRequiredColumn[];
   error?: string | undefined;
 };
 
-function circleActionsSchemaHealthBase(tableExists: boolean, presentColumns = new Set<string>()): CircleActionsSchemaHealth {
+function circleActionsSchemaHealthBase(tableExists: boolean, presentColumns = new Set<string>(), columnTypes: Partial<Record<CircleActionsRequiredColumn | "amount", string>> = {}): CircleActionsSchemaHealth {
   const columns = Object.fromEntries(CIRCLE_ACTIONS_REQUIRED_COLUMNS.map((column) => [column, presentColumns.has(column)])) as Record<CircleActionsRequiredColumn, boolean>;
   const missingColumns = CIRCLE_ACTIONS_REQUIRED_COLUMNS.filter((column) => !columns[column]);
   return {
     tableExists,
     columns,
+    columnTypes,
     legacyAmountColumnExists: presentColumns.has("amount"),
     ok: tableExists && missingColumns.length === 0,
     missingColumns,
@@ -63,15 +65,19 @@ export async function checkCircleActionsSchemaHealth(): Promise<CircleActionsSch
     const tableRows = rowsFromSqlResult<{ exists: boolean }>(tableResult);
     const tableExists = Boolean(tableRows[0]?.exists);
 
-    const columnResult = await db().execute(sql<{ column_name: string }>`
-      select column_name
+    const columnResult = await db().execute(sql<{ column_name: string; data_type: string; udt_name: string; numeric_precision: number | null; numeric_scale: number | null }>`
+      select column_name, data_type, udt_name, numeric_precision, numeric_scale
       from information_schema.columns
       where table_schema = current_schema()
         and table_name = 'circle_actions'
         and column_name in ('amount_usdc', 'amount', 'action_type', 'status', 'created_at')
     `);
-    const columnRows = rowsFromSqlResult<{ column_name: string }>(columnResult);
-    return circleActionsSchemaHealthBase(tableExists, new Set(columnRows.map((row) => row.column_name)));
+    const columnRows = rowsFromSqlResult<{ column_name: string; data_type: string; udt_name: string; numeric_precision: number | null; numeric_scale: number | null }>(columnResult);
+    const columnTypes = Object.fromEntries(columnRows.map((row) => {
+      const numericSuffix = row.numeric_precision ? `(${row.numeric_precision},${row.numeric_scale ?? 0})` : "";
+      return [row.column_name, `${row.data_type}${numericSuffix}`];
+    })) as Partial<Record<CircleActionsRequiredColumn | "amount", string>>;
+    return circleActionsSchemaHealthBase(tableExists, new Set(columnRows.map((row) => row.column_name)), columnTypes);
   } catch (error) {
     return {
       ...circleActionsSchemaHealthBase(false),
@@ -354,15 +360,25 @@ export async function getTodayX402SpendUsdc(now = new Date()) {
   if (!health.columns.amount_usdc && !health.legacyAmountColumnExists) return "0";
 
   const amountColumn = health.columns.amount_usdc ? sql.raw('"amount_usdc"') : sql.raw('"amount"');
-  const result = await db().execute(sql<{ total: string | null }>`
-    select coalesce(sum(coalesce(${amountColumn}, 0::numeric)), 0)::text as "total"
-    from "circle_actions"
-    where "action_type" = 'x402_api_payment'
-      and "status" = 'success'
-      and "created_at" >= ${start}
-  `);
-  const rows = rowsFromSqlResult<{ total: string | null }>(result);
-  return rows[0]?.total || "0";
+  try {
+    const result = await db().execute(sql<{ total: string | null }>`
+      select coalesce(sum(
+        case
+          when ${amountColumn} is null then 0::numeric
+          when btrim(${amountColumn}::text) ~ '^-?\d+(\.\d+)?$' then btrim(${amountColumn}::text)::numeric
+          else 0::numeric
+        end
+      ), 0)::text as "total"
+      from "circle_actions"
+      where "action_type" = 'x402_api_payment'
+        and "status" = 'success'
+        and "created_at" >= ${start}
+    `);
+    const rows = rowsFromSqlResult<{ total: string | null }>(result);
+    return rows[0]?.total || "0";
+  } catch {
+    return "0";
+  }
 }
 
 export async function adminSummary() {

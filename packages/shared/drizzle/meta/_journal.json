@@ -43,6 +43,13 @@
       "when": 1779533437171,
       "tag": "0005_circle_actions_core_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779556008764,
+      "tag": "0006_circle_actions_type_normalization",
+      "breakpoints": true
     }
   ]
 }
