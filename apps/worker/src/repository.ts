@@ -264,7 +264,19 @@ export async function insertEvidenceItems(callId: number, evidence: EvidenceItem
   }
 }
 
-export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; statusReason?: string | undefined }) {
+export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status?: "active" | "watchlist"; statusReason?: string | undefined }) {
+  const status = input.status || "active";
+  if (status === "watchlist") {
+    const existingActive = await db().query.sportsPredictions.findFirst({
+      where: and(
+        eq(sportsPredictions.marketId, input.idea.market.marketId),
+        eq(sportsPredictions.selectedOutcomeIndex, input.idea.selectedOutcomeIndex),
+        eq(sportsPredictions.status, "active"),
+      ),
+    });
+    if (existingActive) return existingActive;
+  }
+
   const values = {
     marketId: input.idea.market.marketId,
     marketTitle: input.idea.market.title,
@@ -286,8 +298,8 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     evidenceContext: input.idea.evidence,
     votes: input.idea.votes,
     x402Status: input.x402Status,
-    status: "active",
-    statusReason: input.statusReason || "Passed Sports Edge quality gates. Non-bonded sports intelligence idea.",
+    status,
+    statusReason: input.statusReason || (status === "watchlist" ? "Watchlist only; failed one or more strong Sports Edge gates." : "Passed Sports Edge quality gates. Non-bonded sports intelligence idea."),
     sourceRunId: input.sourceRunId,
     expiresAt: input.idea.market.closeTime ? new Date(input.idea.market.closeTime) : null,
     updatedAt: new Date(),

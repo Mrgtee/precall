@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsMarket, evaluateSportsCandidate, sportsThresholdFailures } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsMarket, evaluateSportsCandidate, sportsEventTime, sportsThresholdFailures } from "./sports";
 import type { OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -40,6 +40,51 @@ test("sports classifier identifies NBA and moneyline-style markets", () => {
   assert.equal(classification.isSports, true);
   assert.equal(classification.category, "nba");
   assert.equal(classification.marketKind, "moneyline");
+});
+
+test("sports classifier avoids substring false positives in non-sports politics markets", () => {
+  const classification = classifySportsMarket(market({
+    title: "US x Iran permanent peace deal by May 31, 2026?",
+    slug: "us-x-iran-permanent-peace-deal-by-may-31-2026",
+    description: "A geopolitics market, not an MMA or football market.",
+  }));
+  assert.equal(classification.isSports, false);
+  assert.ok(classification.reasons.includes("not_sports"));
+});
+
+test("sports classifier catches club-name soccer markets without explicit soccer words", () => {
+  const classification = classifySportsMarket(market({
+    title: "Will AFC Ajax win on 2026-05-24?",
+    slug: "ere-aja-utr-2026-05-24-aja",
+    description: "Dutch league match market.",
+  }));
+  assert.equal(classification.isSports, true);
+  assert.equal(classification.category, "soccer");
+});
+
+test("sports event date keeps same-day markets eligible when Polymarket close time is later", () => {
+  const tennisMarket = market({
+    title: "Roland Garros ATP: Tomas Etcheverry vs Nuno Borges",
+    slug: "atp-etcheve-borges-2026-05-24",
+    description: "Tennis match market with two clear outcomes.",
+    closeTime: "2026-05-31T09:00:00.000Z",
+  });
+  assert.equal(sportsEventTime(tennisMarket), "2026-05-24T09:00:00.000Z");
+  const result = evaluateSportsCandidate(tennisMarket, undefined, now);
+  assert.equal(result.eligible, true);
+  assert.deepEqual(result.reasons, []);
+});
+
+test("sports event window falls back to near close time for late-night games", () => {
+  const lateGame = market({
+    title: "Thunder vs. Spurs",
+    slug: "nba-okc-sas-2026-05-24",
+    description: "NBA moneyline market.",
+    closeTime: "2026-05-25T00:00:00.000Z",
+  });
+  const result = evaluateSportsCandidate(lateGame, undefined, new Date("2026-05-24T01:00:00.000Z"));
+  assert.equal(result.eligible, true);
+  assert.deepEqual(result.reasons, []);
 });
 
 test("sports candidate eligibility allows non-YES/NO selected-outcome sports markets", () => {

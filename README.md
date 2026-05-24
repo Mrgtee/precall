@@ -97,6 +97,7 @@ Sports Edge controls:
 - `ENABLE_SPORTS_EDGE=true` - enables the non-bonded daily sports scanner.
 - `SPORTS_DISCOVERY_MARKET_LIMIT=250` - Polymarket markets fetched for sports classification.
 - `SPORTS_DAILY_TARGET=5` - target number of strong sports ideas per day; weak picks are filtered, not forced.
+- `SPORTS_WATCHLIST_LIMIT=5` - max filtered sports analyses to show as observation-only watchlist items when strong gates are not met.
 - `MAX_SPORTS_ANALYZED_PER_RUN=16` - max sports markets allowed to spend x402/model calls per run.
 - `SPORTS_LOOKAHEAD_HOURS=72` - focus on near-term daily sports markets.
 - `SPORTS_MIN_LIQUIDITY_USD=25000`, `SPORTS_MAX_SPREAD_BPS=500`, `SPORTS_MIN_EDGE_BPS=300`, `SPORTS_MIN_CONFIDENCE_BPS=5000`, `SPORTS_MIN_PRICE_BPS=1000`, `SPORTS_MAX_PRICE_BPS=9000`.

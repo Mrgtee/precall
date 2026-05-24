@@ -42,8 +42,15 @@ export type SportsSkip = {
   candidateScore?: number;
 };
 
-const SPORTS_KEYWORDS = [
-  "nba", "wnba", "mlb", "nhl", "nfl", "ufc", "ucl", "champions league", "premier league", "epl", "la liga", "serie a", "bundesliga", "ligue 1", "fifa", "world cup", "soccer", "football", "basketball", "baseball", "hockey", "tennis", "atp", "wta", "golf", "cricket", "ipl", "rugby", "mma", "boxing", "dota", "counter-strike", "cs2", "league of legends", "lol", "valorant"
+const SPORTS_PATTERNS = [
+  /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|mma|cs2|lol)\b/,
+  /\b(champions league|premier league|la liga|serie a|bundesliga|ligue 1|world cup|soccer|football|basketball|baseball|hockey|tennis|golf|cricket|rugby|boxing|dota|counter-strike|league of legends|valorant)\b/,
+  /\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-[a-z0-9-]+/,
+  /\b(afc|fc|united|city|hotspur|ajax|inter|madrid|barcelona|arsenal|chelsea|liverpool|tottenham|brighton|everton|west ham|newcastle|aston villa)\b/,
+];
+
+const NON_SPORTS_FALSE_POSITIVE_PATTERNS = [
+  /\b(president|nomination|election|congress|senate|iran|israel|hezbollah|uranium|nuclear|ceasefire|peace deal|invasion|tariff|fed|bitcoin|wti|oil)\b/,
 ];
 
 function lowerMarketText(market: PolymarketMarket) {
@@ -53,7 +60,10 @@ function lowerMarketText(market: PolymarketMarket) {
 export function classifySportsMarket(market: PolymarketMarket): SportsMarketClassification {
   const text = lowerMarketText(market);
   const reasons: string[] = [];
-  const isSports = SPORTS_KEYWORDS.some((keyword) => text.includes(keyword));
+  const hasSportsSignal = SPORTS_PATTERNS.some((pattern) => pattern.test(text));
+  const hasFalsePositiveSignal = NON_SPORTS_FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(text));
+  const hasExplicitCompetitionSignal = /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|fifa|world cup|premier league|champions league|la liga|serie a|bundesliga|ligue 1)\b|\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-/.test(text);
+  const isSports = hasSportsSignal && (!hasFalsePositiveSignal || hasExplicitCompetitionSignal);
   if (!isSports) reasons.push("not_sports");
 
   let category: SportsCategory | "unknown" = "unknown";
@@ -61,9 +71,11 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   else if (/\b(mlb|baseball)\b/.test(text)) category = "mlb";
   else if (/\b(nhl|hockey)\b/.test(text)) category = "nhl";
   else if (/\b(ufc|mma|boxing)\b/.test(text)) category = "ufc";
-  else if (/\b(nfl|football)\b/.test(text) && !/soccer|fifa|ucl|epl|premier league|la liga|serie a|bundesliga|ligue 1/.test(text)) category = "football";
-  else if (/\b(soccer|ucl|champions league|epl|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup)\b/.test(text)) category = "soccer";
+  else if (/\b(nfl)\b/.test(text)) category = "football";
+  else if (/\b(soccer|ucl|champions league|epl|ere|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|united|city|hotspur|ajax|inter)\b/.test(text)) category = "soccer";
   else if (/\b(dota|counter-strike|cs2|league of legends|lol|valorant)\b/.test(text)) category = "esports";
+  else if (/\b(cricket|ipl|rugby|golf|atp|wta|tennis)\b/.test(text)) category = "other_sports";
+  else if (/\bfootball\b/.test(text)) category = "football";
   else if (isSports) category = "other_sports";
 
   let marketKind: SportsMarketKind = "other";
@@ -106,6 +118,10 @@ export function maxSportsAnalyzedPerRun() {
   return numberEnv("MAX_SPORTS_ANALYZED_PER_RUN", 16);
 }
 
+export function sportsWatchlistLimit() {
+  return numberEnv("SPORTS_WATCHLIST_LIMIT", 5);
+}
+
 function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresholds) {
   return market.outcomePrices
     .map((price, index) => ({ priceBps: Math.round(price * 10_000), index }))
@@ -113,11 +129,27 @@ function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresho
     .map((item) => item.index);
 }
 
+export function sportsEventTime(market: PolymarketMarket): string | null {
+  const text = `${market.title} ${market.slug} ${market.url}`;
+  const match = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  if (!match?.[1]) return market.closeTime;
+  const close = market.closeTime ? new Date(market.closeTime) : undefined;
+  const hour = close && Number.isFinite(close.getTime()) ? close.getUTCHours() : 12;
+  const minute = close && Number.isFinite(close.getTime()) ? close.getUTCMinutes() : 0;
+  return `${match[1]}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`;
+}
+
 function closeTimeScore(market: PolymarketMarket, now: Date, lookaheadHours: number) {
-  if (!market.closeTime) return { ok: false, score: 0, reason: "missing_close_time" };
-  const closeMs = new Date(market.closeTime).getTime();
-  if (!Number.isFinite(closeMs) || closeMs <= now.getTime()) return { ok: false, score: 0, reason: "expired" };
-  const hours = (closeMs - now.getTime()) / 3_600_000;
+  const eventTime = sportsEventTime(market);
+  if (!eventTime) return { ok: false, score: 0, reason: "missing_close_time" };
+  const eventMs = new Date(eventTime).getTime();
+  if (!Number.isFinite(eventMs)) return { ok: false, score: 0, reason: "expired" };
+  const closeMs = market.closeTime ? new Date(market.closeTime).getTime() : Number.NaN;
+  const scoreMs = eventMs <= now.getTime() && Number.isFinite(closeMs) && closeMs > now.getTime() && closeMs - eventMs <= 36 * 3_600_000
+    ? closeMs
+    : eventMs;
+  if (scoreMs <= now.getTime()) return { ok: false, score: 0, reason: "expired" };
+  const hours = (scoreMs - now.getTime()) / 3_600_000;
   if (hours > lookaheadHours) return { ok: false, score: 0, reason: "outside_sports_window" };
   return { ok: true, score: Math.max(0, 20 * (1 - Math.abs(hours - 24) / Math.max(lookaheadHours, 1))), reason: "" };
 }

@@ -47,7 +47,8 @@ For judges, show the `/demo` Circle proof section. It displays Gateway enabled s
 - V1 Arc-bonded calls support strict YES/NO markets only.
 - Non-YES/NO sports markets can appear only on Daily Sports Edge as non-bonded ideas until selected-outcome resolution is generalized.
 - Non-sports or low-quality markets are skipped with transparent reasons.
-- Low-confidence or tiny-size signals are stored as filtered runs, not presented as strong buys.
+- Low-confidence sports signals may appear only as watchlist analysis, never as strong picks or guaranteed calls.
+- Low-confidence or tiny-size bonded-call signals are stored as filtered runs, not presented as strong buys.
 - The product does not custody user funds or place trades.
 - The leaderboard does not overclaim quality before resolved calls exist.
 

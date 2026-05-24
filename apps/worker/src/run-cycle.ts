@@ -14,7 +14,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, evaluateSportsCandidate, maxSportsAnalyzedPerRun, passesSportsThresholds, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsThresholdFailures, sportsThresholds, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, evaluateSportsCandidate, maxSportsAnalyzedPerRun, passesSportsThresholds, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsThresholdFailures, sportsThresholds, sportsWatchlistLimit, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -588,6 +588,7 @@ export async function runSportsEdge() {
   const discoveryLimit = sportsDiscoveryLimit();
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
+  const watchlistLimit = sportsWatchlistLimit();
   const requireX402 = boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false);
   const markets = await discoverPolymarketMarkets(discoveryLimit);
   const skipped: SportsSkip[] = [];
@@ -618,6 +619,7 @@ export async function runSportsEdge() {
 
   let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
   const stored = [];
+  const watchlisted = [];
   let analyzed = 0;
 
   for (const candidate of candidatesForAnalysis) {
@@ -666,10 +668,25 @@ export async function runSportsEdge() {
           reasons: thresholdFailures,
           candidateScore: candidate.candidateScore,
         });
+
+        const watchlistable = watchlisted.length < watchlistLimit && thresholdFailures.length > 0 && !thresholdFailures.includes("wide_spread") && !thresholdFailures.includes("outside_price_band");
+        if (watchlistable) {
+          const statusReason = `Watchlist only; failed strong Sports Edge gates: ${thresholdFailures.join(", ")}.`;
+          const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: "watchlist", statusReason });
+          await recordAgentRun({
+            status: "sports_watchlisted",
+            model: councilResult.model,
+            inputs: { sourceAgentRunId: candidateRun?.id, marketId: market.marketId },
+            outputs: { sportsPredictionId: row.id, idea, thresholdFailures, x402: x402Summary(x402Result) },
+            evidenceContext,
+            latencyMs: councilResult.totalLatencyMs,
+          });
+          watchlisted.push({ id: row.id, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
+        }
         continue;
       }
 
-      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result) });
+      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: "active" });
       await recordAgentRun({
         status: "sports_published",
         model: councilResult.model,
@@ -690,12 +707,14 @@ export async function runSportsEdge() {
   return {
     discoveryLimit,
     dailyTarget,
+    watchlistLimit,
     maxAnalyzedSportsMarkets: maxAnalyzed,
     discovered: markets.length,
     checked: markets.length,
     eligible: ranked.length,
     analyzed,
     stored,
+    watchlisted,
     skipped,
     failed,
     skippedByReason: summarizeSkipReasons(skipped),

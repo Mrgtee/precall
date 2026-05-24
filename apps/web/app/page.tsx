@@ -15,7 +15,7 @@ export default async function HomePage() {
   try {
     calls = await getCalls(30);
     leaderboard = await getLeaderboard();
-    sportsIdeas = await getSportsPredictions(3);
+    sportsIdeas = await getSportsPredictions(3, ["active", "watchlist"]);
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
@@ -92,10 +92,10 @@ export default async function HomePage() {
           <section className="grid">
             {sportsIdeas.map((idea) => (
               <article className="panel" key={idea.id}>
-                <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
+                <p className="eyebrow">{idea.status === "active" ? "Strong idea" : "Watchlist"} · {idea.category} · {idea.marketKind}</p>
                 <h3>{idea.marketTitle}</h3>
-                <p className="muted">Pick: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
-                <p className="muted">{idea.verdict}</p>
+                <p className="muted">{idea.status === "active" ? "Pick" : "Lean"}: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
+                <p className="muted">{idea.status === "active" ? idea.verdict : idea.statusReason}</p>
                 <Link className="button secondary" href="/sports">Open Sports Edge <ArrowRight size={16} /></Link>
               </article>
             ))}

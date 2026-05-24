@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "@precall/shared/db/client";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import {
@@ -88,12 +88,12 @@ export async function getEvidence(callId: number) {
 
 export type SportsPredictionRow = Awaited<ReturnType<typeof getSportsPredictions>>[number];
 
-export async function getSportsPredictions(limit = 12) {
+export async function getSportsPredictions(limit = 12, statuses: string[] = ["active"]) {
   const db = createDb();
   return db
     .select()
     .from(sportsPredictions)
-    .where(eq(sportsPredictions.status, "active"))
+    .where(inArray(sportsPredictions.status, statuses))
     .orderBy(desc(sportsPredictions.updatedAt))
     .limit(limit);
 }
@@ -163,11 +163,12 @@ export async function getDemoData() {
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
     sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'active')`,
+    sportsWatchlist: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'watchlist')`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 
   const latestRuns = await db.query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 8 });
   const latestCalls = await getCalls(10);
-  const latestSportsIdeas = await getSportsPredictions(5);
+  const latestSportsIdeas = await getSportsPredictions(5, ["active", "watchlist"]);
   const latestUnlocks = await db.query.thesisUnlocks.findMany({ orderBy: desc(thesisUnlocks.createdAt), limit: 5 });
   const latestCircleActions = await db.query.circleActions.findMany({ orderBy: desc(circleActions.createdAt), limit: 8 });
   const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment')`, orderBy: desc(circleActions.createdAt) });

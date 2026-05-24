@@ -7,7 +7,7 @@ import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } f
 import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
-import { bpsToPercent, outcomeForAction, recommendationLabel, usdc } from "../lib/format";
+import { actionLabel, bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedProbabilityForAction, usdc } from "../lib/format";
 import { FeedbackCapture } from "./feedback-capture";
 
 type UnlockedPayload = {
@@ -160,16 +160,29 @@ export function UnlockThesis({
   if (details) {
     const selectedOutcome = outcomeForAction(details.call.action, details.call.outcomes || []);
     const recommendation = recommendationLabel(details.call.action, details.call.outcomes || [], details.call.confidenceBps, details.call.suggestedSizeBps);
+    const action = actionLabel(details.call.action, details.call.outcomes || []);
+    const selectedAgentProbabilityBps = selectedProbabilityForAction(details.call.action, details.call.yesProbabilityBps);
+    const help = recommendationHelp(details.call.action, details.call.confidenceBps, details.call.suggestedSizeBps);
     return (
       <section className="panel unlocked-analysis">
         <h3><Unlock size={18} /> Full unlocked analysis</h3>
+        <section className="panel">
+          <p className="eyebrow">Unlocked recommendation</p>
+          <h2 className="call-title">{action}</h2>
+          <p className="muted">{help}</p>
+          <div className="pill-row">
+            <span className="pill">Action: {details.call.action.replace("_", " ")}</span>
+            <span className="pill">Selected option: {selectedOutcome}</span>
+            <span className="pill">Market price {bpsToPercent(details.call.marketPriceBps)}</span>
+            <span className="pill">Agent probability {bpsToPercent(selectedAgentProbabilityBps)}</span>
+            <span className="pill">Edge {bpsToPercent(details.call.edgeBps)}</span>
+            <span className="pill">Confidence {bpsToPercent(details.call.confidenceBps)}</span>
+            <span className="pill">Size {bpsToPercent(details.call.suggestedSizeBps)}</span>
+          </div>
+          <p className="muted">This is probability-based analysis, not a guarantee or automatic trade instruction.</p>
+        </section>
         <div className="pill-row">
           <span className="pill">{recommendation}</span>
-          <span className="pill">Selected option: {selectedOutcome}</span>
-          <span className="pill">Market {bpsToPercent(details.call.marketPriceBps)}</span>
-          <span className="pill">Edge {bpsToPercent(details.call.edgeBps)}</span>
-          <span className="pill">Confidence {bpsToPercent(details.call.confidenceBps)}</span>
-          <span className="pill">Size {bpsToPercent(details.call.suggestedSizeBps)}</span>
         </div>
         {(details.call.copyUrl || details.call.marketUrl) ? (
           <p><a href={details.call.copyUrl || details.call.marketUrl || "#"} rel="noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
