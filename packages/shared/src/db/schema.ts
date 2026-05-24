@@ -158,6 +158,44 @@ export const agentRuns = pgTable("agent_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const sportsPredictions = pgTable(
+  "sports_predictions",
+  {
+    id: serial("id").primaryKey(),
+    marketId: text("market_id").notNull(),
+    marketTitle: text("market_title").notNull(),
+    marketUrl: text("market_url").notNull(),
+    category: text("category").notNull(),
+    marketKind: text("market_kind").notNull(),
+    selectedOption: text("selected_option").notNull(),
+    selectedOutcomeIndex: integer("selected_outcome_index").notNull(),
+    marketPriceBps: integer("market_price_bps").notNull(),
+    agentProbabilityBps: integer("agent_probability_bps").notNull(),
+    edgeBps: integer("edge_bps").notNull(),
+    confidenceBps: integer("confidence_bps").notNull(),
+    riskLevel: text("risk_level").notNull(),
+    rationale: text("rationale").notNull(),
+    matchupContext: text("matchup_context").notNull().default(""),
+    marketMovement: text("market_movement").notNull().default(""),
+    risks: jsonb("risks").$type<string[]>().notNull(),
+    verdict: text("verdict").notNull(),
+    evidenceContext: jsonb("evidence_context").notNull(),
+    votes: jsonb("votes").notNull(),
+    x402Status: jsonb("x402_status"),
+    status: text("status").notNull().default("active"),
+    statusReason: text("status_reason").notNull().default(""),
+    sourceRunId: integer("source_run_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    marketOutcomeIdx: uniqueIndex("sports_predictions_market_outcome_idx").on(table.marketId, table.selectedOutcomeIndex),
+    statusIdx: index("sports_predictions_status_idx").on(table.status),
+    createdAtIdx: index("sports_predictions_created_at_idx").on(table.createdAt),
+  }),
+);
+
 export const resolutions = pgTable("resolutions", {
   id: serial("id").primaryKey(),
   callId: integer("call_id").notNull().unique(),

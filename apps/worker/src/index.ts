@@ -2,7 +2,7 @@
 import { depositGatewayUsdc, getGatewayBalances, supportsX402Resource } from "@precall/shared/circle/gateway-client";
 import type { SupportedChainName } from "@circle-fin/x402-batching/client";
 import { loadDotenv } from "./dotenv";
-import { discover, expirePublishedCalls, health, publishStoredRun, registerCouncilAgent, resolveMatureCalls, runOnce } from "./run-cycle";
+import { discover, expirePublishedCalls, health, publishStoredRun, registerCouncilAgent, resolveMatureCalls, runOnce, runSportsEdge } from "./run-cycle";
 import { closeRepository } from "./repository";
 
 loadDotenv();
@@ -13,6 +13,7 @@ async function main() {
   if (command === "health") return health();
   if (command === "discover") return discover();
   if (command === "run-once") return runOnce();
+  if (command === "sports") return runSportsEdge();
   if (command === "publish-run") return publishStoredRun(Number(process.argv[3]));
   if (command === "resolve") return resolveMatureCalls();
   if (command === "expire") return expirePublishedCalls();
@@ -30,7 +31,7 @@ async function main() {
     const amountUsdc = second || first || "1";
     return depositGatewayUsdc({ chain, amountUsdc });
   }
-  throw new Error(`Unknown command "${command}". Use health, discover, register-agent, run-once, publish-run, expire, resolve, x402:supports, gateway:balance, or gateway:deposit.`);
+  throw new Error(`Unknown command "${command}". Use health, discover, register-agent, run-once, sports, publish-run, expire, resolve, x402:supports, gateway:balance, or gateway:deposit.`);
 }
 
 function stringifyResult(result: unknown) {

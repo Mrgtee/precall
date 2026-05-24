@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Precall is an Arc-native prediction-market intelligence arena. Autonomous market-agent roles scan live Polymarket YES/NO markets, identify mispriced opportunities, bond public calls with USDC on Arc Testnet, sell full reasoning traces through USDC unlocks, and build reputation after outcomes resolve.
+Precall is an Arc-native prediction-market intelligence arena. Autonomous market-agent roles scan live Polymarket YES/NO markets, identify mispriced opportunities, bond public calls with USDC on Arc Testnet, sell full reasoning traces through USDC unlocks, and build reputation after outcomes resolve. A separate Daily Sports Edge scans sports markets for non-bonded selected-outcome ideas so the demo can show daily market intelligence without weakening YES/NO settlement safety.
 
 Core loop:
 
@@ -44,8 +44,9 @@ For judges, show the `/demo` Circle proof section. It displays Gateway enabled s
 
 ## Product Honesty
 
-- V1 supports strict YES/NO markets only.
-- Non-YES/NO markets are skipped with transparent reasons.
+- V1 Arc-bonded calls support strict YES/NO markets only.
+- Non-YES/NO sports markets can appear only on Daily Sports Edge as non-bonded ideas until selected-outcome resolution is generalized.
+- Non-sports or low-quality markets are skipped with transparent reasons.
 - Low-confidence or tiny-size signals are stored as filtered runs, not presented as strong buys.
 - The product does not custody user funds or place trades.
 - The leaderboard does not overclaim quality before resolved calls exist.
@@ -72,16 +73,18 @@ Frame these as real testnet activity, not inflated production traction.
 1. Open `/demo` and show system status: DB, model, Arc registry, Circle Gateway/x402, counts, latest run, latest paid evidence payment, latest Arc bond, and latest unlock.
 2. Open `/admin`, connect the whitelisted wallet, run health, then run the agent.
 3. If a call publishes, show the Arc bond tx and the call page. If no call publishes, show filtered reasons and explain quality gates.
-4. On the call page, explain YES probability versus selected-side probability, evidence IDs, confidence, edge, and suggested size.
-5. Unlock the thesis with USDC on Arc and show the unlock transaction.
-6. Open `/leaderboard` and explain reputation activates after resolution.
-7. Run `resolve` or show an awaiting-resolution call and explain the lifecycle.
+4. On the call page, show that pick direction, Polymarket link, thesis, evidence, sizing, and votes are locked.
+5. Unlock the thesis with USDC on Arc and show the selected option, analysis, evidence, and unlock transaction.
+6. Open `/sports` and show Daily Sports Edge ideas with selected options, risk level, reasoning, and no guarantee language.
+7. Open `/leaderboard` and explain reputation activates after resolution.
+8. Run `resolve` or show an awaiting-resolution call and explain the lifecycle.
 
 ## Demo Commands
 
 ```bash
 npm run worker -- health
 npm run worker -- run-once
+npm run worker:sports
 npm run worker -- expire
 npm run worker -- resolve
 npm test
@@ -104,7 +107,7 @@ GitHub: https://github.com/Mrgtee/precall
 
 ## Known Limitations
 
-- Only strict YES/NO markets are supported in V1.
+- Only strict YES/NO markets are supported for Arc-bonded calls in V1. Sports Edge is non-bonded until selected-outcome sports resolution is implemented.
 - Gateway/x402 is optional and only visible as active when real credentials are configured and paid API calls succeed.
 - User trade execution is manual through Polymarket links.
 - A new `PrecallRegistry` deployment is required for V2 bond slashing/treasury behavior.

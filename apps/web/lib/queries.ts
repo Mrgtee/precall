@@ -12,6 +12,7 @@ import {
   markets,
   marketSnapshots,
   resolutions,
+  sportsPredictions,
   thesisUnlocks,
   users,
 } from "@precall/shared/db/schema";
@@ -85,6 +86,18 @@ export async function getEvidence(callId: number) {
   return db.select().from(evidenceItems).where(eq(evidenceItems.callId, callId));
 }
 
+export type SportsPredictionRow = Awaited<ReturnType<typeof getSportsPredictions>>[number];
+
+export async function getSportsPredictions(limit = 12) {
+  const db = createDb();
+  return db
+    .select()
+    .from(sportsPredictions)
+    .where(eq(sportsPredictions.status, "active"))
+    .orderBy(desc(sportsPredictions.updatedAt))
+    .limit(limit);
+}
+
 export async function hasUnlock(callId: number, wallet: string) {
   const db = createDb();
   const [row] = await db
@@ -149,10 +162,12 @@ export async function getDemoData() {
     dailyX402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success' and created_at >= date_trunc('day', now()))`,
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
+    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'active')`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 
   const latestRuns = await db.query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 8 });
   const latestCalls = await getCalls(10);
+  const latestSportsIdeas = await getSportsPredictions(5);
   const latestUnlocks = await db.query.thesisUnlocks.findMany({ orderBy: desc(thesisUnlocks.createdAt), limit: 5 });
   const latestCircleActions = await db.query.circleActions.findMany({ orderBy: desc(circleActions.createdAt), limit: 8 });
   const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment')`, orderBy: desc(circleActions.createdAt) });
@@ -170,6 +185,7 @@ export async function getDemoData() {
     awaitingResolution: latestCalls.filter((call) => call.status === "expired"),
     resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],
+    latestSportsIdeas,
     latestCircleActions,
     latestX402Payment,
     latestArcBond,

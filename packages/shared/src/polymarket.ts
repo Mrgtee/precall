@@ -1,5 +1,5 @@
 import { optionalEnv } from "./env";
-import type { MarketResolution, MarketSnapshot, PolymarketMarket } from "./types";
+import type { MarketResolution, MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "./types";
 
 interface GammaMarket {
   id?: string;
@@ -153,6 +153,23 @@ export async function fetchMarketSnapshot(market: PolymarketMarket): Promise<Mar
     marketId: market.marketId,
     yesPriceBps: Math.round(yesPrice * 10_000),
     noPriceBps: Math.round(noPrice * 10_000),
+    spreadBps: orderBookSpread ?? estimateSpreadBps(market),
+    depthUsd: market.liquidityUsd,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+export async function fetchOutcomeSnapshot(market: PolymarketMarket, outcomeIndex: number): Promise<OutcomeSnapshot> {
+  const safeIndex = Number.isInteger(outcomeIndex) && outcomeIndex >= 0 && outcomeIndex < market.outcomes.length ? outcomeIndex : 0;
+  const price = market.outcomePrices[safeIndex] ?? 0;
+  const orderBookSpread = await fetchOrderBookSpread(market, safeIndex).catch(() => null);
+
+  return {
+    marketId: market.marketId,
+    outcomeIndex: safeIndex,
+    outcome: market.outcomes[safeIndex] || `Outcome ${safeIndex + 1}`,
+    priceBps: Math.round(price * 10_000),
+    complementPriceBps: Math.max(0, 10_000 - Math.round(price * 10_000)),
     spreadBps: orderBookSpread ?? estimateSpreadBps(market),
     depthUsd: market.liquidityUsd,
     capturedAt: new Date().toISOString(),

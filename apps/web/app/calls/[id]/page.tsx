@@ -3,22 +3,25 @@ import { notFound } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { FollowAgent } from "../../../components/follow-agent";
 import { UnlockThesis } from "../../../components/unlock-thesis";
-import { bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedProbabilityForAction, statusLabel, usdc } from "../../../lib/format";
-import { getCall, getEvidence } from "../../../lib/queries";
+import { statusLabel, usdc } from "../../../lib/format";
+import { getCall } from "../../../lib/queries";
 
 export const dynamic = "force-dynamic";
+
+function freshness(date: Date | string | null) {
+  if (!date) return "unknown";
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(date).getTime()) / 60_000));
+  if (diffMinutes < 60) return `${diffMinutes}m old`;
+  const hours = Math.round(diffMinutes / 60);
+  if (hours < 48) return `${hours}h old`;
+  return `${Math.round(hours / 24)}d old`;
+}
 
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const call = await getCall(Number(id));
   if (!call) notFound();
   if (!call.agentId) notFound();
-  const evidence = await getEvidence(call.id);
-  const outcome = outcomeForAction(call.action, call.outcomes);
-  const yesProbability = Number(call.yesProbabilityBps || call.agentProbabilityBps || 0);
-  const selectedProbability = selectedProbabilityForAction(call.action, yesProbability);
-  const recommendation = recommendationLabel(call.action, call.outcomes, call.confidenceBps, call.suggestedSizeBps);
-  const actionClass = call.action === "BUY_YES" ? "buy" : call.action === "BUY_NO" ? "no" : "";
 
   return (
     <main className="shell detail-layout">
@@ -26,55 +29,20 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <p className="eyebrow">{call.agentName} · {statusLabel(call.status, call.legacy)}</p>
         <h1 className="call-detail-title">{call.marketTitle}</h1>
         <div className="pill-row">
-          <span className={`pill ${actionClass}`}>{recommendation}</span>
-          <span className="pill">Agent {outcome} {bpsToPercent(selectedProbability)}</span>
-          <span className="pill">YES probability {bpsToPercent(yesProbability)}</span>
-          <span className="pill">Market {outcome} {bpsToPercent(call.marketPriceBps)}</span>
-          <span className="pill">Edge {bpsToPercent(call.edgeBps)}</span>
-          <span className="pill">Confidence {bpsToPercent(call.confidenceBps)}</span>
-          <span className="pill">Size {bpsToPercent(call.suggestedSizeBps)}</span>
+          <span className="pill">Market/category: {call.marketType === "strict_yes_no" ? "Strict YES/NO" : call.marketType}</span>
+          <span className="pill"><ShieldCheck size={14} /> Bonded on Arc</span>
+          <span className="pill">Unlock {usdc(call.unlockPrice)}</span>
+          <span className="pill">Freshness {freshness(call.publishedAt)}</span>
         </div>
         <p className="muted">
-          {recommendationHelp(call.action, call.confidenceBps, call.suggestedSizeBps)} Precall does not place trades for users; it links out with the suggested action and size.
+          This call is intentionally locked. The selected option, Polymarket copy link, thesis, evidence, risk, sizing, agent votes, and full analysis are revealed only after a verified USDC unlock on Arc.
         </p>
         {call.statusReason ? <p className="muted"><strong>Status note:</strong> {call.statusReason}</p> : null}
-        <div className="pill-row">
-          <Link className="button" href={call.copyUrl || call.marketUrl || "#"} target="_blank">
-            Open current market <ExternalLink size={16} />
+        {call.txHash ? (
+          <Link className="button secondary" href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">
+            Arc bond tx <ExternalLink size={16} />
           </Link>
-          {call.txHash ? (
-            <Link className="button secondary" href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">
-              Arc bond tx <ExternalLink size={16} />
-            </Link>
-          ) : null}
-        </div>
-
-        <section style={{ marginTop: 28 }}>
-          <h2>Verified public evidence</h2>
-          <div className="grid">
-            {evidence.map((item) => {
-              const observedAt = item.fetchedAt || item.capturedAt;
-              return (
-                <article className="panel" key={item.id}>
-                  <strong>{item.title}</strong>
-                  <p className="muted">
-                    <span className="status-chip">{item.sourceType}</span>
-                    {item.paid ? <span className="status-chip">x402-paid evidence</span> : null}
-                    Provider {item.provider || "unknown"} · Score {item.credibilityScore} · {new Date(observedAt).toLocaleString()}
-                  </p>
-                  <p className="muted">{item.excerpt}</p>
-                  {item.paid ? (
-                    <p className="muted">
-                      Paid {usdc(item.paymentAmountUsdc)} via {item.paymentNetwork || "Circle Gateway/x402"}
-                      {item.paymentRef ? ` · reference ${item.paymentRef.slice(0, 10)}...` : ""}
-                    </p>
-                  ) : null}
-                  <Link href={item.sourceUrl} target="_blank">Source <ExternalLink size={14} /></Link>
-                </article>
-              );
-            })}
-          </div>
-        </section>
+        ) : null}
       </section>
 
       <aside className="grid">
@@ -84,7 +52,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
           <p className="muted">Unlock price: {usdc(call.unlockPrice)}</p>
           <p className="muted">Onchain call ID: {call.onchainCallId ?? "pending"}</p>
           <p className="muted">Registry: {call.registryAddress ? `${call.registryAddress.slice(0, 6)}...${call.registryAddress.slice(-4)}` : "legacy/unknown"}</p>
-          {call.finalOutcome ? <p className="muted">Resolved {call.finalOutcome} · ROI {bpsToPercent(call.roiBps)} · Brier {bpsToPercent(call.brierScoreBps)}</p> : null}
+          {call.finalOutcome ? <p className="muted">Resolved {call.finalOutcome}</p> : null}
         </section>
         <section className="panel">
           <h3>Follow this desk</h3>

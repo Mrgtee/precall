@@ -5,7 +5,7 @@ import { Activity, Play, ShieldAlert, ShieldCheck, Stethoscope, UserMinus, UserP
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { shortAddress, usdc } from "../lib/format";
 
-type AdminAction = "health" | "run-once" | "resolve" | "expire";
+type AdminAction = "health" | "run-once" | "sports" | "resolve" | "expire";
 type WalletAction = "admin-add" | "admin-remove";
 
 type ChallengeResponse = {
@@ -24,6 +24,7 @@ type AdminResult = {
     eligible?: unknown[];
     analyzed?: unknown[];
     published?: unknown[];
+    stored?: unknown[];
     skipped?: unknown[];
     failed?: unknown[];
     resolved?: unknown[];
@@ -101,6 +102,13 @@ const actions: Array<{
     danger: true,
   },
   {
+    action: "sports",
+    title: "Run sports scan",
+    description: "Scan daily sports markets, pay x402 evidence when available, run the sports council, and store qualifying non-bonded Sports Edge ideas.",
+    icon: <Play size={18} />,
+    danger: true,
+  },
+  {
     action: "expire",
     title: "Mark expired calls",
     description: "Move matured but unresolved published calls into the awaiting-resolution state without spending USDC.",
@@ -134,7 +142,8 @@ export function AdminConsole() {
   const [targetWallet, setTargetWallet] = useState("");
   const [walletStatus, setWalletStatus] = useState("");
   const publishedCount = result?.command === "run-once" ? (result.result?.published?.length ?? 0) : null;
-  const skippedCount = result?.command === "run-once" ? (result.result?.skipped?.length ?? 0) : null;
+  const skippedCount = result?.command === "run-once" || result?.command === "sports" ? (result.result?.skipped?.length ?? 0) : null;
+  const sportsStoredCount = result?.command === "sports" ? (result.result?.stored?.length ?? 0) : null;
 
   const refreshAdminData = useCallback(async (currentAddress = address) => {
     if (!currentAddress) return;
@@ -196,7 +205,7 @@ export function AdminConsole() {
 
     try {
       const { challengePayload, signature } = await getChallenge(action);
-      setStatus(action === "run-once" ? "Triggering Railway agent cycle. This can take a few minutes..." : "Submitting admin action...");
+      setStatus(action === "run-once" ? "Triggering Railway agent cycle. This can take a few minutes..." : action === "sports" ? "Triggering Railway sports scan. This can take a few minutes..." : "Submitting admin action...");
       const runResponse = await fetch("/api/admin/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -328,7 +337,7 @@ export function AdminConsole() {
           <article className={`panel admin-action ${item.danger ? "danger" : ""}`} key={item.action}>
             <h3>{item.icon} {item.title}</h3>
             <p className="muted">{item.description}</p>
-            {item.action === "run-once" ? <p className="muted"><strong>Spend note:</strong> Railway should have Gateway/x402 enabled; keep x402 not-required until a provider/chain support check succeeds.</p> : null}
+            {item.action === "run-once" || item.action === "sports" ? <p className="muted"><strong>Spend note:</strong> Railway should have Gateway/x402 enabled; keep x402 not-required until a provider/chain support check succeeds.</p> : null}
             <button className={item.danger ? "button" : "button secondary"} disabled={Boolean(active)} onClick={() => runAction(item.action)} type="button">
               {active === item.action ? "Running..." : item.title}
             </button>
@@ -360,9 +369,10 @@ export function AdminConsole() {
         {status ? <p className="muted">{status}</p> : <p className="muted">No action run yet.</p>}
         {result?.ok && publishedCount === 0 ? <p className="muted">No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out or failed required evidence/payment gates.</p> : null}
         {publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
+        {sportsStoredCount && sportsStoredCount > 0 ? <p className="muted">Stored {sportsStoredCount} sports idea{sportsStoredCount === 1 ? "" : "s"}. Refresh Sports Edge to see the latest board.</p> : null}
         {skippedCount && skippedCount > 0 ? <p className="muted">Filtered {skippedCount} market{skippedCount === 1 ? "" : "s"}. This is expected when live markets fail V1 eligibility or quality gates.</p> : null}
         {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}
-        <p className="muted">If a run returns an empty <code>published</code> list, the dashboard will not show a new call. That means no live market passed all configured filters and required evidence checks.</p>
+        <p className="muted">If a bonded run returns an empty <code>published</code> list or a sports run returns an empty <code>stored</code> list, the public pages will not gain new ideas. That means no live market passed all configured filters and required evidence checks.</p>
       </section>
     </section>
   );

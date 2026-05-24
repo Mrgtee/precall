@@ -6,10 +6,43 @@ import { getWalletClient } from "@wagmi/core";
 import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } from "wagmi";
 import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
-import { LockKeyhole, Unlock } from "lucide-react";
-import { usdc } from "../lib/format";
+import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
+import { bpsToPercent, outcomeForAction, recommendationLabel, usdc } from "../lib/format";
 import { FeedbackCapture } from "./feedback-capture";
 
+type UnlockedPayload = {
+  call: {
+    title: string;
+    action: string;
+    outcomes?: string[] | null;
+    marketUrl?: string | null;
+    copyUrl?: string | null;
+    marketPriceBps: number;
+    yesProbabilityBps: number;
+    edgeBps: number;
+    confidenceBps: number;
+    suggestedSizeBps: number;
+    thesis: string;
+    counterarguments?: string[] | null;
+  };
+  evidence: Array<{
+    id: number;
+    evidenceId: string;
+    sourceType: string;
+    provider: string;
+    sourceUrl: string;
+    title: string;
+    excerpt: string;
+    credibilityScore: number;
+    fetchedAt: string | Date;
+    capturedAt: string | Date;
+    paid: boolean;
+    paymentAmountUsdc?: string | null;
+    paymentNetwork?: string | null;
+    paymentRef?: string | null;
+  }>;
+  votes: Array<{ agent?: string; thesis?: string; confidenceBps?: number; evidenceIds?: string[]; risks?: string[] }>;
+};
 
 export function UnlockThesis({
   callId,
@@ -31,24 +64,17 @@ export function UnlockThesis({
   const { writeContractAsync } = useWriteContract();
   const [status, setStatus] = useState<string>("");
   const [txHash, setTxHash] = useState<`0x${string}` | "">("");
-  const [thesis, setThesis] = useState<string>("");
+  const [details, setDetails] = useState<UnlockedPayload | null>(null);
 
-  async function waitForReceiptWithTimeout(
-    publicClient: ReturnType<typeof createPublicClient>,
-    hash: `0x${string}`,
-    label: string,
-  ) {
+  async function waitForReceiptWithTimeout(publicClient: ReturnType<typeof createPublicClient>, hash: `0x${string}`, label: string) {
     return Promise.race([
       publicClient.waitForTransactionReceipt({ hash }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${label} is still pending. Check your wallet or ArcScan, then refresh.`)), 75_000),
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} is still pending. Check your wallet or ArcScan, then refresh.`)), 75_000)),
     ]);
   }
 
   function errorMessage(error: unknown) {
-    if (error instanceof Error) return error.message;
-    return String(error);
+    return error instanceof Error ? error.message : String(error);
   }
 
   async function getConnectedWalletChainId() {
@@ -61,8 +87,8 @@ export function UnlockThesis({
     const thesisResponse = await fetch(`/api/calls/${callId}/thesis?wallet=${wallet}`);
     if (!thesisResponse.ok) return false;
 
-    const payload = (await thesisResponse.json()) as { thesis: string };
-    setThesis(payload.thesis);
+    const payload = (await thesisResponse.json()) as UnlockedPayload;
+    setDetails(payload);
     setStatus(successStatus);
     return true;
   }
@@ -96,32 +122,17 @@ export function UnlockThesis({
         return;
       }
 
-      const publicClient = createPublicClient({
-        chain: arcTestnet,
-        transport: http(arcTestnet.rpcUrls.default.http[0]),
-      });
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
 
       setStatus("Approve the USDC spend in your wallet...");
       const amount = parseUnits(unlockPrice, 6);
-      const approveHash = await writeContractAsync({
-        address: usdcAddress,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [registry, amount],
-        chainId: arcTestnet.id,
-      });
+      const approveHash = await writeContractAsync({ address: usdcAddress, abi: erc20Abi, functionName: "approve", args: [registry, amount], chainId: arcTestnet.id });
       setTxHash(approveHash);
       setStatus("Approval submitted. Waiting for Arc confirmation...");
       await waitForReceiptWithTimeout(publicClient, approveHash, "Approval transaction");
 
       setStatus("Approve thesis unlock in your wallet...");
-      const unlockHash = await writeContractAsync({
-        address: registry,
-        abi: precallRegistryAbi,
-        functionName: "unlockThesis",
-        args: [BigInt(onchainCallId)],
-        chainId: arcTestnet.id,
-      });
+      const unlockHash = await writeContractAsync({ address: registry, abi: precallRegistryAbi, functionName: "unlockThesis", args: [BigInt(onchainCallId)], chainId: arcTestnet.id });
       setTxHash(unlockHash);
       setStatus("Unlock submitted. Waiting for Arc confirmation...");
       await waitForReceiptWithTimeout(publicClient, unlockHash, "Unlock transaction");
@@ -146,11 +157,43 @@ export function UnlockThesis({
     }
   }
 
-  if (thesis) {
+  if (details) {
+    const selectedOutcome = outcomeForAction(details.call.action, details.call.outcomes || []);
+    const recommendation = recommendationLabel(details.call.action, details.call.outcomes || [], details.call.confidenceBps, details.call.suggestedSizeBps);
     return (
-      <section className="panel">
-        <h3><Unlock size={18} /> Full thesis</h3>
-        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{thesis}</p>
+      <section className="panel unlocked-analysis">
+        <h3><Unlock size={18} /> Full unlocked analysis</h3>
+        <div className="pill-row">
+          <span className="pill">{recommendation}</span>
+          <span className="pill">Selected option: {selectedOutcome}</span>
+          <span className="pill">Market {bpsToPercent(details.call.marketPriceBps)}</span>
+          <span className="pill">Edge {bpsToPercent(details.call.edgeBps)}</span>
+          <span className="pill">Confidence {bpsToPercent(details.call.confidenceBps)}</span>
+          <span className="pill">Size {bpsToPercent(details.call.suggestedSizeBps)}</span>
+        </div>
+        {(details.call.copyUrl || details.call.marketUrl) ? (
+          <p><a href={details.call.copyUrl || details.call.marketUrl || "#"} rel="noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
+        ) : null}
+        <h4>Thesis</h4>
+        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{details.call.thesis}</p>
+        {details.call.counterarguments?.length ? (
+          <><h4>Counterarguments</h4><ul>{details.call.counterarguments.map((item) => <li key={item}>{item}</li>)}</ul></>
+        ) : null}
+        <h4>Evidence</h4>
+        <div className="grid">
+          {details.evidence.map((item) => (
+            <article className="panel" key={item.id}>
+              <strong>{item.title}</strong>
+              <p className="muted"><span className="status-chip">{item.sourceType}</span>{item.paid ? <span className="status-chip">x402-paid evidence</span> : null} Provider {item.provider || "unknown"} · Score {item.credibilityScore}</p>
+              <p className="muted">{item.excerpt}</p>
+              {item.paid ? <p className="muted">Paid {usdc(item.paymentAmountUsdc || 0)} via {item.paymentNetwork || "Circle Gateway/x402"}</p> : null}
+              <a href={item.sourceUrl} rel="noreferrer" target="_blank">Source <ExternalLink size={14} /></a>
+            </article>
+          ))}
+        </div>
+        {details.votes.length ? (
+          <><h4>Agent votes</h4><div className="grid">{details.votes.map((vote, index) => <article className="panel" key={`${vote.agent || "agent"}-${index}`}><strong>{vote.agent || "Agent"}</strong><p className="muted">Confidence {bpsToPercent(vote.confidenceBps || 0)}</p><p className="muted">{vote.thesis}</p>{vote.risks?.length ? <p className="muted">Risks: {vote.risks.join("; ")}</p> : null}</article>)}</div></>
+        ) : null}
         <FeedbackCapture callId={callId} context="post-unlock" />
       </section>
     );
@@ -159,19 +202,13 @@ export function UnlockThesis({
   return (
     <section className="thesis-lock">
       <h3><LockKeyhole size={18} /> Thesis locked</h3>
-      <p className="muted">
-        Pay {usdc(unlockPrice)} on Arc to unlock the full reasoning trace, evidence, risks, and sizing logic.
-      </p>
+      <p className="muted">Pay {usdc(unlockPrice)} on Arc to unlock the selected option, Polymarket link, thesis, evidence, risks, sizing logic, and agent votes.</p>
       <button className="button" onClick={unlock} type="button">
         <Unlock size={17} />
         {isConnected ? "Unlock thesis" : "Connect to unlock"}
       </button>
       {status ? <p className="muted">{status}</p> : null}
-      {txHash ? (
-        <p className="muted">
-          Transaction: <a href={arcTxUrl(txHash)} rel="noreferrer" target="_blank">view on ArcScan</a>
-        </p>
-      ) : null}
+      {txHash ? <p className="muted">Transaction: <a href={arcTxUrl(txHash)} rel="noreferrer" target="_blank">view on ArcScan</a></p> : null}
     </section>
   );
 }

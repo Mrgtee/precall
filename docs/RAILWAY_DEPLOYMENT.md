@@ -47,6 +47,7 @@ Manual one-shot commands:
 ```bash
 npm run worker:health
 npm run worker:run-once
+npm run worker:sports
 npm run worker:expire
 npm run worker:resolve
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
@@ -105,6 +106,18 @@ BOND_AMOUNT_USDC=1
 UNLOCK_PRICE_USDC=0.05
 ALLOW_PUBLISH_FILTERED_RUN=false
 
+ENABLE_SPORTS_EDGE=true
+SPORTS_DISCOVERY_MARKET_LIMIT=250
+SPORTS_DAILY_TARGET=5
+MAX_SPORTS_ANALYZED_PER_RUN=16
+SPORTS_LOOKAHEAD_HOURS=72
+SPORTS_MIN_LIQUIDITY_USD=25000
+SPORTS_MAX_SPREAD_BPS=500
+SPORTS_MIN_EDGE_BPS=300
+SPORTS_MIN_CONFIDENCE_BPS=5000
+SPORTS_MIN_PRICE_BPS=1000
+SPORTS_MAX_PRICE_BPS=9000
+
 WORKER_TRIGGER_SECRET=generate-a-long-random-secret
 PORT=8080
 ```
@@ -161,6 +174,7 @@ The Railway HTTP worker exposes:
 ```text
 POST /worker/health
 POST /worker/run-once
+POST /worker/sports
 POST /worker/expire
 POST /worker/resolve
 ```
@@ -181,6 +195,9 @@ curl -sS -X POST "$WORKER_TRIGGER_URL/worker/health" \
 curl -sS -X POST "$WORKER_TRIGGER_URL/worker/run-once" \
   -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
 
+curl -sS -X POST "$WORKER_TRIGGER_URL/worker/sports" \
+  -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
+
 curl -sS -X POST "$WORKER_TRIGGER_URL/worker/expire" \
   -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
 
@@ -192,11 +209,12 @@ curl -sS -X POST "$WORKER_TRIGGER_URL/worker/resolve" \
 
 Health is manual only. Use it from the dashboard or curl when debugging.
 
-Create three Railway cron services from the same GitHub repo:
+Create four Railway cron services from the same GitHub repo:
 
 | Job | Schedule | Command | Notes |
 | --- | --- | --- | --- |
-| Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans live markets, optionally pays x402 evidence, and publishes only quality-passing calls. |
+| Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans strict YES/NO markets, optionally pays x402 evidence, and publishes only quality-passing bonded calls. |
+| Sports Edge | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, optionally pays x402 evidence, and stores only quality-passing non-bonded sports ideas. |
 | Expire calls | `0 * * * *` | `npm run worker:expire` | Marks matured published calls as awaiting resolution. |
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 
@@ -273,7 +291,7 @@ With `REQUIRE_CIRCLE_GATEWAY_X402=false`, admin-triggered `run-once` records pai
 
 1. Push this commit to GitHub.
 2. Create the Railway service from GitHub and let it use `railway.json`, or manually set the build/start commands above.
-3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=false`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
+3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=false`, `ENABLE_SPORTS_EDGE=true`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
 4. Deploy the Railway HTTP worker and open `/healthz`.
 5. Copy the Railway URL into Vercel as `WORKER_TRIGGER_URL`.
 6. Add the same `WORKER_TRIGGER_SECRET` to Vercel.

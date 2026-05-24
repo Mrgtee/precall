@@ -4,11 +4,11 @@ import { getAddress, isAddress, verifyMessage, type Hex } from "viem";
 import { createDb } from "@precall/shared/db/client";
 import { adminWallets as adminWalletRows } from "@precall/shared/db/schema";
 
-export type WorkerAdminAction = "health" | "run-once" | "resolve" | "expire";
+export type WorkerAdminAction = "health" | "run-once" | "sports" | "resolve" | "expire";
 export type AdminWalletAction = "admin-add" | "admin-remove";
 export type AdminAction = WorkerAdminAction | AdminWalletAction;
 
-const workerActions = new Set<WorkerAdminAction>(["health", "run-once", "resolve", "expire"]);
+const workerActions = new Set<WorkerAdminAction>(["health", "run-once", "sports", "resolve", "expire"]);
 const walletActions = new Set<AdminWalletAction>(["admin-add", "admin-remove"]);
 const allowedActions = new Set<AdminAction>([...workerActions, ...walletActions]);
 const challengeTtlMs = 10 * 60 * 1000;

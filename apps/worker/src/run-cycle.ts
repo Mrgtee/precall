@@ -1,4 +1,6 @@
 import { buildEvidenceContext } from "@precall/shared/evidence";
+import { runAgentCouncilDetailed } from "@precall/shared/agents/council";
+import { runSportsCouncilDetailed } from "@precall/shared/agents/sports-council";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { fetchAisaX402SocialEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
@@ -7,12 +9,13 @@ import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain 
 import {
   discoverPolymarketMarkets,
   fetchMarketSnapshot,
+  fetchOutcomeSnapshot,
   fetchPolymarketResolution,
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import type { MarketSnapshot, PolymarketMarket } from "@precall/shared/types";
-import { runAgentCouncilDetailed } from "@precall/shared/agents/council";
+import { aggregateSportsVotes, buildSportsEvidenceContext, evaluateSportsCandidate, maxSportsAnalyzedPerRun, passesSportsThresholds, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsThresholdFailures, sportsThresholds, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
   getAgentRunById,
@@ -28,10 +31,12 @@ import {
   getTodayX402SpendUsdc,
   checkCircleActionsSchemaHealth,
   upsertMarket,
+  upsertSportsPrediction,
 } from "./repository";
 
 export async function health() {
   const thresholds = publishThresholds();
+  const sportsConfig = sportsThresholds();
   const gatewayConfig = gatewayRuntimeConfig();
   const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) }]) : [];
   const primaryGatewayBalance = gatewayBalances.find((balance) => balance.chain === gatewayConfig.chain) || gatewayBalances[0];
@@ -39,7 +44,7 @@ export async function health() {
   const base = {
     worker: {
       commitSha: optionalEnv("RAILWAY_GIT_COMMIT_SHA", optionalEnv("GIT_COMMIT_SHA", "unknown")),
-      schemaRepair: "0005_circle_actions_core_columns",
+      schemaRepair: "0008_sports_predictions",
     },
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -78,6 +83,13 @@ export async function health() {
       gatewayError: primaryGatewayBalance?.error,
     },
     thresholds,
+    sportsEdge: {
+      enabled: sportsEnabled(),
+      discoveryLimit: sportsDiscoveryLimit(),
+      dailyTarget: sportsDailyTarget(),
+      maxAnalyzedMarkets: maxSportsAnalyzedPerRun(),
+      thresholds: sportsConfig,
+    },
   };
 
   let markets;
@@ -189,6 +201,49 @@ function candidateSummary(candidate: RankedDiscoveryCandidate) {
     closeTime: candidate.market.closeTime,
     yesPriceBps: candidate.snapshot.yesPriceBps,
     descriptionLength: candidate.candidateScore.descriptionLength,
+  };
+}
+
+function sportsCandidateSummary(candidate: SportsCandidate): Omit<SportsSkip, "reasons"> {
+  return {
+    marketId: candidate.market.marketId,
+    title: candidate.market.title,
+    url: candidate.market.url,
+    category: candidate.classification.category,
+    marketKind: candidate.classification.marketKind,
+    liquidityUsd: candidate.market.liquidityUsd,
+    volume24hUsd: candidate.market.volume24hUsd,
+    closeTime: candidate.market.closeTime,
+    candidateScore: candidate.candidateScore,
+  };
+}
+
+function sportsRejectedSummary(market: PolymarketMarket, reasons: string[]): SportsSkip {
+  return {
+    marketId: market.marketId,
+    title: market.title,
+    reasons,
+    url: market.url,
+    liquidityUsd: market.liquidityUsd,
+    volume24hUsd: market.volume24hUsd,
+    closeTime: market.closeTime,
+  };
+}
+
+function provisionalSportsOutcomeIndex(candidate: SportsCandidate) {
+  return candidate.outcomeIndexes
+    .map((index) => ({ index, distance: Math.abs(Math.round((candidate.market.outcomePrices[index] || 0) * 10_000) - 5_000) }))
+    .sort((left, right) => left.distance - right.distance)[0]?.index ?? candidate.outcomeIndexes[0] ?? 0;
+}
+
+function marketSnapshotFromOutcome(snapshot: OutcomeSnapshot): MarketSnapshot {
+  return {
+    marketId: snapshot.marketId,
+    yesPriceBps: snapshot.priceBps,
+    noPriceBps: snapshot.complementPriceBps,
+    spreadBps: snapshot.spreadBps,
+    depthUsd: snapshot.depthUsd,
+    capturedAt: snapshot.capturedAt,
   };
 }
 
@@ -519,6 +574,132 @@ export async function runOnce() {
     skippedByReason: summarizeSkipReasons(skipped),
     topRejectedMarkets: discovery.topRejectedMarkets,
     topEligibleCandidates: discovery.topEligibleCandidates,
+  };
+}
+
+
+export async function runSportsEdge() {
+  if (!sportsEnabled()) {
+    return { ok: true, disabled: true, message: "Sports Edge is disabled. Set ENABLE_SPORTS_EDGE=true on Railway to run sports scans." };
+  }
+
+  requireEnv("OPENAI_API_KEY");
+  const thresholds = sportsThresholds();
+  const discoveryLimit = sportsDiscoveryLimit();
+  const dailyTarget = sportsDailyTarget();
+  const maxAnalyzed = maxSportsAnalyzedPerRun();
+  const requireX402 = boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false);
+  const markets = await discoverPolymarketMarkets(discoveryLimit);
+  const skipped: SportsSkip[] = [];
+  const failed: RunFailedMarket[] = [];
+  const candidates: SportsCandidate[] = [];
+
+  for (const market of markets) {
+    try {
+      await upsertMarket(market);
+    } catch (error) {
+      failed.push({ marketId: market.marketId, title: market.title, stage: "market_upsert", error: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+
+    const evaluation = evaluateSportsCandidate(market, thresholds);
+    if (!evaluation.eligible || !evaluation.candidate) {
+      skipped.push(sportsRejectedSummary(market, evaluation.reasons));
+      continue;
+    }
+    candidates.push(evaluation.candidate);
+  }
+
+  const ranked = rankSportsCandidates(candidates);
+  const candidatesForAnalysis = ranked.slice(0, maxAnalyzed);
+  for (const candidate of ranked.slice(maxAnalyzed)) {
+    skipped.push({ ...sportsCandidateSummary(candidate), reasons: ["analysis_limit"] });
+  }
+
+  let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
+  const stored = [];
+  let analyzed = 0;
+
+  for (const candidate of candidatesForAnalysis) {
+    if (stored.length >= dailyTarget) {
+      skipped.push({ ...sportsCandidateSummary(candidate), reasons: ["sports_target_met"] });
+      continue;
+    }
+
+    const { market, classification } = candidate;
+    let x402Result: X402EvidenceProviderResult | undefined;
+
+    try {
+      analyzed += 1;
+      const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
+      x402Result = await fetchAisaX402SocialEvidence({ market, snapshot: marketSnapshotFromOutcome(provisionalSnapshot), dailySpendUsdc: dailyX402SpendUsdc, query: `${market.title} injuries form stats news` });
+      if (x402Result.status === "success") dailyX402SpendUsdc = addUsdc(dailyX402SpendUsdc, x402Result.paymentAmountUsdc);
+
+      if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
+        const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
+        const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
+        await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+        failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
+        continue;
+      }
+
+      const evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
+      const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
+      const idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      const thresholdFailures = sportsThresholdFailures(idea, thresholds);
+      const storeable = passesSportsThresholds(idea, thresholds);
+
+      const candidateRun = await recordAgentRun({
+        status: storeable ? "sports_candidate" : "sports_filtered",
+        model: councilResult.model,
+        inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
+        outputs: { idea, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
+        evidenceContext,
+        retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
+        latencyMs: councilResult.totalLatencyMs,
+      });
+      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
+
+      if (!storeable) {
+        skipped.push({
+          ...sportsCandidateSummary(candidate),
+          reasons: thresholdFailures,
+          candidateScore: candidate.candidateScore,
+        });
+        continue;
+      }
+
+      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result) });
+      await recordAgentRun({
+        status: "sports_published",
+        model: councilResult.model,
+        inputs: { sourceAgentRunId: candidateRun?.id, marketId: market.marketId },
+        outputs: { sportsPredictionId: row.id, idea, x402: x402Summary(x402Result) },
+        evidenceContext,
+        latencyMs: councilResult.totalLatencyMs,
+      });
+      stored.push({ id: row.id, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
+      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+      failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
+    }
+  }
+
+  return {
+    discoveryLimit,
+    dailyTarget,
+    maxAnalyzedSportsMarkets: maxAnalyzed,
+    discovered: markets.length,
+    checked: markets.length,
+    eligible: ranked.length,
+    analyzed,
+    stored,
+    skipped,
+    failed,
+    skippedByReason: summarizeSkipReasons(skipped),
+    topSportsCandidates: ranked.slice(0, Math.max(dailyTarget, 10)).map(sportsCandidateSummary),
   };
 }
 

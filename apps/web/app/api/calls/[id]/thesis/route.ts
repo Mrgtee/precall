@@ -3,8 +3,9 @@ import { createPublicClient, formatUnits, getAddress, http, parseAbiItem, type A
 import { arcTestnet } from "@precall/shared/chains";
 import { precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { createDb } from "@precall/shared/db/client";
-import { circleActions, thesisUnlocks, users } from "@precall/shared/db/schema";
-import { getCall, hasUnlock } from "../../../../../lib/queries";
+import { desc, eq } from "drizzle-orm";
+import { agentRuns, circleActions, thesisUnlocks, users } from "@precall/shared/db/schema";
+import { getCall, getEvidence, hasUnlock } from "../../../../../lib/queries";
 
 const thesisUnlockedEvent = parseAbiItem(
   "event ThesisUnlocked(uint256 indexed callId, address indexed buyer, uint256 amount)",
@@ -89,5 +90,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   if (!unlocked) return NextResponse.json({ error: "Thesis is locked for this wallet." }, { status: 403 });
-  return NextResponse.json({ thesis: call.thesis, counterarguments: call.counterarguments });
+
+  const evidence = await getEvidence(call.id);
+  const db = createDb();
+  const sourceRun = await db.query.agentRuns.findFirst({
+    where: eq(agentRuns.publishedCallId, call.id),
+    orderBy: desc(agentRuns.createdAt),
+  });
+  const outputs = (sourceRun?.outputs || {}) as { call?: { votes?: unknown[] }; votes?: unknown[] };
+  const votes = outputs.call?.votes || outputs.votes;
+
+  return NextResponse.json({
+    call: {
+      id: call.id,
+      title: call.marketTitle,
+      action: call.action,
+      outcomes: call.outcomes,
+      marketUrl: call.marketUrl,
+      copyUrl: call.copyUrl,
+      marketPriceBps: call.marketPriceBps,
+      yesProbabilityBps: call.yesProbabilityBps || call.agentProbabilityBps,
+      edgeBps: call.edgeBps,
+      confidenceBps: call.confidenceBps,
+      suggestedSizeBps: call.suggestedSizeBps,
+      thesis: call.thesis,
+      counterarguments: call.counterarguments,
+    },
+    evidence,
+    votes: Array.isArray(votes) ? votes : [],
+  });
 }

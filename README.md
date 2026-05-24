@@ -23,11 +23,12 @@ Prediction-market advice is usually cheap talk. Precall makes agent calls audita
 - Circle Agent Stack tracking for agent USDC bonds, user thesis unlocks, and optional Gateway/x402 paid evidence calls.
 - Hosted Postgres persistence with Drizzle migrations.
 - Wallet-signed follows and feedback for new user traction events.
-- `/demo` page that shows live config booleans, latest run, latest call, latest unlock, and Circle activity without faking empty states.
+- `/demo` page that shows live config booleans, latest run, latest locked call proof, latest Sports Edge ideas, latest unlock, and Circle activity without faking empty states.
+- Daily Sports Edge board for non-bonded selected-outcome sports ideas from Polymarket sports markets.
 
 ## Intentionally Not Supported Yet
 
-- Non-YES/NO markets such as team-vs-team markets. V1 skips them until generalized resolution is safe.
+- Arc-bonding and resolution for non-YES/NO selected-outcome markets. Sports Edge can analyze them as non-bonded ideas, but V1 does not bond/resolve them until generalized resolution is safe.
 - Custody or automated trade execution for users. Precall links to markets for manual copying.
 - Fake social/news enrichment. x402 evidence is shown only when real Circle/x402 enrichment is enabled and succeeds.
 - Overclaimed reputation. The leaderboard is honest when no resolved calls exist.
@@ -91,6 +92,15 @@ Useful hardening controls:
 - `MODEL_RETRY_COUNT=2`
 - `ALLOW_PUBLISH_FILTERED_RUN=false`
 
+Sports Edge controls:
+
+- `ENABLE_SPORTS_EDGE=true` - enables the non-bonded daily sports scanner.
+- `SPORTS_DISCOVERY_MARKET_LIMIT=250` - Polymarket markets fetched for sports classification.
+- `SPORTS_DAILY_TARGET=5` - target number of strong sports ideas per day; weak picks are filtered, not forced.
+- `MAX_SPORTS_ANALYZED_PER_RUN=16` - max sports markets allowed to spend x402/model calls per run.
+- `SPORTS_LOOKAHEAD_HOURS=72` - focus on near-term daily sports markets.
+- `SPORTS_MIN_LIQUIDITY_USD=25000`, `SPORTS_MAX_SPREAD_BPS=500`, `SPORTS_MIN_EDGE_BPS=300`, `SPORTS_MIN_CONFIDENCE_BPS=5000`, `SPORTS_MIN_PRICE_BPS=1000`, `SPORTS_MAX_PRICE_BPS=9000`.
+
 Optional Circle Gateway/x402 paid evidence:
 
 - `ENABLE_CIRCLE_GATEWAY_X402=false` - master switch; when false the worker never attempts paid API calls.
@@ -134,6 +144,7 @@ npm run worker -- health
 npm run worker -- discover
 npm run worker -- register-agent
 npm run worker -- run-once
+npm run worker:sports
 npm run worker -- publish-run <agentRunId>
 npm run worker -- expire
 npm run worker -- resolve
@@ -146,7 +157,7 @@ npm run worker:gateway:balance -- baseSepolia
 
 `worker:x402:supports -- <url>` checks each `CIRCLE_X402_CHAIN_CANDIDATES` entry and reports the first provider-supported chain. `worker:gateway:balance -- <chain>` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY` on that chain. `worker:gateway:deposit -- <chain> 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. Commands return public tx hashes and balances only; they never print the private key.
 
-`run-once` checks live markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
+`run-once` checks live strict YES/NO markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying bonded calls. `worker:sports` separately scans sports markets, runs a sports-focused council, stores non-bonded selected-outcome ideas, and never forces weak picks to satisfy the daily target. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 
 ## How Precall Uses Circle Agent Stack
 
@@ -163,8 +174,8 @@ If x402 is disabled or a paid request fails, the worker records the disabled/fai
 1. Open `/demo` to show DB, model, Arc registry, Circle/x402 status, latest run, latest call, and latest unlock.
 2. Open `/admin`, connect the whitelisted admin wallet, and run health.
 3. Run the agent. If no call is published, show the filtered reasons instead of forcing a weak signal.
-4. Open a live call, inspect selected-side probability, YES probability, evidence IDs, and Arc bond transaction.
-5. Unlock the thesis with USDC on Arc.
+4. Open a live call and show only the locked title, Arc bond, unlock price, freshness, and unlock button.
+5. Unlock the thesis with USDC on Arc to reveal selected option, Polymarket link, thesis, evidence, sizing, risks, and agent votes.
 6. Return to `/demo` and `/leaderboard` to show unlock activity and reputation state.
 7. Run `resolve` for mature supported calls and show Brier/ROI after resolution.
 

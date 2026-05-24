@@ -2,18 +2,20 @@ import Link from "next/link";
 import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
-import { type CallRow, getCalls, getLeaderboard } from "../lib/queries";
+import { type CallRow, getCalls, getLeaderboard, getSportsPredictions } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   let calls: CallRow[] = [];
   let leaderboard: Awaited<ReturnType<typeof getLeaderboard>> = [];
+  let sportsIdeas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
   let setupError = "";
 
   try {
     calls = await getCalls(30);
     leaderboard = await getLeaderboard();
+    sportsIdeas = await getSportsPredictions(3);
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
@@ -75,6 +77,31 @@ export default async function HomePage() {
           {live.map((call) => <CallCard key={call.id} call={call} />)}
         </section>
       )}
+
+      <section style={{ marginTop: 34 }}>
+        <section className="section-heading">
+          <div>
+            <p className="eyebrow">Daily Sports Edge</p>
+            <h2>Non-bonded sports ideas</h2>
+          </div>
+          <p>Sports ideas are separate from Arc-bonded calls until selected-outcome resolution is generalized.</p>
+        </section>
+        {sportsIdeas.length === 0 ? (
+          <section className="empty"><h2>No sports ideas stored yet</h2><p className="muted">Run the Sports Scan from Admin or Railway to populate this board.</p></section>
+        ) : (
+          <section className="grid">
+            {sportsIdeas.map((idea) => (
+              <article className="panel" key={idea.id}>
+                <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
+                <h3>{idea.marketTitle}</h3>
+                <p className="muted">Pick: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
+                <p className="muted">{idea.verdict}</p>
+                <Link className="button secondary" href="/sports">Open Sports Edge <ArrowRight size={16} /></Link>
+              </article>
+            ))}
+          </section>
+        )}
+      </section>
 
       {past.length > 0 ? (
         <section style={{ marginTop: 34 }}>

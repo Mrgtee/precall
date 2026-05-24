@@ -9,9 +9,10 @@ import {
   markets,
   marketSnapshots,
   resolutions,
+  sportsPredictions,
 } from "@precall/shared/db/schema";
 import { hashText } from "@precall/shared/scoring";
-import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "@precall/shared/types";
+import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SportsPredictionIdea } from "@precall/shared/types";
 
 let dbClient: PrecallDb | undefined;
 let closeDbClient: (() => Promise<void>) | undefined;
@@ -263,6 +264,54 @@ export async function insertEvidenceItems(callId: number, evidence: EvidenceItem
   }
 }
 
+export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; statusReason?: string | undefined }) {
+  const values = {
+    marketId: input.idea.market.marketId,
+    marketTitle: input.idea.market.title,
+    marketUrl: input.idea.market.url,
+    category: input.idea.category,
+    marketKind: input.idea.marketKind,
+    selectedOption: input.idea.selectedOption,
+    selectedOutcomeIndex: input.idea.selectedOutcomeIndex,
+    marketPriceBps: input.idea.marketPriceBps,
+    agentProbabilityBps: input.idea.agentProbabilityBps,
+    edgeBps: input.idea.edgeBps,
+    confidenceBps: input.idea.confidenceBps,
+    riskLevel: input.idea.riskLevel,
+    rationale: input.idea.rationale,
+    matchupContext: input.idea.matchupContext,
+    marketMovement: input.idea.marketMovement,
+    risks: input.idea.risks,
+    verdict: input.idea.verdict,
+    evidenceContext: input.idea.evidence,
+    votes: input.idea.votes,
+    x402Status: input.x402Status,
+    status: "active",
+    statusReason: input.statusReason || "Passed Sports Edge quality gates. Non-bonded sports intelligence idea.",
+    sourceRunId: input.sourceRunId,
+    expiresAt: input.idea.market.closeTime ? new Date(input.idea.market.closeTime) : null,
+    updatedAt: new Date(),
+  };
+  const [row] = await db()
+    .insert(sportsPredictions)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [sportsPredictions.marketId, sportsPredictions.selectedOutcomeIndex],
+      set: values,
+    })
+    .returning();
+  if (!row) throw new Error("Failed to upsert sports prediction.");
+  return row;
+}
+
+export async function getLatestSportsPredictions(limit = 10) {
+  return db().query.sportsPredictions.findMany({
+    where: eq(sportsPredictions.status, "active"),
+    orderBy: desc(sportsPredictions.updatedAt),
+    limit,
+  });
+}
+
 export async function getOpenPublishedCalls() {
   return db().query.calls.findMany({
     where: inArray(calls.status, ["published", "expired"]),
@@ -387,6 +436,7 @@ export async function adminSummary() {
     liveCalls: sql<number>`count(*) filter (where ${calls.status} = 'published')::int`,
     expiredCalls: sql<number>`count(*) filter (where ${calls.status} = 'expired')::int`,
     resolvedCalls: sql<number>`count(*) filter (where ${calls.status} = 'resolved')::int`,
+    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'active')`,
   }).from(calls);
   const latestRuns = await db().query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 10 });
   return { counts, latestRuns };

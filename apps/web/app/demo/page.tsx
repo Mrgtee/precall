@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Activity, CircleDollarSign, ExternalLink, RadioTower, ShieldCheck } from "lucide-react";
-import { bpsToPercent, outcomeForAction, selectedProbabilityForAction, shortAddress, usdc } from "../../lib/format";
+import { shortAddress, usdc } from "../../lib/format";
 import { getDemoData } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,6 @@ export default async function DemoPage() {
   const call = data.latestLiveCall;
   const latestRun = data.latestRuns[0];
   const latestUnlock = data.latestUnlock;
-  const selectedProbability = call ? selectedProbabilityForAction(call.action, call.yesProbabilityBps || call.agentProbabilityBps) : 0;
-  const outcome = call ? outcomeForAction(call.action, call.outcomes) : "YES";
 
   return (
     <main className="shell page info-page">
@@ -31,7 +29,7 @@ export default async function DemoPage() {
         <div className="metric"><span><RadioTower size={14} /> Calls</span><strong>{data.counts?.calls ?? 0}</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Live</span><strong>{data.counts?.liveCalls ?? 0}</strong></div>
         <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>{data.counts?.unlocks ?? 0}</strong></div>
-        <div className="metric"><span><Activity size={14} /> Circle actions</span><strong>{data.counts?.circleActions ?? 0}</strong></div>
+        <div className="metric"><span><Activity size={14} /> Sports ideas</span><strong>{data.counts?.sportsIdeas ?? 0}</strong></div>
       </section>
 
       <section className="info-grid">
@@ -73,19 +71,16 @@ export default async function DemoPage() {
 
       <section className="panel info-split">
         <div>
-          <h2>Latest live call</h2>
+          <h2>Latest live bonded call</h2>
           {call ? (
             <>
               <p className="eyebrow">{call.marketTitle}</p>
               <div className="pill-row">
-                <span className="pill">Action {call.action}</span>
-                <span className="pill">Agent {outcome} {bpsToPercent(selectedProbability)}</span>
-                <span className="pill">YES probability {bpsToPercent(call.yesProbabilityBps || call.agentProbabilityBps)}</span>
-                <span className="pill">Market {outcome} {bpsToPercent(call.marketPriceBps)}</span>
-                <span className="pill">Edge {bpsToPercent(call.edgeBps)}</span>
-                <span className="pill">Confidence {bpsToPercent(call.confidenceBps)}</span>
+                <span className="pill">Category {call.marketType}</span>
+                <span className="pill">Bonded on Arc</span>
+                <span className="pill">Unlock {usdc(call.unlockPrice)}</span>
               </div>
-              <p>Bond {usdc(call.bondAmount)} · Unlock {usdc(call.unlockPrice)}</p>
+              <p className="muted">Pick direction, probability, edge, thesis, evidence, and Polymarket link stay locked until a user pays the USDC unlock fee.</p>
               {call.txHash ? <Link href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">Arc tx <ExternalLink size={14} /></Link> : null}
             </>
           ) : <p className="muted">No current live call passes hardened V1 filters. Run the worker from admin or cron.</p>}
@@ -96,6 +91,21 @@ export default async function DemoPage() {
           <h3>Circle-powered rails</h3>
           <p className="muted">Agent bonds, thesis unlocks, and optional x402 evidence payments are tracked as Circle actions when real events exist.</p>
         </aside>
+      </section>
+
+      <section className="panel">
+        <h2>Latest Sports Edge ideas</h2>
+        {data.latestSportsIdeas?.length ? (
+          <div className="grid">
+            {data.latestSportsIdeas.map((idea) => (
+              <article className="panel" key={idea.id}>
+                <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
+                <strong>{idea.marketTitle}</strong>
+                <p className="muted">Pick {idea.selectedOption} · Risk {idea.riskLevel} · {idea.verdict}</p>
+              </article>
+            ))}
+          </div>
+        ) : <p className="muted">No Sports Edge ideas stored yet. Run Sports Scan from Admin or Railway.</p>}
       </section>
 
       <section className="panel">

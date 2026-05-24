@@ -17,6 +17,7 @@
     "worker:serve": "npm run serve -w apps/worker",
     "worker:health": "npm run start -w apps/worker -- health",
     "worker:run-once": "npm run start -w apps/worker -- run-once",
+    "worker:sports": "npm run start -w apps/worker -- sports",
     "worker:expire": "npm run start -w apps/worker -- expire",
     "worker:resolve": "npm run start -w apps/worker -- resolve",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",

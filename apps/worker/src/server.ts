@@ -2,13 +2,13 @@
 import { createServer } from "node:http";
 import { loadDotenv } from "./dotenv";
 import { closeRepository } from "./repository";
-import { expirePublishedCalls, health, resolveMatureCalls, runOnce } from "./run-cycle";
+import { expirePublishedCalls, health, resolveMatureCalls, runOnce, runSportsEdge } from "./run-cycle";
 
 loadDotenv();
 
-type WorkerTriggerCommand = "health" | "run-once" | "expire" | "resolve";
+type WorkerTriggerCommand = "health" | "run-once" | "sports" | "expire" | "resolve";
 
-const commands = new Set<WorkerTriggerCommand>(["health", "run-once", "expire", "resolve"]);
+const commands = new Set<WorkerTriggerCommand>(["health", "run-once", "sports", "expire", "resolve"]);
 
 function serializeResult(value: unknown) {
   return JSON.parse(
@@ -24,7 +24,7 @@ function errorMessage(error: unknown) {
 function workerBuildInfo() {
   return {
     commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "unknown",
-    schemaRepair: "0005_circle_actions_core_columns",
+    schemaRepair: "0008_sports_predictions",
   };
 }
 
@@ -39,6 +39,7 @@ function authorized(headers: Headers) {
 async function execute(command: WorkerTriggerCommand) {
   if (command === "health") return health();
   if (command === "run-once") return runOnce();
+  if (command === "sports") return runSportsEdge();
   if (command === "expire") return expirePublishedCalls();
   return resolveMatureCalls();
 }
@@ -54,13 +55,13 @@ const server = createServer(async (req, res) => {
   const headers = new Headers(req.headers as Record<string, string>);
 
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/healthz")) {
-    jsonResponse(res, 200, { ok: true, service: "precall-worker", worker: workerBuildInfo(), endpoints: ["/worker/health", "/worker/run-once", "/worker/expire", "/worker/resolve"] });
+    jsonResponse(res, 200, { ok: true, service: "precall-worker", worker: workerBuildInfo(), endpoints: ["/worker/health", "/worker/run-once", "/worker/sports", "/worker/expire", "/worker/resolve"] });
     return;
   }
 
-  const match = url.pathname.match(/^\/worker\/(health|run-once|expire|resolve)$/);
+  const match = url.pathname.match(/^\/worker\/(health|run-once|sports|expire|resolve)$/);
   if (req.method !== "POST" || !match) {
-    jsonResponse(res, 404, { ok: false, error: "Use POST /worker/health, /worker/run-once, /worker/expire, or /worker/resolve." });
+    jsonResponse(res, 404, { ok: false, error: "Use POST /worker/health, /worker/run-once, /worker/sports, /worker/expire, or /worker/resolve." });
     return;
   }
 
