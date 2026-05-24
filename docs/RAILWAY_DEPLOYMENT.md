@@ -55,7 +55,7 @@ npm run worker:gateway:balance -- baseSepolia
 npm run worker:gateway:deposit -- baseSepolia 1
 ```
 
-The CLI commands close DB connections after completion and exit cleanly. The HTTP trigger server closes DB connections after every request and during SIGTERM/SIGINT shutdown.
+The CLI commands close DB connections after completion and exit cleanly. Discovery now fetches deeper market pools, computes CLOB best bid/ask spread, and skips ultra-extreme prices before spending x402/model calls so the worker has a better chance of finding publishable signals without lowering quality gates. The HTTP trigger server closes DB connections after every request and during SIGTERM/SIGINT shutdown.
 
 ## Required Railway Env Vars
 
@@ -97,8 +97,10 @@ MIN_EDGE_BPS=650
 MAX_SPREAD_BPS=900
 MIN_CONFIDENCE_BPS=5200
 MIN_SUGGESTED_SIZE_BPS=100
-DISCOVERY_MARKET_LIMIT=75
+DISCOVERY_MARKET_LIMIT=150
 MAX_ANALYZED_MARKETS_PER_RUN=8
+MIN_ANALYSIS_PRICE_BPS=100
+MAX_ANALYSIS_PRICE_BPS=9900
 BOND_AMOUNT_USDC=1
 UNLOCK_PRICE_USDC=0.05
 ALLOW_PUBLISH_FILTERED_RUN=false

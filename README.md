@@ -84,8 +84,9 @@ Useful hardening controls:
 - `MAX_SPREAD_BPS=900`
 - `MIN_CONFIDENCE_BPS=5200`
 - `MIN_SUGGESTED_SIZE_BPS=100`
-- `DISCOVERY_MARKET_LIMIT=75` - Polymarket markets fetched before eligibility/ranking.
+- `DISCOVERY_MARKET_LIMIT=150` - Polymarket markets fetched before eligibility/ranking.
 - `MAX_ANALYZED_MARKETS_PER_RUN=8` - top ranked eligible candidates allowed to spend x402/LLM calls.
+- `MIN_ANALYSIS_PRICE_BPS=100` and `MAX_ANALYSIS_PRICE_BPS=9900` - skip ultra-extreme lottery-ticket prices before paid/model analysis so runs focus on markets that can produce actionable edge.
 - `MODEL_TIMEOUT_MS=45000`
 - `MODEL_RETRY_COUNT=2`
 - `ALLOW_PUBLISH_FILTERED_RUN=false`
@@ -145,7 +146,7 @@ npm run worker:gateway:balance -- baseSepolia
 
 `worker:x402:supports -- <url>` checks each `CIRCLE_X402_CHAIN_CANDIDATES` entry and reports the first provider-supported chain. `worker:gateway:balance -- <chain>` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY` on that chain. `worker:gateway:deposit -- <chain> 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. Commands return public tx hashes and balances only; they never print the private key.
 
-`run-once` checks live markets, skips unsupported markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
+`run-once` checks live markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying calls. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 
 ## How Precall Uses Circle Agent Stack
 

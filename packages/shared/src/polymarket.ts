@@ -147,7 +147,7 @@ export async function fetchMarketSnapshot(market: PolymarketMarket): Promise<Mar
   const noIndex = market.outcomes.findIndex((outcome) => /^no$/i.test(outcome));
   const yesPrice = market.outcomePrices[yesIndex >= 0 ? yesIndex : 0] ?? 0;
   const noPrice = market.outcomePrices[noIndex >= 0 ? noIndex : 1] ?? 1 - yesPrice;
-  const orderBookSpread = await fetchOrderBookSpread(market).catch(() => null);
+  const orderBookSpread = await fetchOrderBookSpread(market, yesIndex >= 0 ? yesIndex : 0).catch(() => null);
 
   return {
     marketId: market.marketId,
@@ -159,8 +159,8 @@ export async function fetchMarketSnapshot(market: PolymarketMarket): Promise<Mar
   };
 }
 
-async function fetchOrderBookSpread(market: PolymarketMarket): Promise<number | null> {
-  const tokenId = market.clobTokenIds[0];
+async function fetchOrderBookSpread(market: PolymarketMarket, outcomeIndex = 0): Promise<number | null> {
+  const tokenId = market.clobTokenIds[outcomeIndex] || market.clobTokenIds[0];
   if (!tokenId) return null;
 
   const baseUrl = optionalEnv("POLYMARKET_CLOB_URL", "https://clob.polymarket.com");
@@ -170,8 +170,11 @@ async function fetchOrderBookSpread(market: PolymarketMarket): Promise<number | 
     url.toString(),
     7_500,
   );
-  const bestBid = Number(book.bids?.[0]?.price);
-  const bestAsk = Number(book.asks?.[0]?.price);
+  const bids = (book.bids || []).map((level) => Number(level.price)).filter(Number.isFinite);
+  const asks = (book.asks || []).map((level) => Number(level.price)).filter(Number.isFinite);
+  if (bids.length === 0 || asks.length === 0) return null;
+  const bestBid = Math.max(...bids);
+  const bestAsk = Math.min(...asks);
   if (!Number.isFinite(bestBid) || !Number.isFinite(bestAsk) || bestAsk < bestBid) return null;
   return Math.round((bestAsk - bestBid) * 10_000);
 }

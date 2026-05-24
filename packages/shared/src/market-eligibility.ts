@@ -10,7 +10,8 @@ export type MarketSkipReason =
   | "invalid_prices"
   | "not_yes_no"
   | "low_liquidity"
-  | "wide_spread";
+  | "wide_spread"
+  | "extreme_price";
 
 export type MarketEligibility = {
   eligible: boolean;
@@ -51,6 +52,16 @@ export function evaluateMarketEligibility(
   if (options.thresholds && options.snapshot && options.snapshot.spreadBps > options.thresholds.maxSpreadBps) reasons.push("wide_spread");
 
   return { eligible: reasons.length === 0, reasons };
+}
+
+
+export function isAnalysisPriceInBand(priceBps: number | null, minBps = 100, maxBps = 9_900): boolean {
+  if (priceBps === null || !Number.isFinite(priceBps)) return false;
+  return priceBps >= minBps && priceBps <= maxBps;
+}
+
+export function analysisPriceSkipReason(snapshot: MarketSnapshot, minBps = 100, maxBps = 9_900): MarketSkipReason[] {
+  return isAnalysisPriceInBand(snapshot.yesPriceBps, minBps, maxBps) ? [] : ["extreme_price"];
 }
 
 export function summarizeSkipReasons(items: { reasons: string[] }[]) {
@@ -101,7 +112,15 @@ export function scoreMarketCandidate(market: PolymarketMarket, snapshot?: Market
   const priceBalance = yesPriceBps === null ? 0 : Math.max(0, 10 * (1 - Math.min(Math.abs(yesPriceBps - 5_000), 4_500) / 4_500));
   const descriptionLength = market.description.trim().length;
   const evidenceDepth = Math.min(10, (descriptionLength / 240) * 10);
-  const priceQualityMultiplier = yesPriceBps === null ? 0.8 : yesPriceBps <= 500 || yesPriceBps >= 9_500 ? 0.65 : yesPriceBps <= 1_000 || yesPriceBps >= 9_000 ? 0.8 : 1;
+  const priceQualityMultiplier = yesPriceBps === null
+    ? 0.8
+    : yesPriceBps < 100 || yesPriceBps > 9_900
+      ? 0.2
+      : yesPriceBps <= 500 || yesPriceBps >= 9_500
+        ? 0.45
+        : yesPriceBps <= 1_000 || yesPriceBps >= 9_000
+          ? 0.7
+          : 1;
   const components = { spread, liquidity, volume, closeTime, priceBalance, evidenceDepth, priceQualityMultiplier };
   const rawScore = spread + liquidity + volume + closeTime + priceBalance + evidenceDepth;
   const score = rawScore * priceQualityMultiplier;

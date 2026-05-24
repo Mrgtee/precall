@@ -2,7 +2,7 @@ import { buildEvidenceContext } from "@precall/shared/evidence";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { fetchAisaX402SocialEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
-import { evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
+import { analysisPriceSkipReason, evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
   discoverPolymarketMarkets,
@@ -51,6 +51,8 @@ export async function health() {
     discovery: {
       marketLimit: discoveryMarketLimit(),
       maxAnalyzedMarkets: maxAnalyzedMarketsPerRun(),
+      minAnalysisPriceBps: minAnalysisPriceBps(),
+      maxAnalysisPriceBps: maxAnalysisPriceBps(),
     },
     database: {
       circleActions: circleActionsSchema,
@@ -131,11 +133,19 @@ function publishThresholds(): PublishThresholds {
 }
 
 function discoveryMarketLimit() {
-  return numberEnv("DISCOVERY_MARKET_LIMIT", 75);
+  return numberEnv("DISCOVERY_MARKET_LIMIT", 150);
 }
 
 function maxAnalyzedMarketsPerRun() {
   return numberEnv("MAX_ANALYZED_MARKETS_PER_RUN", 8);
+}
+
+function minAnalysisPriceBps() {
+  return numberEnv("MIN_ANALYSIS_PRICE_BPS", 100);
+}
+
+function maxAnalysisPriceBps() {
+  return numberEnv("MAX_ANALYSIS_PRICE_BPS", 9_900);
 }
 
 type RunSkippedMarket = {
@@ -197,7 +207,7 @@ function rejectedSummary(market: PolymarketMarket, reasons: string[], snapshot: 
   };
 }
 
-async function discoverRankedMarketPool(input: { thresholds: PublishThresholds; discoveryLimit: number; topLimit: number }) {
+async function discoverRankedMarketPool(input: { thresholds: PublishThresholds; discoveryLimit: number; topLimit: number; minAnalysisPriceBps?: number; maxAnalysisPriceBps?: number }) {
   const markets = await discoverPolymarketMarkets(input.discoveryLimit);
   const skipped: RunSkippedMarket[] = [];
   const failed: RunFailedMarket[] = [];
@@ -237,6 +247,14 @@ async function discoverRankedMarketPool(input: { thresholds: PublishThresholds; 
       continue;
     }
 
+    const priceReasons = analysisPriceSkipReason(snapshot, input.minAnalysisPriceBps, input.maxAnalysisPriceBps);
+    if (priceReasons.length > 0) {
+      const summary = rejectedSummary(market, priceReasons, snapshot, scoreMarketCandidate(market, snapshot));
+      skipped.push(summary);
+      rejected.push(summary);
+      continue;
+    }
+
     snapshotCandidates.push({ market, snapshot });
   }
 
@@ -264,10 +282,15 @@ export async function discover() {
     thresholds,
     discoveryLimit: discoveryMarketLimit(),
     topLimit: maxAnalyzedMarketsPerRun(),
+    minAnalysisPriceBps: minAnalysisPriceBps(),
+    maxAnalysisPriceBps: maxAnalysisPriceBps(),
   });
 
   return {
     discoveryLimit: discovery.discoveryLimit,
+    maxAnalyzedMarkets: maxAnalyzedMarketsPerRun(),
+    minAnalysisPriceBps: minAnalysisPriceBps(),
+    maxAnalysisPriceBps: maxAnalysisPriceBps(),
     discovered: discovery.discovered,
     checked: discovery.checked,
     eligible: discovery.eligibleCandidates.length,
@@ -363,7 +386,13 @@ export async function runOnce() {
     ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000"),
   });
 
-  const discovery = await discoverRankedMarketPool({ thresholds, discoveryLimit, topLimit: maxAnalyzedMarkets });
+  const discovery = await discoverRankedMarketPool({
+    thresholds,
+    discoveryLimit,
+    topLimit: maxAnalyzedMarkets,
+    minAnalysisPriceBps: minAnalysisPriceBps(),
+    maxAnalysisPriceBps: maxAnalysisPriceBps(),
+  });
   let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
   const published = [];
   const skipped: RunSkippedMarket[] = [...discovery.skipped];
@@ -478,6 +507,8 @@ export async function runOnce() {
   return {
     discoveryLimit,
     maxAnalyzedMarkets,
+    minAnalysisPriceBps: minAnalysisPriceBps(),
+    maxAnalysisPriceBps: maxAnalysisPriceBps(),
     discovered: discovery.discovered,
     checked: discovery.checked,
     eligible: discovery.eligibleCandidates.length,

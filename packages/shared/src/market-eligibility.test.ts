@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateMarketEligibility, isEligibleBinaryMarket, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons } from "./market-eligibility";
+import { analysisPriceSkipReason, evaluateMarketEligibility, isAnalysisPriceInBand, isEligibleBinaryMarket, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons } from "./market-eligibility";
 import type { PolymarketMarket } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -82,4 +82,30 @@ test("candidate ranking prefers tighter spread, liquidity, volume, balanced pric
   const ranked = rankMarketCandidates([weaker, stronger]);
   assert.equal(ranked[0]?.market.marketId, "tight");
   assert.ok(scoreMarketCandidate(stronger.market, stronger.snapshot).score > scoreMarketCandidate(weaker.market, weaker.snapshot).score);
+});
+
+
+test("analysis price band skips extreme lottery-ticket markets before model spend", () => {
+  const low = { marketId: "low", yesPriceBps: 5, noPriceBps: 9995, spreadBps: 120, depthUsd: 50_000, capturedAt: now.toISOString() };
+  const balanced = { marketId: "balanced", yesPriceBps: 4500, noPriceBps: 5500, spreadBps: 120, depthUsd: 50_000, capturedAt: now.toISOString() };
+
+  assert.equal(isAnalysisPriceInBand(low.yesPriceBps, 100, 9900), false);
+  assert.deepEqual(analysisPriceSkipReason(low, 100, 9900), ["extreme_price"]);
+  assert.equal(isAnalysisPriceInBand(balanced.yesPriceBps, 100, 9900), true);
+  assert.deepEqual(analysisPriceSkipReason(balanced, 100, 9900), []);
+});
+
+test("candidate scoring heavily penalizes ultra-extreme prices", () => {
+  const extreme = {
+    market: market({ marketId: "extreme", title: "Extreme longshot", outcomePrices: [0.0005, 0.9995], liquidityUsd: 1_000_000, volume24hUsd: 250_000 }),
+    snapshot: { marketId: "extreme", yesPriceBps: 5, noPriceBps: 9995, spreadBps: 120, depthUsd: 1_000_000, capturedAt: now.toISOString() },
+  };
+  const useful = {
+    market: market({ marketId: "useful", title: "Useful market", outcomePrices: [0.42, 0.58], liquidityUsd: 60_000, volume24hUsd: 20_000 }),
+    snapshot: { marketId: "useful", yesPriceBps: 4200, noPriceBps: 5800, spreadBps: 180, depthUsd: 60_000, capturedAt: now.toISOString() },
+  };
+
+  const ranked = rankMarketCandidates([extreme, useful]);
+  assert.equal(ranked[0]?.market.marketId, "useful");
+  assert.ok(scoreMarketCandidate(useful.market, useful.snapshot).score > scoreMarketCandidate(extreme.market, extreme.snapshot).score);
 });
