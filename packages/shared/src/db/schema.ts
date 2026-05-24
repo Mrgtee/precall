@@ -72,7 +72,7 @@ export const calls = pgTable(
   "calls",
   {
     id: serial("id").primaryKey(),
-    onchainCallId: integer("onchain_call_id").unique(),
+    onchainCallId: integer("onchain_call_id"),
     agentId: integer("agent_id").notNull(),
     marketId: text("market_id").notNull(),
     action: text("action").notNull(),
@@ -101,6 +101,7 @@ export const calls = pgTable(
   (table) => ({
     marketIdx: index("calls_market_idx").on(table.marketId),
     statusIdx: index("calls_status_idx").on(table.status),
+    registryOnchainIdx: uniqueIndex("calls_registry_onchain_call_idx").on(table.registryAddress, table.onchainCallId),
   }),
 );
 

@@ -50,6 +50,13 @@
       "when": 1779556008764,
       "tag": "0006_circle_actions_type_normalization",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779609009170,
+      "tag": "0007_registry_scoped_call_ids",
+      "breakpoints": true
     }
   ]
 }
