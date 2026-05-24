@@ -71,6 +71,13 @@
       "when": 1779615600000,
       "tag": "0009_sports_live_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779702000000,
+      "tag": "0010_sports_unlocks",
+      "breakpoints": true
     }
   ]
 }

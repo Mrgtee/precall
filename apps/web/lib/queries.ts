@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "@precall/shared/db/client";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import {
@@ -13,6 +13,7 @@ import {
   marketSnapshots,
   resolutions,
   sportsPredictions,
+  sportsUnlocks,
   thesisUnlocks,
   users,
 } from "@precall/shared/db/schema";
@@ -86,16 +87,66 @@ export async function getEvidence(callId: number) {
   return db.select().from(evidenceItems).where(eq(evidenceItems.callId, callId));
 }
 
+export const activeSportsCallStatuses = ["strong_call", "lean_call", "high_risk_call", "avoid_call"] as const;
+
+function activeSportsPredicate(statuses: readonly string[] = activeSportsCallStatuses) {
+  return and(
+    inArray(sportsPredictions.status, [...statuses]),
+    sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
+  );
+}
+
 export type SportsPredictionRow = Awaited<ReturnType<typeof getSportsPredictions>>[number];
 
-export async function getSportsPredictions(limit = 12, statuses: string[] = ["strong_call", "lean_call", "high_risk_call", "avoid_call"]) {
+export async function getSportsPredictions(limit = 12, statuses: readonly string[] = activeSportsCallStatuses) {
   const db = createDb();
   return db
     .select()
     .from(sportsPredictions)
-    .where(inArray(sportsPredictions.status, statuses))
+    .where(activeSportsPredicate(statuses))
     .orderBy(desc(sportsPredictions.updatedAt))
     .limit(limit);
+}
+
+export async function getStrongSportsPredictions(limit = 5) {
+  return getSportsPredictions(limit, ["strong_call"]);
+}
+
+export async function getActiveSportsCallCount() {
+  const db = createDb();
+  const [row] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(sportsPredictions)
+    .where(activeSportsPredicate());
+  return row?.total ?? 0;
+}
+
+export async function getSportsActivitySummary() {
+  const db = createDb();
+  const [row] = await db
+    .select({
+      active: sql<number>`count(*) filter (where ${sportsPredictions.status} in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now()))::int`,
+      unresolved: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'unresolved')::int`,
+      expired: sql<number>`count(*) filter (where ${sportsPredictions.status} = 'expired' or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= now()))::int`,
+      unlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
+    })
+    .from(sportsPredictions);
+  return row || { active: 0, unresolved: 0, expired: 0, unlocks: 0 };
+}
+
+export async function getSportsPrediction(id: number) {
+  const db = createDb();
+  return db.query.sportsPredictions.findFirst({ where: eq(sportsPredictions.id, id) });
+}
+
+export async function hasSportsUnlock(sportsPredictionId: number, wallet: string) {
+  const db = createDb();
+  const [row] = await db
+    .select({ id: sportsUnlocks.id })
+    .from(sportsUnlocks)
+    .where(sql`${sportsUnlocks.sportsPredictionId} = ${sportsPredictionId} and lower(${sportsUnlocks.userWallet}) = lower(${wallet})`)
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function hasUnlock(callId: number, wallet: string) {
@@ -157,12 +208,16 @@ export async function getDemoData() {
     uniqueWallets: sql<number>`(select count(distinct wallet_address)::int from ${users})`,
     unlockVolume: sql<string>`(select coalesce(sum(amount), 0)::text from ${thesisUnlocks})`,
     thesisUnlockVolume: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('thesis_unlock', 'unlock_thesis'))`,
+    sportsUnlockVolume: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type = 'sports_unlock')`,
     bondVolume: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('arc_bond', 'bond_call'))`,
     x402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success')`,
     dailyX402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success' and created_at >= date_trunc('day', now()))`,
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
     sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,
+    activeSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (expires_at is null or expires_at > now()))`,
+    expiredSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'expired' or (expires_at is not null and expires_at <= now()))`,
+    sportsUnlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 
   const latestRuns = await db.query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 8 });

@@ -29,13 +29,13 @@ export default async function DemoPage() {
         <div className="metric"><span><RadioTower size={14} /> Calls</span><strong>{data.counts?.calls ?? 0}</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Live</span><strong>{data.counts?.liveCalls ?? 0}</strong></div>
         <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>{data.counts?.unlocks ?? 0}</strong></div>
-        <div className="metric"><span><Activity size={14} /> Sports calls</span><strong>{data.counts?.sportsIdeas ?? 0}</strong></div>
+        <div className="metric"><span><Activity size={14} /> Active sports</span><strong>{data.counts?.activeSportsCalls ?? 0}</strong></div>
       </section>
 
       <section className="info-grid">
         <article className="panel info-card"><h2>System status</h2><p>DB <Bool value={data.config.database} /></p><p>Model <Bool value={data.config.model} /></p><p>Arc registry <Bool value={data.config.registry} /></p><p>Railway trigger <Bool value={data.config.workerTriggerConfigured} /></p></article>
         <article className="panel info-card"><h2>Circle stack</h2><p>Gateway x402 <Bool value={data.circleStack.gatewayX402Enabled} /></p><p>Required <Bool value={Boolean(data.circleStack.gatewayX402Required)} /></p><p>Agent key <Bool value={data.circleStack.gatewayWalletConfigured} /></p><p>x402 spend {usdc(data.counts?.x402Spend || 0)}</p></article>
-        <article className="panel info-card"><h2>Resolution</h2><p>Resolved calls: {data.counts?.resolvedCalls ?? 0}</p><p>Awaiting: {data.awaitingResolution.length}</p><p className="muted">Reputation activates after resolved markets.</p></article>
+        <article className="panel info-card"><h2>Resolution</h2><p>Resolved bonded calls: {data.counts?.resolvedCalls ?? 0}</p><p>Awaiting bonded: {data.awaitingResolution.length}</p><p>Expired sports: {data.counts?.expiredSportsCalls ?? 0}</p><p className="muted">Sports calls are expiry-safe but not selected-outcome resolved yet.</p></article>
         <article className="panel info-card"><h2>Latest run</h2><p>Status: {latestRun?.status || "none"}</p><p>Model: {latestRun?.model || "none"}</p><p>{latestRun?.failure ? "Failure recorded" : "No latest failure"}</p></article>
       </section>
 
@@ -101,7 +101,8 @@ export default async function DemoPage() {
               <article className="panel" key={idea.id}>
                 <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
                 <strong>{idea.marketTitle}</strong>
-                <p className="muted">AI Prediction {idea.selectedOption} · Risk {idea.riskLevel} · {idea.verdict}</p>
+                <p className="muted">AI Prediction {idea.selectedOption} · Risk {idea.riskLevel}</p>
+                <p className="muted">Full sports reasoning and market link unlock with Arc USDC.</p>
               </article>
             ))}
           </div>
@@ -116,6 +117,7 @@ export default async function DemoPage() {
           <li>Open a live call, inspect verified evidence and the Arc bond transaction.</li>
           <li>Unlock the thesis with USDC on Arc and refresh this page to show the unlock.</li>
           <li>Run resolution for mature YES/NO markets and show leaderboard reputation updates.</li>
+          <li>Open Sports Live Calls to show active count, locked preview, and Arc USDC unlock flow.</li>
         </ol>
       </section>
     </main>

@@ -75,6 +75,8 @@ Required for a real run:
 - `AGENT_OWNER_WALLET` - public address for the agent wallet.
 - `RESOLVER_PRIVATE_KEY` - secure resolver key, or omit to use the agent key.
 - `PROTOCOL_TREASURY_ADDRESS` - treasury receiving slashed wrong-call bonds in V2 deployments.
+- `SPORTS_UNLOCK_PRICE_USDC` - Arc USDC price to unlock full Sports Live Call analysis. Defaults to `UNLOCK_PRICE_USDC`.
+- `SPORTS_UNLOCK_RECEIVER_ADDRESS` and `NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS` - treasury/receiver for direct Arc USDC sports unlock transfers. This address is public, but private keys remain server-only.
 - `DEFAULT_ONCHAIN_AGENT_ID` - onchain agent ID after `register-agent`.
 - `ADMIN_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_ADMIN_WALLETS` - admin and automation protection.
 

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { bpsToPercent } from "../../lib/format";
-import { getLeaderboard } from "../../lib/queries";
+import { getLeaderboard, getSportsActivitySummary } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
-  const rows = await getLeaderboard();
+  const [rows, sportsActivity] = await Promise.all([getLeaderboard(), getSportsActivitySummary()]);
   const hasResolved = rows.some((row) => Number(row.resolved) > 0);
 
   return (
@@ -23,6 +23,15 @@ export default async function LeaderboardPage() {
           <p className="muted">Reputation activates after the first supported YES/NO market resolves.</p>
         </section>
       ) : null}
+      <section className="panel info-note" style={{ marginBottom: 18 }}>
+        <h2>Sports activity is tracked separately</h2>
+        <p className="muted">Sports Live Calls are active/unresolved market intelligence and do not inflate agent reputation until selected-outcome resolution is implemented.</p>
+        <div className="pill-row">
+          <span className="pill">Active sports calls: {sportsActivity.active}</span>
+          <span className="pill">Unresolved sports rows: {sportsActivity.unresolved}</span>
+          <span className="pill">Sports unlocks: {sportsActivity.unlocks}</span>
+        </div>
+      </section>
       <div className="table-wrap">
         <table className="table">
           <thead>

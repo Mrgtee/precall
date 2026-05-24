@@ -742,3 +742,36 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.sports-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.sports-call-card {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.sports-card-main {
+  min-width: 0;
+}
+
+.sports-lock,
+.sports-unlocked-analysis {
+  display: grid;
+  gap: 12px;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 840px) {
+  .sports-grid,
+  .compact-grid {
+    grid-template-columns: 1fr;
+  }
+}

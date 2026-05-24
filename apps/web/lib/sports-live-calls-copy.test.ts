@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 const SPORTS_PRODUCT_FILES = [
   "apps/web/app/sports/page.tsx",
   "apps/web/app/page.tsx",
+  "apps/web/app/top-5-today/page.tsx",
+  "apps/web/app/leaderboard/page.tsx",
   "apps/web/components/admin-console.tsx",
+  "apps/web/components/unlock-sports-call.tsx",
   "apps/worker/src/run-cycle.ts",
 ];
 

@@ -11,6 +11,7 @@ import {
   resolutions,
   sportsPredictions,
 } from "@precall/shared/db/schema";
+import { optionalEnv } from "@precall/shared/env";
 import { hashText } from "@precall/shared/scoring";
 import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SportsPredictionIdea } from "@precall/shared/types";
 import type { SportsCallStatus } from "@precall/shared/sports";
@@ -296,6 +297,11 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     x402PaidEvidenceUsed,
     votes: input.idea.votes,
     x402Status: input.x402Status,
+    unlockPrice: optionalEnv("SPORTS_UNLOCK_PRICE_USDC", optionalEnv("UNLOCK_PRICE_USDC", "0.05")),
+    resolutionStatus: "unresolved",
+    resolvedOutcomeIndex: null,
+    resolvedOutcome: null,
+    resolvedAt: null,
     status,
     statusReason: input.statusReason || "Sports Live Call generated from analyzed valid sports market.",
     sourceRunId: input.sourceRunId,
@@ -315,12 +321,28 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
   return row;
 }
 
+const activeSportsStatuses = ["strong_call", "lean_call", "high_risk_call", "avoid_call"];
+
 export async function getLatestSportsPredictions(limit = 10) {
   return db().query.sportsPredictions.findMany({
-    where: inArray(sportsPredictions.status, ["strong_call", "lean_call", "high_risk_call", "avoid_call"]),
+    where: and(inArray(sportsPredictions.status, activeSportsStatuses), sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`),
     orderBy: desc(sportsPredictions.updatedAt),
     limit,
   });
+}
+
+export async function markExpiredSportsPredictions(now = new Date()) {
+  const expired = await db()
+    .update(sportsPredictions)
+    .set({
+      status: "expired",
+      resolutionStatus: "expired",
+      statusReason: "Expired sports live call. Selected-outcome settlement is not enabled yet.",
+      updatedAt: now,
+    })
+    .where(and(inArray(sportsPredictions.status, activeSportsStatuses), lt(sportsPredictions.expiresAt, now)))
+    .returning({ id: sportsPredictions.id, marketId: sportsPredictions.marketId, selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex });
+  return expired;
 }
 
 export async function getOpenPublishedCalls() {

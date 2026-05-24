@@ -31,6 +31,7 @@ type AdminResult = {
     failed?: unknown[];
     resolved?: unknown[];
     expired?: number;
+    sportsExpired?: number;
     total?: number;
     message?: string;
   };
@@ -55,6 +56,10 @@ type AdminSummary = {
     x402ApiPayments?: number;
     bondVolume?: string;
     thesisUnlockVolume?: string;
+    sportsUnlockVolume?: string;
+    activeSportsCalls?: number;
+    expiredSportsCalls?: number;
+    sportsUnlocks?: number;
   };
   config: {
     database: boolean;
@@ -330,6 +335,7 @@ export function AdminConsole() {
               {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status}{summary.latestX402Payment.chain ? ` · ${summary.latestX402Payment.chain}` : ""}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
               <p className="muted">Arc bond volume: {usdc(summary.counts?.bondVolume || 0)}</p>
               <p className="muted">Thesis unlock volume: {usdc(summary.counts?.thesisUnlockVolume || summary.counts?.unlockVolume || 0)}</p>
+              <p className="muted">Sports unlock volume: {usdc(summary.counts?.sportsUnlockVolume || 0)} · Active sports calls: {summary.counts?.activeSportsCalls ?? 0}</p>
             </aside>
           </section>
         </>
@@ -374,6 +380,7 @@ export function AdminConsole() {
         {publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
         {sportsLiveCallsStored && sportsLiveCallsStored > 0 ? <p className="muted">Stored {sportsLiveCallsStored} Sports Live Call{sportsLiveCallsStored === 1 ? "" : "s"}. Refresh /sports to see the latest board.</p> : null}
         {sportsStatusCounts ? <p className="muted">Sports status counts: strong {sportsStatusCounts.strong_call || 0}, lean {sportsStatusCounts.lean_call || 0}, high-risk {sportsStatusCounts.high_risk_call || 0}, avoid {sportsStatusCounts.avoid_call || 0}.</p> : null}
+        {result?.command === "expire" && result.result?.sportsExpired !== undefined ? <p className="muted">Expired {result.result.sportsExpired} sports live call{result.result.sportsExpired === 1 ? "" : "s"}. Expired sports calls are excluded from active counts.</p> : null}
         {skippedCount && skippedCount > 0 ? <p className="muted">Skipped {skippedCount} market{skippedCount === 1 ? "" : "s"}. Sports skips are reserved for invalid, expired, low-liquidity, unsupported, or unclear markets.</p> : null}
         {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}
         <p className="muted">If a bonded run returns an empty <code>published</code> list, the dashboard will not gain new bonded calls. If a sports run returns zero <code>liveCallsStored</code>, every discovered sports market was invalid, unsupported, or failed before analysis.</p>

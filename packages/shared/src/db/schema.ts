@@ -143,6 +143,22 @@ export const thesisUnlocks = pgTable(
   }),
 );
 
+export const sportsUnlocks = pgTable(
+  "sports_unlocks",
+  {
+    id: serial("id").primaryKey(),
+    sportsPredictionId: integer("sports_prediction_id").notNull(),
+    userWallet: text("user_wallet").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 6 }).notNull(),
+    txHash: text("tx_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    sportsWalletIdx: uniqueIndex("sports_unlocks_prediction_wallet_idx").on(table.sportsPredictionId, table.userWallet),
+    txHashIdx: index("sports_unlocks_tx_hash_idx").on(table.txHash),
+  }),
+);
+
 export const agentRuns = pgTable("agent_runs", {
   id: serial("id").primaryKey(),
   status: text("status").notNull(),
@@ -186,10 +202,15 @@ export const sportsPredictions = pgTable(
     x402PaidEvidenceUsed: boolean("x402_paid_evidence_used").notNull().default(false),
     votes: jsonb("votes").notNull(),
     x402Status: jsonb("x402_status"),
+    unlockPrice: numeric("unlock_price", { precision: 18, scale: 6 }).notNull().default("0.05"),
     status: text("status").notNull().default("lean_call"),
     statusReason: text("status_reason").notNull().default(""),
     sourceRunId: integer("source_run_id"),
     eventStartTime: timestamp("event_start_time", { withTimezone: true }),
+    resolutionStatus: text("resolution_status").notNull().default("unresolved"),
+    resolvedOutcomeIndex: integer("resolved_outcome_index"),
+    resolvedOutcome: text("resolved_outcome"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -200,6 +221,7 @@ export const sportsPredictions = pgTable(
     createdAtIdx: index("sports_predictions_created_at_idx").on(table.createdAt),
     eventStartTimeIdx: index("sports_predictions_event_start_time_idx").on(table.eventStartTime),
     x402PaidIdx: index("sports_predictions_x402_paid_idx").on(table.x402PaidEvidenceUsed),
+    resolutionStatusIdx: index("sports_predictions_resolution_status_idx").on(table.resolutionStatus),
   }),
 );
 

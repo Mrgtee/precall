@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
-import { type CallRow, getCalls, getLeaderboard, getSportsPredictions } from "../lib/queries";
+import { type CallRow, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,14 @@ export default async function HomePage() {
   let calls: CallRow[] = [];
   let leaderboard: Awaited<ReturnType<typeof getLeaderboard>> = [];
   let sportsIdeas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
+  let activeSportsCalls = 0;
   let setupError = "";
 
   try {
     calls = await getCalls(30);
     leaderboard = await getLeaderboard();
     sportsIdeas = await getSportsPredictions(3);
+    activeSportsCalls = await getActiveSportsCallCount();
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
@@ -50,7 +52,7 @@ export default async function HomePage() {
         <div className="metric"><span>Live calls</span><strong>{liveCalls}</strong></div>
         <div className="metric"><span>Agent desks</span><strong>{agents}</strong></div>
         <div className="metric"><span>Thesis unlocks</span><strong>{unlocks}</strong></div>
-        <div className="metric"><span>Settlement</span><strong>Arc</strong></div>
+        <div className="metric"><span>Sports Live Calls</span><strong>{activeSportsCalls}</strong></div>
       </section>
 
       <section className="section-heading">
@@ -82,12 +84,12 @@ export default async function HomePage() {
         <section className="section-heading">
           <div>
             <p className="eyebrow">Sports Live Calls</p>
-            <h2>Non-bonded sports predictions</h2>
+            <h2>{activeSportsCalls} Active Sports Live Call{activeSportsCalls === 1 ? "" : "s"}</h2>
           </div>
-          <p>Sports Live Calls are separate from Arc-bonded calls until selected-outcome resolution is generalized.</p>
+          <p>Sports Live Calls are separate from bonded Arc calls. Preview is public; full analysis unlocks with Arc USDC.</p>
         </section>
-        {sportsIdeas.length === 0 ? (
-          <section className="empty"><h2>No Sports Live Calls stored yet</h2><p className="muted">Run the Sports Scan from Admin or Railway to populate this board.</p></section>
+        {activeSportsCalls === 0 ? (
+          <section className="empty"><h2>No active Sports Live Calls</h2><p className="muted">Run the Sports Scan from Admin or Railway to populate this board.</p></section>
         ) : (
           <section className="grid">
             {sportsIdeas.map((idea) => (
@@ -95,7 +97,8 @@ export default async function HomePage() {
                 <p className="eyebrow">{idea.status.replace("_call", "").replace("_", " ")} · {idea.category} · {idea.marketKind}</p>
                 <h3>{idea.marketTitle}</h3>
                 <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
-                <p className="muted">{idea.verdict}</p>
+                <p className="muted">Preview: {idea.statusReason}</p>
+                <p className="muted">Full reasoning and market link unlock with Arc USDC.</p>
                 <Link className="button secondary" href="/sports">Open Sports Live Calls <ArrowRight size={16} /></Link>
               </article>
             ))}

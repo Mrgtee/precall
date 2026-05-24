@@ -18,6 +18,7 @@ export type CircleActionType =
   | "x402_api_payment"
   | "arc_bond"
   | "thesis_unlock"
+  | "sports_unlock"
   | "gateway_deposit"
   | "gateway_withdrawal"
   | "bond_call"

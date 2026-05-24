@@ -26,6 +26,7 @@ import {
   markCallResolutionFailed,
   markCallResolving,
   markExpiredCalls,
+  markExpiredSportsPredictions,
   recordAgentRun,
   recordCircleAction,
   getTodayX402SpendUsdc,
@@ -740,7 +741,8 @@ function realizedPnlBps(action: string, entryPriceBps: number, outcomeYes: boole
 
 export async function expirePublishedCalls() {
   const expired = await markExpiredCalls();
-  return { expired: expired.length, calls: expired };
+  const sportsExpired = await markExpiredSportsPredictions();
+  return { expired: expired.length, calls: expired, sportsExpired: sportsExpired.length, sportsCalls: sportsExpired };
 }
 
 export async function resolveMatureCalls() {

@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ExternalLink, ShieldCheck, Trophy } from "lucide-react";
-import { bpsToPercent } from "../../lib/format";
-import { getSportsPredictions } from "../../lib/queries";
+import { ShieldCheck, Trophy } from "lucide-react";
+import { UnlockSportsCall } from "../../components/unlock-sports-call";
+import { bpsToPercent, usdc } from "../../lib/format";
+import { getActiveSportsCallCount, getSportsPredictions } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -36,40 +36,45 @@ function statusDescription(status: string) {
   return "Valid markets the AI recommends avoiding rather than following.";
 }
 
+function previewReason(statusReason: string) {
+  return statusReason || "AI selected a side from the supplied market, price, and evidence context. Unlock for the complete reasoning trail.";
+}
+
 type SportsIdea = Awaited<ReturnType<typeof getSportsPredictions>>[number];
 
 function SportsCard({ idea }: { idea: SportsIdea }) {
   const x402Status = idea.x402Status as { status?: unknown } | null;
   const paidEvidenceUsed = Boolean(idea.x402PaidEvidenceUsed || x402Status?.status === "success");
   return (
-    <article className="panel">
-      <p className="eyebrow">{statusLabel(idea.status)} · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
-      <h2 className="call-title">{idea.marketTitle}</h2>
-      <div className="pill-row">
-        <span className="pill">AI Prediction: {idea.selectedOption}</span>
-        <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
-        <span className="pill">AI {bpsToPercent(idea.agentProbabilityBps)}</span>
-        <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
-        <span className="pill">Confidence {bpsToPercent(idea.confidenceBps)}</span>
-        <span className="pill">Risk {idea.riskLevel}</span>
-        {paidEvidenceUsed ? <span className="pill">x402 evidence</span> : null}
+    <article className="panel sports-call-card">
+      <div className="sports-card-main">
+        <p className="eyebrow">{statusLabel(idea.status)} · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
+        <h2 className="call-title">{idea.marketTitle}</h2>
+        <div className="pill-row">
+          <span className="pill">AI Prediction: {idea.selectedOption}</span>
+          <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
+          <span className="pill">AI {bpsToPercent(idea.agentProbabilityBps)}</span>
+          <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
+          <span className="pill">Confidence {bpsToPercent(idea.confidenceBps)}</span>
+          <span className="pill">Risk {idea.riskLevel}</span>
+          <span className="pill">Unlock {usdc(idea.unlockPrice)}</span>
+          {paidEvidenceUsed ? <span className="pill">x402 evidence</span> : null}
+        </div>
+        <p className="muted"><strong>Preview:</strong> {previewReason(idea.statusReason)}</p>
+        <p className="muted">Full reasoning, evidence, market link, probability breakdown, and risk notes unlock with Arc USDC.</p>
+        <p className="muted">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
       </div>
-      <p className="muted"><strong>Short reasoning:</strong> {idea.reasoning || idea.rationale}</p>
-      <p className="muted"><strong>Context:</strong> {idea.matchupContext}</p>
-      <p className="muted"><strong>Market movement:</strong> {idea.marketMovement}</p>
-      {idea.risks.length ? <p className="muted"><strong>Risks:</strong> {idea.risks.join("; ")}</p> : null}
-      <p><strong>Verdict:</strong> {idea.verdict}</p>
-      <p className="muted">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
-      <Link href={idea.marketUrl} target="_blank">Open Polymarket <ExternalLink size={14} /></Link>
+      <UnlockSportsCall sportsPredictionId={idea.id} unlockPrice={String(idea.unlockPrice)} />
     </article>
   );
 }
 
 export default async function SportsPage() {
   let ideas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
+  let activeCount = 0;
   let setupError = "";
   try {
-    ideas = await getSportsPredictions(40);
+    [ideas, activeCount] = await Promise.all([getSportsPredictions(40), getActiveSportsCallCount()]);
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
@@ -88,21 +93,28 @@ export default async function SportsPage() {
         </div>
         <div className="hero-card">
           <p>
-            Precall scans sports markets separately from Arc-bonded calls. These Sports Live Calls are non-bonded market intelligence until selected-outcome resolution is generalized.
+            Sports Live Calls are separate from bonded Arc calls. The prediction preview is public; full reasoning unlocks with Arc USDC.
           </p>
           <div className="pill-row">
-            <span className="pill"><Trophy size={14} /> Sports scanner</span>
-            <span className="pill"><ShieldCheck size={14} /> Not Arc-bonded yet</span>
+            <span className="pill"><Trophy size={14} /> {activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</span>
+            <span className="pill"><ShieldCheck size={14} /> Non-bonded sports intelligence</span>
           </div>
         </div>
+      </section>
+
+      <section className="metric-strip" aria-label="Sports Live Calls summary">
+        <div className="metric"><span>Active Sports Live Calls</span><strong>{activeCount}</strong></div>
+        <div className="metric"><span>Strong</span><strong>{grouped.find((group) => group.status === "strong_call")?.ideas.length ?? 0}</strong></div>
+        <div className="metric"><span>Lean / High Risk</span><strong>{(grouped.find((group) => group.status === "lean_call")?.ideas.length ?? 0) + (grouped.find((group) => group.status === "high_risk_call")?.ideas.length ?? 0)}</strong></div>
+        <div className="metric"><span>Unlock rail</span><strong>Arc USDC</strong></div>
       </section>
 
       <section className="section-heading">
         <div>
           <p className="eyebrow">Today</p>
-          <h2>Sports Live Calls</h2>
+          <h2>{activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</h2>
         </div>
-        <p>Valid analyzed markets are saved as Strong, Lean, High Risk, or Avoid calls. Confidence changes the label, not whether the analysis exists.</p>
+        <p>Valid analyzed sports markets are labeled Strong, Lean, High Risk, or Avoid. Expired calls are not counted as active.</p>
       </section>
 
       <section className="panel info-note">
@@ -113,10 +125,10 @@ export default async function SportsPage() {
 
       {setupError ? (
         <section className="empty"><h2>Sports Live Calls setup required</h2><p className="muted">{setupError}</p></section>
-      ) : ideas.length === 0 ? (
+      ) : activeCount === 0 ? (
         <section className="empty">
-          <h2>No Sports Live Calls stored yet</h2>
-          <p className="muted">Run <code>npm run worker:sports</code> on Railway. Invalid or unclear markets will still be skipped with transparent reasons.</p>
+          <h2>No active Sports Live Calls</h2>
+          <p className="muted">Run <code>npm run worker:sports</code> on Railway. Expired, unsupported, unclear, or low-liquidity markets stay out of the active board.</p>
         </section>
       ) : (
         grouped.map((group) => group.ideas.length ? (
@@ -128,7 +140,7 @@ export default async function SportsPage() {
               </div>
               <p>{statusDescription(group.status)}</p>
             </section>
-            <section className="grid">
+            <section className="sports-grid">
               {group.ideas.map((idea) => <SportsCard idea={idea} key={idea.id} />)}
             </section>
           </section>
