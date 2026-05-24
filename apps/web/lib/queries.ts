@@ -88,7 +88,7 @@ export async function getEvidence(callId: number) {
 
 export type SportsPredictionRow = Awaited<ReturnType<typeof getSportsPredictions>>[number];
 
-export async function getSportsPredictions(limit = 12, statuses: string[] = ["active"]) {
+export async function getSportsPredictions(limit = 12, statuses: string[] = ["strong_call", "lean_call", "high_risk_call", "avoid_call"]) {
   const db = createDb();
   return db
     .select()
@@ -162,13 +162,12 @@ export async function getDemoData() {
     dailyX402Spend: sql<string>`(select coalesce(sum(amount_usdc), 0)::text from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment') and status = 'success' and created_at >= date_trunc('day', now()))`,
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
-    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'active')`,
-    sportsWatchlist: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'watchlist')`,
+    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 
   const latestRuns = await db.query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 8 });
   const latestCalls = await getCalls(10);
-  const latestSportsIdeas = await getSportsPredictions(5, ["active", "watchlist"]);
+  const latestSportsIdeas = await getSportsPredictions(5);
   const latestUnlocks = await db.query.thesisUnlocks.findMany({ orderBy: desc(thesisUnlocks.createdAt), limit: 5 });
   const latestCircleActions = await db.query.circleActions.findMany({ orderBy: desc(circleActions.createdAt), limit: 8 });
   const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment')`, orderBy: desc(circleActions.createdAt) });

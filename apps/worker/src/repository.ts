@@ -13,6 +13,7 @@ import {
 } from "@precall/shared/db/schema";
 import { hashText } from "@precall/shared/scoring";
 import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SportsPredictionIdea } from "@precall/shared/types";
+import type { SportsCallStatus } from "@precall/shared/sports";
 
 let dbClient: PrecallDb | undefined;
 let closeDbClient: (() => Promise<void>) | undefined;
@@ -264,18 +265,11 @@ export async function insertEvidenceItems(callId: number, evidence: EvidenceItem
   }
 }
 
-export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status?: "active" | "watchlist"; statusReason?: string | undefined }) {
-  const status = input.status || "active";
-  if (status === "watchlist") {
-    const existingActive = await db().query.sportsPredictions.findFirst({
-      where: and(
-        eq(sportsPredictions.marketId, input.idea.market.marketId),
-        eq(sportsPredictions.selectedOutcomeIndex, input.idea.selectedOutcomeIndex),
-        eq(sportsPredictions.status, "active"),
-      ),
-    });
-    if (existingActive) return existingActive;
-  }
+export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status: SportsCallStatus; statusReason?: string | undefined; eventStartTime?: string | null | undefined }) {
+  const status = input.status;
+  const evidenceIds = input.idea.evidence.map((item) => item.evidenceId);
+  const sourceUrls = [...new Set(input.idea.evidence.map((item) => item.sourceUrl).filter(Boolean))];
+  const x402PaidEvidenceUsed = input.idea.evidence.some((item) => item.paid);
 
   const values = {
     marketId: input.idea.market.marketId,
@@ -291,16 +285,21 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     confidenceBps: input.idea.confidenceBps,
     riskLevel: input.idea.riskLevel,
     rationale: input.idea.rationale,
+    reasoning: input.idea.rationale,
     matchupContext: input.idea.matchupContext,
     marketMovement: input.idea.marketMovement,
     risks: input.idea.risks,
     verdict: input.idea.verdict,
     evidenceContext: input.idea.evidence,
+    evidenceIds,
+    sourceUrls,
+    x402PaidEvidenceUsed,
     votes: input.idea.votes,
     x402Status: input.x402Status,
     status,
-    statusReason: input.statusReason || (status === "watchlist" ? "Watchlist only; failed one or more strong Sports Edge gates." : "Passed Sports Edge quality gates. Non-bonded sports intelligence idea."),
+    statusReason: input.statusReason || "Sports Live Call generated from analyzed valid sports market.",
     sourceRunId: input.sourceRunId,
+    eventStartTime: input.eventStartTime ? new Date(input.eventStartTime) : null,
     expiresAt: input.idea.market.closeTime ? new Date(input.idea.market.closeTime) : null,
     updatedAt: new Date(),
   };
@@ -318,7 +317,7 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
 
 export async function getLatestSportsPredictions(limit = 10) {
   return db().query.sportsPredictions.findMany({
-    where: eq(sportsPredictions.status, "active"),
+    where: inArray(sportsPredictions.status, ["strong_call", "lean_call", "high_risk_call", "avoid_call"]),
     orderBy: desc(sportsPredictions.updatedAt),
     limit,
   });
@@ -448,7 +447,7 @@ export async function adminSummary() {
     liveCalls: sql<number>`count(*) filter (where ${calls.status} = 'published')::int`,
     expiredCalls: sql<number>`count(*) filter (where ${calls.status} = 'expired')::int`,
     resolvedCalls: sql<number>`count(*) filter (where ${calls.status} = 'resolved')::int`,
-    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'active')`,
+    sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,
   }).from(calls);
   const latestRuns = await db().query.agentRuns.findMany({ orderBy: desc(agentRuns.createdAt), limit: 10 });
   return { counts, latestRuns };

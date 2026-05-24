@@ -74,7 +74,7 @@ export function recommendationLabel(
   const outcome = outcomeForAction(action, outcomes);
   const confidence = Number(confidenceBps || 0);
   const size = Number(suggestedSizeBps || 0);
-  if (confidence < 5_200 || size < 100) return `Watchlist: ${outcome}`;
+  if (confidence < 5_200 || size < 100) return `Lean ${outcome}`;
   return `Buy ${outcome}`;
 }
 

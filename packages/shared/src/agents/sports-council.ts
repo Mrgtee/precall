@@ -40,10 +40,10 @@ export async function runSportsCouncilDetailed(input: {
   }
 
   if (!votes.some((vote) => vote.agent === "Skeptic")) {
-    throw new Error(`Skeptic sports agent failed; refusing to store strong sports idea. Failures: ${JSON.stringify(failures)}`);
+    throw new Error(`Skeptic sports agent failed; refusing to store Sports Live Call. Failures: ${JSON.stringify(failures)}`);
   }
   if (votes.length < 4) {
-    throw new Error(`Only ${votes.length} valid sports agent votes returned; refusing to store strong sports idea. Failures: ${JSON.stringify(failures)}`);
+    throw new Error(`Only ${votes.length} valid sports agent votes returned; refusing to store Sports Live Call. Failures: ${JSON.stringify(failures)}`);
   }
 
   return { votes, failures, model, baseUrl, totalLatencyMs: Date.now() - startedAt };
@@ -151,7 +151,7 @@ function buildSportsPrompt(input: {
   return `
 You are ${input.agent.name}: ${input.agent.role}.
 
-Analyze this sports prediction market for a selected option/value idea. Do not choose an option only because it has the highest market probability. Choose it only if supplied evidence supports a reasonable value case versus alternatives. If evidence is thin, lower confidence.
+Analyze this sports prediction market for a selected AI side. Do not choose an option only because it has the highest market probability. Prefer the side with the best probability-adjusted case versus alternatives. If no side is worth taking, still select the least bad/most plausible candidate outcome, set low confidence, and explain that the market should be avoided. If evidence is thin, say evidence was not available and lower confidence.
 
 Market category: ${input.category}
 Market kind: ${input.marketKind}
@@ -182,7 +182,7 @@ Return JSON with this exact shape:
 `;
 }
 
-function validateSportsVote(payload: unknown, agent: SportsAgentName, evidence: EvidenceItemInput[], candidateOutcomeIndexes: number[], latencyMs: number, retryCount: number): SportsVote {
+export function validateSportsVote(payload: unknown, agent: SportsAgentName, evidence: EvidenceItemInput[], candidateOutcomeIndexes: number[], latencyMs: number, retryCount: number): SportsVote {
   const raw = payload as Partial<SportsVote> & { probabilityBps?: number; outcomeIndex?: number };
   if (raw.agent !== agent) throw new Error(`Sports agent response must be from ${agent}.`);
   const selectedOutcomeIndex = Number(raw.selectedOutcomeIndex ?? raw.outcomeIndex);

@@ -109,7 +109,6 @@ ALLOW_PUBLISH_FILTERED_RUN=false
 ENABLE_SPORTS_EDGE=true
 SPORTS_DISCOVERY_MARKET_LIMIT=250
 SPORTS_DAILY_TARGET=5
-SPORTS_WATCHLIST_LIMIT=5
 MAX_SPORTS_ANALYZED_PER_RUN=16
 SPORTS_LOOKAHEAD_HOURS=72
 SPORTS_MIN_LIQUIDITY_USD=25000
@@ -215,7 +214,7 @@ Create four Railway cron services from the same GitHub repo:
 | Job | Schedule | Command | Notes |
 | --- | --- | --- | --- |
 | Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans strict YES/NO markets, optionally pays x402 evidence, and publishes only quality-passing bonded calls. |
-| Sports Edge | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, optionally pays x402 evidence, stores quality-passing ideas, and can show filtered analysis as an observation-only watchlist. |
+| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, optionally pays x402 evidence, and stores analyzed valid markets as strong, lean, high-risk, or avoid non-bonded calls. |
 | Expire calls | `0 * * * *` | `npm run worker:expire` | Marks matured published calls as awaiting resolution. |
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 

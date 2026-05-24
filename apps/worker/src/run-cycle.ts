@@ -14,7 +14,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, evaluateSportsCandidate, maxSportsAnalyzedPerRun, passesSportsThresholds, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsThresholdFailures, sportsThresholds, sportsWatchlistLimit, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -44,7 +44,7 @@ export async function health() {
   const base = {
     worker: {
       commitSha: optionalEnv("RAILWAY_GIT_COMMIT_SHA", optionalEnv("GIT_COMMIT_SHA", "unknown")),
-      schemaRepair: "0008_sports_predictions",
+      schemaRepair: "0009_sports_live_calls",
     },
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -83,7 +83,7 @@ export async function health() {
       gatewayError: primaryGatewayBalance?.error,
     },
     thresholds,
-    sportsEdge: {
+    sportsLiveCalls: {
       enabled: sportsEnabled(),
       discoveryLimit: sportsDiscoveryLimit(),
       dailyTarget: sportsDailyTarget(),
@@ -580,7 +580,7 @@ export async function runOnce() {
 
 export async function runSportsEdge() {
   if (!sportsEnabled()) {
-    return { ok: true, disabled: true, message: "Sports Edge is disabled. Set ENABLE_SPORTS_EDGE=true on Railway to run sports scans." };
+    return { ok: true, disabled: true, message: "Sports Live Calls are disabled. Set ENABLE_SPORTS_EDGE=true on Railway to run sports scans." };
   }
 
   requireEnv("OPENAI_API_KEY");
@@ -588,7 +588,6 @@ export async function runSportsEdge() {
   const discoveryLimit = sportsDiscoveryLimit();
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
-  const watchlistLimit = sportsWatchlistLimit();
   const requireX402 = boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false);
   const markets = await discoverPolymarketMarkets(discoveryLimit);
   const skipped: SportsSkip[] = [];
@@ -618,16 +617,11 @@ export async function runSportsEdge() {
   }
 
   let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
-  const stored = [];
-  const watchlisted = [];
+  const sportsCalls = [];
+  const callsByStatus: Record<SportsCallStatus, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0, avoid_call: 0 };
   let analyzed = 0;
 
   for (const candidate of candidatesForAnalysis) {
-    if (stored.length >= dailyTarget) {
-      skipped.push({ ...sportsCandidateSummary(candidate), reasons: ["sports_target_met"] });
-      continue;
-    }
-
     const { market, classification } = candidate;
     let x402Result: X402EvidenceProviderResult | undefined;
 
@@ -645,57 +639,41 @@ export async function runSportsEdge() {
         continue;
       }
 
-      const evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
+      let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
       const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
-      const idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
+        const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
+        evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
+        idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      }
       const thresholdFailures = sportsThresholdFailures(idea, thresholds);
-      const storeable = passesSportsThresholds(idea, thresholds);
+      const sportsStatus = classifySportsCallStatus(idea, thresholds);
+      const statusReason = sportsStatusReason(sportsStatus, thresholdFailures);
+      idea = { ...idea, verdict: sportsVerdictForStatus(sportsStatus, idea) };
 
       const candidateRun = await recordAgentRun({
-        status: storeable ? "sports_candidate" : "sports_filtered",
+        status: "sports_analyzed",
         model: councilResult.model,
         inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
-        outputs: { idea, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
+        outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
         evidenceContext,
         retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
         latencyMs: councilResult.totalLatencyMs,
       });
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
 
-      if (!storeable) {
-        skipped.push({
-          ...sportsCandidateSummary(candidate),
-          reasons: thresholdFailures,
-          candidateScore: candidate.candidateScore,
-        });
-
-        const watchlistable = watchlisted.length < watchlistLimit && thresholdFailures.length > 0 && !thresholdFailures.includes("wide_spread") && !thresholdFailures.includes("outside_price_band");
-        if (watchlistable) {
-          const statusReason = `Watchlist only; failed strong Sports Edge gates: ${thresholdFailures.join(", ")}.`;
-          const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: "watchlist", statusReason });
-          await recordAgentRun({
-            status: "sports_watchlisted",
-            model: councilResult.model,
-            inputs: { sourceAgentRunId: candidateRun?.id, marketId: market.marketId },
-            outputs: { sportsPredictionId: row.id, idea, thresholdFailures, x402: x402Summary(x402Result) },
-            evidenceContext,
-            latencyMs: councilResult.totalLatencyMs,
-          });
-          watchlisted.push({ id: row.id, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
-        }
-        continue;
-      }
-
-      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: "active" });
+      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
       await recordAgentRun({
-        status: "sports_published",
+        status: "sports_live_call_stored",
         model: councilResult.model,
         inputs: { sourceAgentRunId: candidateRun?.id, marketId: market.marketId },
-        outputs: { sportsPredictionId: row.id, idea, x402: x402Summary(x402Result) },
+        outputs: { sportsPredictionId: row.id, idea, sportsStatus, thresholdFailures, x402: x402Summary(x402Result) },
         evidenceContext,
         latencyMs: councilResult.totalLatencyMs,
       });
-      stored.push({ id: row.id, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel });
+      callsByStatus[sportsStatus] += 1;
+      sportsCalls.push({ id: row.id, status: sportsStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
@@ -707,14 +685,14 @@ export async function runSportsEdge() {
   return {
     discoveryLimit,
     dailyTarget,
-    watchlistLimit,
     maxAnalyzedSportsMarkets: maxAnalyzed,
     discovered: markets.length,
     checked: markets.length,
     eligible: ranked.length,
     analyzed,
-    stored,
-    watchlisted,
+    liveCallsStored: sportsCalls.length,
+    callsByStatus,
+    sportsCalls,
     skipped,
     failed,
     skippedByReason: summarizeSkipReasons(skipped),

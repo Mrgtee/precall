@@ -15,7 +15,7 @@ export default async function HomePage() {
   try {
     calls = await getCalls(30);
     leaderboard = await getLeaderboard();
-    sportsIdeas = await getSportsPredictions(3, ["active", "watchlist"]);
+    sportsIdeas = await getSportsPredictions(3);
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
@@ -81,22 +81,22 @@ export default async function HomePage() {
       <section style={{ marginTop: 34 }}>
         <section className="section-heading">
           <div>
-            <p className="eyebrow">Daily Sports Edge</p>
-            <h2>Non-bonded sports ideas</h2>
+            <p className="eyebrow">Sports Live Calls</p>
+            <h2>Non-bonded sports predictions</h2>
           </div>
-          <p>Sports ideas are separate from Arc-bonded calls until selected-outcome resolution is generalized.</p>
+          <p>Sports Live Calls are separate from Arc-bonded calls until selected-outcome resolution is generalized.</p>
         </section>
         {sportsIdeas.length === 0 ? (
-          <section className="empty"><h2>No sports ideas stored yet</h2><p className="muted">Run the Sports Scan from Admin or Railway to populate this board.</p></section>
+          <section className="empty"><h2>No Sports Live Calls stored yet</h2><p className="muted">Run the Sports Scan from Admin or Railway to populate this board.</p></section>
         ) : (
           <section className="grid">
             {sportsIdeas.map((idea) => (
               <article className="panel" key={idea.id}>
-                <p className="eyebrow">{idea.status === "active" ? "Strong idea" : "Watchlist"} · {idea.category} · {idea.marketKind}</p>
+                <p className="eyebrow">{idea.status.replace("_call", "").replace("_", " ")} · {idea.category} · {idea.marketKind}</p>
                 <h3>{idea.marketTitle}</h3>
-                <p className="muted">{idea.status === "active" ? "Pick" : "Lean"}: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
-                <p className="muted">{idea.status === "active" ? idea.verdict : idea.statusReason}</p>
-                <Link className="button secondary" href="/sports">Open Sports Edge <ArrowRight size={16} /></Link>
+                <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
+                <p className="muted">{idea.verdict}</p>
+                <Link className="button secondary" href="/sports">Open Sports Live Calls <ArrowRight size={16} /></Link>
               </article>
             ))}
           </section>

@@ -24,8 +24,9 @@ type AdminResult = {
     eligible?: unknown[];
     analyzed?: unknown[];
     published?: unknown[];
-    stored?: unknown[];
-    watchlisted?: unknown[];
+    liveCallsStored?: number;
+    sportsCalls?: unknown[];
+    callsByStatus?: Record<string, number>;
     skipped?: unknown[];
     failed?: unknown[];
     resolved?: unknown[];
@@ -105,7 +106,7 @@ const actions: Array<{
   {
     action: "sports",
     title: "Run sports scan",
-    description: "Scan daily sports markets, pay x402 evidence when available, run the sports council, and store qualifying non-bonded Sports Edge ideas.",
+    description: "Scan daily sports markets, pay x402 evidence when available, run the sports council, and store non-bonded Sports Live Calls with risk labels.",
     icon: <Play size={18} />,
     danger: true,
   },
@@ -144,8 +145,8 @@ export function AdminConsole() {
   const [walletStatus, setWalletStatus] = useState("");
   const publishedCount = result?.command === "run-once" ? (result.result?.published?.length ?? 0) : null;
   const skippedCount = result?.command === "run-once" || result?.command === "sports" ? (result.result?.skipped?.length ?? 0) : null;
-  const sportsStoredCount = result?.command === "sports" ? (result.result?.stored?.length ?? 0) : null;
-  const sportsWatchlistedCount = result?.command === "sports" ? (result.result?.watchlisted?.length ?? 0) : null;
+  const sportsLiveCallsStored = result?.command === "sports" ? (result.result?.liveCallsStored ?? result.result?.sportsCalls?.length ?? 0) : null;
+  const sportsStatusCounts = result?.command === "sports" ? result.result?.callsByStatus : null;
 
   const refreshAdminData = useCallback(async (currentAddress = address) => {
     if (!currentAddress) return;
@@ -371,11 +372,11 @@ export function AdminConsole() {
         {status ? <p className="muted">{status}</p> : <p className="muted">No action run yet.</p>}
         {result?.ok && publishedCount === 0 ? <p className="muted">No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out or failed required evidence/payment gates.</p> : null}
         {publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
-        {sportsStoredCount && sportsStoredCount > 0 ? <p className="muted">Stored {sportsStoredCount} strong sports idea{sportsStoredCount === 1 ? "" : "s"}. Refresh Sports Edge to see the latest board.</p> : null}
-        {sportsWatchlistedCount && sportsWatchlistedCount > 0 ? <p className="muted">Stored {sportsWatchlistedCount} watchlist item{sportsWatchlistedCount === 1 ? "" : "s"}. These are labeled as filtered analysis, not strong picks.</p> : null}
-        {skippedCount && skippedCount > 0 ? <p className="muted">Filtered {skippedCount} market{skippedCount === 1 ? "" : "s"}. This is expected when live markets fail V1 eligibility or quality gates.</p> : null}
+        {sportsLiveCallsStored && sportsLiveCallsStored > 0 ? <p className="muted">Stored {sportsLiveCallsStored} Sports Live Call{sportsLiveCallsStored === 1 ? "" : "s"}. Refresh /sports to see the latest board.</p> : null}
+        {sportsStatusCounts ? <p className="muted">Sports status counts: strong {sportsStatusCounts.strong_call || 0}, lean {sportsStatusCounts.lean_call || 0}, high-risk {sportsStatusCounts.high_risk_call || 0}, avoid {sportsStatusCounts.avoid_call || 0}.</p> : null}
+        {skippedCount && skippedCount > 0 ? <p className="muted">Skipped {skippedCount} market{skippedCount === 1 ? "" : "s"}. Sports skips are reserved for invalid, expired, low-liquidity, unsupported, or unclear markets.</p> : null}
         {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}
-        <p className="muted">If a bonded run returns an empty <code>published</code> list, the dashboard will not gain new bonded calls. If a sports run returns an empty <code>stored</code> list, the Sports page may still gain watchlist items, but those are observation-only and failed at least one strong-pick gate.</p>
+        <p className="muted">If a bonded run returns an empty <code>published</code> list, the dashboard will not gain new bonded calls. If a sports run returns zero <code>liveCallsStored</code>, every discovered sports market was invalid, unsupported, or failed before analysis.</p>
       </section>
     </section>
   );

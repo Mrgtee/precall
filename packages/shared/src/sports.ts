@@ -2,8 +2,22 @@ import { numberEnv, optionalEnv } from "./env";
 import { clampBps } from "./scoring";
 import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsPredictionIdea, SportsRiskLevel, SportsVote } from "./types";
 
-export type SportsCategory = "soccer" | "nba" | "mlb" | "nhl" | "ufc" | "football" | "esports" | "other_sports";
-export type SportsMarketKind = "over_under" | "spread" | "moneyline" | "team_win" | "draw" | "double_chance" | "outright" | "other";
+export type SportsCategory = "soccer" | "nba" | "mlb" | "nhl" | "ufc" | "football" | "esports" | "tennis" | "cricket" | "golf" | "rugby" | "other_sports";
+export type SportsMarketKind =
+  | "over_under"
+  | "spread"
+  | "moneyline"
+  | "team_win"
+  | "draw"
+  | "double_chance"
+  | "team_total"
+  | "both_teams_to_score"
+  | "goals_range"
+  | "correct_score"
+  | "player_prop"
+  | "outright"
+  | "other";
+export type SportsCallStatus = "strong_call" | "lean_call" | "high_risk_call" | "avoid_call";
 
 export type SportsMarketClassification = {
   isSports: boolean;
@@ -47,6 +61,8 @@ const SPORTS_PATTERNS = [
   /\b(champions league|premier league|la liga|serie a|bundesliga|ligue 1|world cup|soccer|football|basketball|baseball|hockey|tennis|golf|cricket|rugby|boxing|dota|counter-strike|league of legends|valorant)\b/,
   /\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-[a-z0-9-]+/,
   /\b(afc|fc|united|city|hotspur|ajax|inter|madrid|barcelona|arsenal|chelsea|liverpool|tottenham|brighton|everton|west ham|newcastle|aston villa)\b/,
+  /\b(over|under)\s+\d+(?:\.\d+)?\s+(goals?|points?|runs?)\b/,
+  /\b(total goals?|team goals?|both teams to score|btts|double chance|correct score|score range)\b/,
 ];
 
 const NON_SPORTS_FALSE_POSITIVE_PATTERNS = [
@@ -62,7 +78,7 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   const reasons: string[] = [];
   const hasSportsSignal = SPORTS_PATTERNS.some((pattern) => pattern.test(text));
   const hasFalsePositiveSignal = NON_SPORTS_FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(text));
-  const hasExplicitCompetitionSignal = /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|fifa|world cup|premier league|champions league|la liga|serie a|bundesliga|ligue 1)\b|\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-/.test(text);
+  const hasExplicitCompetitionSignal = /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|fifa|world cup|premier league|champions league|la liga|serie a|bundesliga|ligue 1|roland garros)\b|\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-/.test(text);
   const isSports = hasSportsSignal && (!hasFalsePositiveSignal || hasExplicitCompetitionSignal);
   if (!isSports) reasons.push("not_sports");
 
@@ -71,21 +87,29 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   else if (/\b(mlb|baseball)\b/.test(text)) category = "mlb";
   else if (/\b(nhl|hockey)\b/.test(text)) category = "nhl";
   else if (/\b(ufc|mma|boxing)\b/.test(text)) category = "ufc";
-  else if (/\b(nfl)\b/.test(text)) category = "football";
+  else if (/\b(nfl|american football)\b/.test(text)) category = "football";
+  else if (/\b(atp|wta|tennis|roland garros)\b/.test(text)) category = "tennis";
+  else if (/\b(cricket|ipl|cricipl|indian premier league)\b/.test(text)) category = "cricket";
+  else if (/\b(golf)\b/.test(text)) category = "golf";
+  else if (/\b(rugby)\b/.test(text)) category = "rugby";
   else if (/\b(soccer|ucl|champions league|epl|ere|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|united|city|hotspur|ajax|inter)\b/.test(text)) category = "soccer";
   else if (/\b(dota|counter-strike|cs2|league of legends|lol|valorant)\b/.test(text)) category = "esports";
-  else if (/\b(cricket|ipl|rugby|golf|atp|wta|tennis)\b/.test(text)) category = "other_sports";
   else if (/\bfootball\b/.test(text)) category = "football";
   else if (isSports) category = "other_sports";
 
   let marketKind: SportsMarketKind = "other";
-  if (/over\/under|over under|total goals|\bo\/u\b|over [0-9]+\.?[0-9]?|under [0-9]+\.?[0-9]?/.test(text)) marketKind = "over_under";
-  else if (/spread|\(-?\d+\.?\d?\)|\+\d+\.?\d?/.test(text)) marketKind = "spread";
+  if (/both teams to score|\bbtts\b/.test(text)) marketKind = "both_teams_to_score";
+  else if (/correct score/.test(text)) marketKind = "correct_score";
+  else if (/score range|goals? range|between \d+(?:\.\d+)?(?: and |-)\d+(?:\.\d+)? goals?/.test(text)) marketKind = "goals_range";
+  else if (/team total|team goals?|\b[a-z .'-]+ goals? over|\b[a-z .'-]+ goals? under/.test(text)) marketKind = "team_total";
+  else if (/over\/under|over under|total goals?|total points?|total runs?|\bo\/u\b|over \d+(?:\.\d+)?|under \d+(?:\.\d+)?/.test(text)) marketKind = "over_under";
+  else if (/spread|\([+-]?\d+(?:\.\d+)?\)|(?:^|\s)[+-]\d+(?:\.\d+)?\b/.test(text)) marketKind = "spread";
   else if (/double chance/.test(text)) marketKind = "double_chance";
   else if (/\bdraw\b/.test(text)) marketKind = "draw";
+  else if (/player|points|rebounds|assists|shots|cards|goalscorer|touchdown|strikeouts|bases|saves/.test(text) && !/team goals?/.test(text)) marketKind = "player_prop";
   else if (/winner|wins?|beat|defeat|vs\.| vs |moneyline/.test(text)) marketKind = "moneyline";
   else if (/will .* win/.test(text)) marketKind = "team_win";
-  else if (/champion|finals|world cup|conference|division|nomination/.test(text)) marketKind = "outright";
+  else if (/champion|finals|world cup|conference|division|tournament/.test(text)) marketKind = "outright";
 
   return { isSports, category, marketKind, reasons };
 }
@@ -116,10 +140,6 @@ export function sportsDailyTarget() {
 
 export function maxSportsAnalyzedPerRun() {
   return numberEnv("MAX_SPORTS_ANALYZED_PER_RUN", 16);
-}
-
-export function sportsWatchlistLimit() {
-  return numberEnv("SPORTS_WATCHLIST_LIMIT", 5);
 }
 
 function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresholds) {
@@ -168,6 +188,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   if (market.outcomes.length < 2 || market.outcomePrices.length < 2) reasons.push("missing_outcomes_or_prices");
   if (market.outcomePrices.some((price) => !Number.isFinite(price) || price < 0 || price > 1)) reasons.push("invalid_prices");
   if (market.liquidityUsd < thresholds.minLiquidityUsd) reasons.push("low_liquidity");
+  if (classification.isSports && classification.marketKind === "other") reasons.push("unsupported_market_format");
   const outcomeIndexes = validOutcomeIndexes(market, thresholds);
   if (outcomeIndexes.length === 0) reasons.push("no_reasonable_price_band");
 
@@ -177,7 +198,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   const liquidity = logScore(market.liquidityUsd, 1_000_000, 25);
   const evidenceDepth = Math.min(15, (market.description.trim().length / 600) * 15);
   const outcomeDepth = Math.min(10, outcomeIndexes.length * 4);
-  const kindBoost = classification.marketKind === "over_under" || classification.marketKind === "moneyline" || classification.marketKind === "spread" ? 10 : 5;
+  const kindBoost = classification.marketKind === "over_under" || classification.marketKind === "moneyline" || classification.marketKind === "spread" || classification.marketKind === "team_total" ? 10 : 5;
   const candidateScore = Math.round((volume + liquidity + close.score + evidenceDepth + outcomeDepth + kindBoost) * 100) / 100;
 
   return { eligible: true, reasons: [], candidate: { market, classification, outcomeIndexes, candidateScore } };
@@ -224,6 +245,38 @@ export function buildSportsEvidenceContext(input: { market: PolymarketMarket; sn
   return [...publicEvidence, ...(input.x402Evidence || [])];
 }
 
+export function selectedSportsOptionLabel(market: PolymarketMarket, outcomeIndex: number) {
+  const rawOutcome = String(market.outcomes[outcomeIndex] || `Outcome ${outcomeIndex + 1}`).trim();
+  const normalizedOutcome = rawOutcome.toLowerCase();
+  if (normalizedOutcome !== "yes" && normalizedOutcome !== "no") return rawOutcome;
+
+  const affirmative = normalizedOutcome === "yes";
+  const title = market.title.replace(/\?$/, "").trim();
+  const text = `${market.title} ${market.slug}`.toLowerCase();
+  const explicitTotalLine = text.match(/\b(over|under)\s*(\d+(?:\.\d+)?)\s*(goals?|points?|runs?)?\b/);
+  const shorthandTotalLine = text.match(/\bo\/u\s*(\d+(?:\.\d+)?)\b/);
+  if (explicitTotalLine || shorthandTotalLine) {
+    const explicitDirection = explicitTotalLine?.[1] === "under" ? "Under" : "Over";
+    const number = explicitTotalLine?.[2] || shorthandTotalLine?.[1] || "";
+    const unitToken = explicitTotalLine?.[3];
+    const unit = unitToken ? (unitToken.endsWith("s") ? unitToken : `${unitToken}s`) : text.includes("goal") ? "goals" : text.includes("run") ? "runs" : "points";
+    const direction = affirmative ? explicitDirection : explicitDirection === "Over" ? "Under" : "Over";
+    return `${direction} ${number} ${unit}`;
+  }
+
+  if (/both teams to score|\bbtts\b/.test(text)) return affirmative ? "Both teams to score" : "Both teams not to score";
+  if (/double chance/.test(text)) return affirmative ? title.replace(/^will\s+/i, "") : `Oppose ${title.replace(/^will\s+/i, "")}`;
+  const winMatch = title.match(/^will\s+(.+?)\s+win(?:\s+on\s+\d{4}-\d{2}-\d{2})?/i);
+  if (winMatch?.[1]) return affirmative ? `${winMatch[1]} to win` : `${winMatch[1]} not to win`;
+  const spreadMatch = title.match(/(.+?)([+-]\d+(?:\.\d+)?)/);
+  if (spreadMatch?.[1] && spreadMatch[2]) {
+    const spreadLabel = `${spreadMatch[1].trim()} ${spreadMatch[2]}`;
+    return affirmative ? spreadLabel : `Oppose ${spreadLabel}`;
+  }
+
+  return affirmative ? title : `No: ${title}`;
+}
+
 export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot: OutcomeSnapshot; category: string; marketKind: string; evidence: EvidenceItemInput[]; votes: SportsVote[] }): SportsPredictionIdea {
   const grouped = new Map<number, SportsVote[]>();
   for (const vote of input.votes) {
@@ -243,7 +296,7 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
   const agentProbabilityBps = clampBps(selectedVotes.reduce((sum, vote) => sum + vote.agentProbabilityBps * Math.max(1, vote.confidenceBps), 0) / totalWeight);
   const confidenceBps = clampBps(selectedVotes.reduce((sum, vote) => sum + vote.confidenceBps, 0) / Math.max(1, selectedVotes.length));
   const edgeBps = Math.max(0, agentProbabilityBps - marketPriceBps);
-  const selectedOption = input.market.outcomes[selectedOutcomeIndex] || `Outcome ${selectedOutcomeIndex + 1}`;
+  const selectedOption = selectedSportsOptionLabel(input.market, selectedOutcomeIndex);
   const riskLevel = riskLevelFor({ confidenceBps, edgeBps, marketPriceBps, spreadBps: input.snapshot.spreadBps });
   const rationale = selectedVotes.map((vote) => `${vote.agent}: ${vote.thesis}`).join("\n\n").slice(0, 4_000);
   const risks = [...new Set(selectedVotes.flatMap((vote) => vote.risks))].slice(0, 8);
@@ -264,7 +317,7 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
     matchupContext: summarizeEvidence(input.evidence, ["circle_x402_social", "circle_x402_news", "free_web"]),
     marketMovement: `Polymarket selected outcome ${selectedOption} is priced at ${marketPriceBps} bps with ${input.snapshot.spreadBps} bps spread and about $${Math.round(input.snapshot.depthUsd).toLocaleString()} liquidity/depth context.`,
     risks,
-    verdict: edgeBps > 0 ? `${selectedOption} is a ${riskLevel}-risk value idea, not a guarantee.` : `No clear value edge after council review.`,
+    verdict: edgeBps > 0 ? `${selectedOption} is a ${riskLevel}-risk AI sports call, not a guarantee.` : `Avoid this market: no positive selected-side edge after council review.`,
     evidence: input.evidence,
     votes: selectedVotes,
   };
@@ -279,8 +332,30 @@ export function sportsThresholdFailures(idea: Pick<SportsPredictionIdea, "edgeBp
   return failures;
 }
 
-export function passesSportsThresholds(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot">, thresholds = sportsThresholds()) {
-  return sportsThresholdFailures(idea, thresholds).length === 0;
+export function classifySportsCallStatus(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()): SportsCallStatus {
+  if (idea.edgeBps <= 0) return "avoid_call";
+  const wideSpread = idea.snapshot.spreadBps > thresholds.maxSpreadBps;
+  if (!wideSpread && idea.edgeBps >= thresholds.minEdgeBps && idea.confidenceBps >= thresholds.minConfidenceBps && idea.riskLevel !== "high") return "strong_call";
+  if (!wideSpread && (idea.confidenceBps >= 4_000 || idea.edgeBps >= 200)) return "lean_call";
+  return "high_risk_call";
+}
+
+export function sportsStatusReason(status: SportsCallStatus, failures: string[]) {
+  if (status === "strong_call") return "Strong sports live call: edge, confidence, spread, and risk passed configured strong-call gates.";
+  if (status === "lean_call") return failures.length ? `Lean sports live call: useful but below at least one strong gate (${failures.join(", ")}).` : "Lean sports live call: selected side is clear but conviction is moderate.";
+  if (status === "high_risk_call") return failures.length ? `High-risk sports live call: selected side exists, but risk is elevated (${failures.join(", ")}).` : "High-risk sports live call: selected side exists, but evidence or confidence is limited.";
+  return failures.length ? `Avoid call: no playable edge or evidence quality is too weak (${failures.join(", ")}).` : "Avoid call: no side is worth taking from the supplied evidence.";
+}
+
+export function sportsVerdictForStatus(status: SportsCallStatus, idea: Pick<SportsPredictionIdea, "selectedOption" | "edgeBps" | "confidenceBps" | "riskLevel">) {
+  if (status === "strong_call") return `AI prediction: ${idea.selectedOption}. Strong call with ${idea.edgeBps} bps edge and ${idea.confidenceBps} bps confidence. Not financial advice.`;
+  if (status === "lean_call") return `AI leans: ${idea.selectedOption}. Moderate conviction; useful market intelligence, not a guaranteed outcome.`;
+  if (status === "high_risk_call") return `AI leans: ${idea.selectedOption}, but this is high risk due to weaker confidence, evidence, or market conditions.`;
+  return `AI recommendation: avoid this market. The reviewed side did not show enough playable edge from supplied evidence.`;
+}
+
+export function passesSportsThresholds(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()) {
+  return classifySportsCallStatus(idea, thresholds) === "strong_call";
 }
 
 function riskLevelFor(input: { confidenceBps: number; edgeBps: number; marketPriceBps: number; spreadBps: number }): SportsRiskLevel {

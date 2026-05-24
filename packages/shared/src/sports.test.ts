@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsMarket, evaluateSportsCandidate, sportsEventTime, sportsThresholdFailures } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
 import type { OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -62,6 +62,38 @@ test("sports classifier catches club-name soccer markets without explicit soccer
   assert.equal(classification.category, "soccer");
 });
 
+
+test("sports classifier supports soccer over/under goal markets", () => {
+  const goalMarket = market({
+    title: "Arsenal vs Chelsea: Over 2.5 goals",
+    slug: "epl-ars-che-2026-05-24-total-goals-over-2pt5",
+    description: "Soccer total goals market.",
+    outcomes: ["Yes", "No"],
+    outcomePrices: [0.52, 0.48],
+  });
+  const classification = classifySportsMarket(goalMarket);
+  assert.equal(classification.isSports, true);
+  assert.equal(classification.category, "soccer");
+  assert.equal(classification.marketKind, "over_under");
+  assert.equal(selectedSportsOptionLabel(goalMarket, 0), "Over 2.5 goals");
+  assert.equal(selectedSportsOptionLabel(goalMarket, 1), "Under 2.5 goals");
+});
+
+test("sports classifier supports match winner and spread markets", () => {
+  const matchWinner = classifySportsMarket(market({
+    title: "Will Tottenham Hotspur FC win on 2026-05-24?",
+    slug: "epl-tot-eve-2026-05-24-tot",
+    description: "Premier League match market.",
+    url: "https://polymarket.com/market/epl-tot-eve-2026-05-24-tot",
+  }));
+  assert.equal(matchWinner.category, "soccer");
+  assert.equal(matchWinner.marketKind, "moneyline");
+
+  const spread = classifySportsMarket(market({ title: "Thunder vs. Spurs: Spurs +7.5", slug: "nba-okc-sas-2026-05-24-spread-away-7pt5" }));
+  assert.equal(spread.category, "nba");
+  assert.equal(spread.marketKind, "spread");
+});
+
 test("sports event date keeps same-day markets eligible when Polymarket close time is later", () => {
   const tennisMarket = market({
     title: "Roland Garros ATP: Tomas Etcheverry vs Nuno Borges",
@@ -117,4 +149,17 @@ test("sports aggregation uses selected outcome probability and edge semantics", 
   assert.ok(idea.agentProbabilityBps > 5000);
   assert.ok(idea.edgeBps > 600);
   assert.equal(sportsThresholdFailures(idea).length, 0);
+});
+
+
+test("sports live call status classifies strong, lean, high-risk, and avoid calls", () => {
+  const strongIdea = { edgeBps: 700, confidenceBps: 6200, marketPriceBps: 4400, riskLevel: "medium" as const, snapshot: { ...snapshot, spreadBps: 120 } };
+  const leanIdea = { edgeBps: 250, confidenceBps: 4200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
+  const highRiskIdea = { edgeBps: 100, confidenceBps: 3200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
+  const avoidIdea = { edgeBps: 0, confidenceBps: 5600, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
+  assert.equal(classifySportsCallStatus(strongIdea), "strong_call");
+  assert.equal(classifySportsCallStatus(leanIdea), "lean_call");
+  assert.equal(classifySportsCallStatus(highRiskIdea), "high_risk_call");
+  assert.equal(classifySportsCallStatus(avoidIdea), "avoid_call");
+  assert.match(sportsVerdictForStatus("avoid_call", { selectedOption: "Knicks", edgeBps: 0, confidenceBps: 5600, riskLevel: "high" }), /avoid/i);
 });

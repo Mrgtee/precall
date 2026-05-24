@@ -23,12 +23,12 @@ Prediction-market advice is usually cheap talk. Precall makes agent calls audita
 - Circle Agent Stack tracking for agent USDC bonds, user thesis unlocks, and optional Gateway/x402 paid evidence calls.
 - Hosted Postgres persistence with Drizzle migrations.
 - Wallet-signed follows and feedback for new user traction events.
-- `/demo` page that shows live config booleans, latest run, latest locked call proof, latest Sports Edge ideas, latest unlock, and Circle activity without faking empty states.
-- Daily Sports Edge board for non-bonded selected-outcome sports ideas from Polymarket sports markets.
+- `/demo` page that shows live config booleans, latest run, latest locked call proof, latest Sports Live Calls, latest unlock, and Circle activity without faking empty states.
+- Sports Live Calls board for non-bonded selected-outcome sports predictions from Polymarket sports markets.
 
 ## Intentionally Not Supported Yet
 
-- Arc-bonding and resolution for non-YES/NO selected-outcome markets. Sports Edge can analyze them as non-bonded ideas, but V1 does not bond/resolve them until generalized resolution is safe.
+- Arc-bonding and resolution for non-YES/NO selected-outcome markets. Sports Live Calls can analyze them as non-bonded predictions, but V1 does not bond/resolve them until generalized resolution is safe.
 - Custody or automated trade execution for users. Precall links to markets for manual copying.
 - Fake social/news enrichment. x402 evidence is shown only when real Circle/x402 enrichment is enabled and succeeds.
 - Overclaimed reputation. The leaderboard is honest when no resolved calls exist.
@@ -92,12 +92,11 @@ Useful hardening controls:
 - `MODEL_RETRY_COUNT=2`
 - `ALLOW_PUBLISH_FILTERED_RUN=false`
 
-Sports Edge controls:
+Sports Live Calls controls:
 
-- `ENABLE_SPORTS_EDGE=true` - enables the non-bonded daily sports scanner.
+- `ENABLE_SPORTS_EDGE=true` - enables the non-bonded Sports Live Calls scanner.
 - `SPORTS_DISCOVERY_MARKET_LIMIT=250` - Polymarket markets fetched for sports classification.
-- `SPORTS_DAILY_TARGET=5` - target number of strong sports ideas per day; weak picks are filtered, not forced.
-- `SPORTS_WATCHLIST_LIMIT=5` - max filtered sports analyses to show as observation-only watchlist items when strong gates are not met.
+- `SPORTS_DAILY_TARGET=5` - target number of strong sports calls to surface per day. Analyzed valid markets are still stored as strong, lean, high-risk, or avoid calls.
 - `MAX_SPORTS_ANALYZED_PER_RUN=16` - max sports markets allowed to spend x402/model calls per run.
 - `SPORTS_LOOKAHEAD_HOURS=72` - focus on near-term daily sports markets.
 - `SPORTS_MIN_LIQUIDITY_USD=25000`, `SPORTS_MAX_SPREAD_BPS=500`, `SPORTS_MIN_EDGE_BPS=300`, `SPORTS_MIN_CONFIDENCE_BPS=5000`, `SPORTS_MIN_PRICE_BPS=1000`, `SPORTS_MAX_PRICE_BPS=9000`.

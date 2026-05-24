@@ -29,7 +29,7 @@ export default async function DemoPage() {
         <div className="metric"><span><RadioTower size={14} /> Calls</span><strong>{data.counts?.calls ?? 0}</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Live</span><strong>{data.counts?.liveCalls ?? 0}</strong></div>
         <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>{data.counts?.unlocks ?? 0}</strong></div>
-        <div className="metric"><span><Activity size={14} /> Sports ideas</span><strong>{data.counts?.sportsIdeas ?? 0}</strong></div>
+        <div className="metric"><span><Activity size={14} /> Sports calls</span><strong>{data.counts?.sportsIdeas ?? 0}</strong></div>
       </section>
 
       <section className="info-grid">
@@ -94,18 +94,18 @@ export default async function DemoPage() {
       </section>
 
       <section className="panel">
-        <h2>Latest Sports Edge ideas</h2>
+        <h2>Latest Sports Live Calls</h2>
         {data.latestSportsIdeas?.length ? (
           <div className="grid">
             {data.latestSportsIdeas.map((idea) => (
               <article className="panel" key={idea.id}>
                 <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
                 <strong>{idea.marketTitle}</strong>
-                <p className="muted">Pick {idea.selectedOption} · Risk {idea.riskLevel} · {idea.verdict}</p>
+                <p className="muted">AI Prediction {idea.selectedOption} · Risk {idea.riskLevel} · {idea.verdict}</p>
               </article>
             ))}
           </div>
-        ) : <p className="muted">No Sports Edge ideas stored yet. Run Sports Scan from Admin or Railway.</p>}
+        ) : <p className="muted">No Sports Live Calls stored yet. Run Sports Scan from Admin or Railway.</p>}
       </section>
 
       <section className="panel">

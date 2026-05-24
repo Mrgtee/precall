@@ -8,8 +8,8 @@ test("BUY_NO displays selected NO probability, not canonical YES probability", (
   assert.equal(bpsToPercent(selectedProbabilityForAction("BUY_NO", 4500)), "55.0%");
 });
 
-test("weak buy signals are labeled watchlist", () => {
-  assert.equal(recommendationLabel("BUY_YES", ["Yes", "No"], 370, 10), "Watchlist: YES");
+test("weak buy signals are labeled as lean, not hidden", () => {
+  assert.equal(recommendationLabel("BUY_YES", ["Yes", "No"], 370, 10), "Lean YES");
   assert.equal(recommendationLabel("BUY_NO", ["Yes", "No"], 6000, 200), "Buy NO");
 });
 

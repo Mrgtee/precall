@@ -14,32 +14,85 @@ function freshness(date: Date | string | null) {
   return `${Math.round(hours / 24)}d old`;
 }
 
+function statusLabel(status: string) {
+  if (status === "strong_call") return "Strong";
+  if (status === "lean_call") return "Lean";
+  if (status === "high_risk_call") return "High Risk";
+  if (status === "avoid_call") return "Avoid";
+  return status.replace(/_/g, " ");
+}
+
+function statusIntro(status: string) {
+  if (status === "strong_call") return "Strong Calls";
+  if (status === "lean_call") return "Lean Calls";
+  if (status === "high_risk_call") return "High Risk Calls";
+  return "Avoided Markets";
+}
+
+function statusDescription(status: string) {
+  if (status === "strong_call") return "Edge, confidence, market spread, and risk are all acceptable.";
+  if (status === "lean_call") return "The selected side is clear, but conviction is moderate.";
+  if (status === "high_risk_call") return "The model found a side, but evidence, confidence, or market conditions make it risky.";
+  return "Valid markets the AI recommends avoiding rather than following.";
+}
+
+type SportsIdea = Awaited<ReturnType<typeof getSportsPredictions>>[number];
+
+function SportsCard({ idea }: { idea: SportsIdea }) {
+  const x402Status = idea.x402Status as { status?: unknown } | null;
+  const paidEvidenceUsed = Boolean(idea.x402PaidEvidenceUsed || x402Status?.status === "success");
+  return (
+    <article className="panel">
+      <p className="eyebrow">{statusLabel(idea.status)} · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
+      <h2 className="call-title">{idea.marketTitle}</h2>
+      <div className="pill-row">
+        <span className="pill">AI Prediction: {idea.selectedOption}</span>
+        <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
+        <span className="pill">AI {bpsToPercent(idea.agentProbabilityBps)}</span>
+        <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
+        <span className="pill">Confidence {bpsToPercent(idea.confidenceBps)}</span>
+        <span className="pill">Risk {idea.riskLevel}</span>
+        {paidEvidenceUsed ? <span className="pill">x402 evidence</span> : null}
+      </div>
+      <p className="muted"><strong>Short reasoning:</strong> {idea.reasoning || idea.rationale}</p>
+      <p className="muted"><strong>Context:</strong> {idea.matchupContext}</p>
+      <p className="muted"><strong>Market movement:</strong> {idea.marketMovement}</p>
+      {idea.risks.length ? <p className="muted"><strong>Risks:</strong> {idea.risks.join("; ")}</p> : null}
+      <p><strong>Verdict:</strong> {idea.verdict}</p>
+      <p className="muted">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
+      <Link href={idea.marketUrl} target="_blank">Open Polymarket <ExternalLink size={14} /></Link>
+    </article>
+  );
+}
+
 export default async function SportsPage() {
   let ideas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
   let setupError = "";
   try {
-    ideas = await getSportsPredictions(20, ["active", "watchlist"]);
+    ideas = await getSportsPredictions(40);
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
 
-  const strongIdeas = ideas.filter((idea) => idea.status === "active");
-  const watchlistIdeas = ideas.filter((idea) => idea.status === "watchlist");
+  const grouped = ["strong_call", "lean_call", "high_risk_call", "avoid_call"].map((status) => ({
+    status,
+    ideas: ideas.filter((idea) => idea.status === status),
+  }));
 
   return (
     <main className="shell page">
       <section className="hero compact-hero">
         <div>
-          <p className="eyebrow">Daily Sports Edge</p>
-          <h1>Sports ideas from live Polymarket markets.</h1>
+          <p className="eyebrow">Sports Live Calls</p>
+          <h1>AI predictions for live Polymarket sports markets.</h1>
         </div>
         <div className="hero-card">
           <p>
-            Precall scans daily sports markets separately from bonded calls. These are non-bonded intelligence ideas until sports resolution is generalized, and they are never guarantees.
+            Precall scans sports markets separately from Arc-bonded calls. These Sports Live Calls are non-bonded market intelligence until selected-outcome resolution is generalized.
           </p>
           <div className="pill-row">
             <span className="pill"><Trophy size={14} /> Sports scanner</span>
-            <span className="pill"><ShieldCheck size={14} /> No auto-trading</span>
+            <span className="pill"><ShieldCheck size={14} /> Not Arc-bonded yet</span>
           </div>
         </div>
       </section>
@@ -47,81 +100,39 @@ export default async function SportsPage() {
       <section className="section-heading">
         <div>
           <p className="eyebrow">Today</p>
-          <h2>Latest sports prediction ideas</h2>
+          <h2>Sports Live Calls</h2>
         </div>
-        <p>Target is 5 strong ideas per day, but weak or unsupported picks are filtered instead of forced.</p>
+        <p>Valid analyzed markets are saved as Strong, Lean, High Risk, or Avoid calls. Confidence changes the label, not whether the analysis exists.</p>
+      </section>
+
+      <section className="panel info-note">
+        <p>
+          Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.
+        </p>
       </section>
 
       {setupError ? (
-        <section className="empty"><h2>Sports board setup required</h2><p className="muted">{setupError}</p></section>
+        <section className="empty"><h2>Sports Live Calls setup required</h2><p className="muted">{setupError}</p></section>
       ) : ideas.length === 0 ? (
         <section className="empty">
-          <h2>No sports ideas or watchlist items yet</h2>
-          <p className="muted">Run <code>npm run worker:sports</code> on Railway. Strong ideas must still pass quality gates; filtered analysis can appear as a clearly labeled watchlist.</p>
+          <h2>No Sports Live Calls stored yet</h2>
+          <p className="muted">Run <code>npm run worker:sports</code> on Railway. Invalid or unclear markets will still be skipped with transparent reasons.</p>
         </section>
       ) : (
-        <>
-          {strongIdeas.length > 0 ? (
+        grouped.map((group) => group.ideas.length ? (
+          <section key={group.status} style={{ marginTop: 34 }}>
+            <section className="section-heading">
+              <div>
+                <p className="eyebrow">{statusLabel(group.status)}</p>
+                <h2>{statusIntro(group.status)}</h2>
+              </div>
+              <p>{statusDescription(group.status)}</p>
+            </section>
             <section className="grid">
-              {strongIdeas.map((idea) => (
-                <article className="panel" key={idea.id}>
-                  <p className="eyebrow">Strong idea · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
-                  <h2 className="call-title">{idea.marketTitle}</h2>
-                  <div className="pill-row">
-                    <span className="pill">Pick: {idea.selectedOption}</span>
-                    <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
-                    <span className="pill">Agent {bpsToPercent(idea.agentProbabilityBps)}</span>
-                    <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
-                    <span className="pill">Risk {idea.riskLevel}</span>
-                  </div>
-                  <p className="muted"><strong>Why it looks stronger:</strong> {idea.rationale}</p>
-                  <p className="muted"><strong>Context:</strong> {idea.matchupContext}</p>
-                  <p className="muted"><strong>Market movement:</strong> {idea.marketMovement}</p>
-                  {idea.risks.length ? <p className="muted"><strong>Risks:</strong> {idea.risks.join("; ")}</p> : null}
-                  <p><strong>Verdict:</strong> {idea.verdict}</p>
-                  <Link href={idea.marketUrl} target="_blank">Open Polymarket <ExternalLink size={14} /></Link>
-                </article>
-              ))}
+              {group.ideas.map((idea) => <SportsCard idea={idea} key={idea.id} />)}
             </section>
-          ) : (
-            <section className="empty">
-              <h2>No strong sports ideas passed all gates yet</h2>
-              <p className="muted">The scanner found and analyzed sports markets, but it did not promote weak edges as strong recommendations.</p>
-            </section>
-          )}
-
-          {watchlistIdeas.length > 0 ? (
-            <>
-              <section className="section-heading" style={{ marginTop: 34 }}>
-                <div>
-                  <p className="eyebrow">Watchlist</p>
-                  <h2>Filtered sports analysis</h2>
-                </div>
-                <p>These are useful market reads, not strong ideas. They failed one or more quality gates and should be treated as observation-only.</p>
-              </section>
-              <section className="grid">
-                {watchlistIdeas.map((idea) => (
-                  <article className="panel" key={idea.id}>
-                    <p className="eyebrow">Watchlist · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
-                    <h2 className="call-title">{idea.marketTitle}</h2>
-                    <div className="pill-row">
-                      <span className="pill">Lean: {idea.selectedOption}</span>
-                      <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
-                      <span className="pill">Agent {bpsToPercent(idea.agentProbabilityBps)}</span>
-                      <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
-                      <span className="pill">Risk {idea.riskLevel}</span>
-                    </div>
-                    <p className="muted"><strong>Why it stayed watchlist:</strong> {idea.statusReason}</p>
-                    <p className="muted"><strong>Analysis:</strong> {idea.rationale}</p>
-                    <p className="muted"><strong>Context:</strong> {idea.matchupContext}</p>
-                    <p><strong>Verdict:</strong> Observation-only. Not a guaranteed pick and not promoted as a strong Sports Edge idea.</p>
-                    <Link href={idea.marketUrl} target="_blank">Open Polymarket <ExternalLink size={14} /></Link>
-                  </article>
-                ))}
-              </section>
-            </>
-          ) : null}
-        </>
+          </section>
+        ) : null)
       )}
     </main>
   );
