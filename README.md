@@ -1,196 +1,460 @@
-# Precall Arena
+# 1. Project Title
 
-Precall is an Arc-native prediction-market intelligence arena for the Agora Agents Hackathon. Separate market-agent roles scan live Polymarket YES/NO markets, produce accountable probabilities, publish only quality-passing calls with USDC bonds on Arc Testnet, let users unlock the full thesis with USDC, and build public reputation after outcomes resolve.
+# Precall
 
-The core proof loop is:
+**Tagline:** Agent calls you can inspect before you copy.
+
+Precall is an Arc-native, Circle-powered prediction market intelligence platform that turns noisy Polymarket markets into structured AI calls, unlockable reasoning, and accountable performance history.
+
+# 2. Live Links
+
+- **Live app:** https://precall-arena.vercel.app
+- **Demo video:** https://youtu.be/6SQVBe1wa3A
+- **GitHub repo:** https://github.com/Mrgtee/precall
+- **Arc registry contract:** `0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76`
+- **Arc registry explorer:** https://testnet.arcscan.app/address/0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+- **Registry deploy tx:** https://testnet.arcscan.app/tx/0x212dd0eff10e18728267cfea556b2db51dcac2f32adfe6395e75a9158924fe92
+- **Railway worker:** deployed as a protected worker service; the public URL is not required for app users and should stay protected by `WORKER_TRIGGER_SECRET`.
+
+# 3. Overview
+
+Precall is an AI-powered prediction market intelligence platform built on Arc with Circle Agent Stack primitives. It scans Polymarket markets, filters weak or unsafe candidates, runs specialized AI agents, and produces two clearly separated product surfaces:
+
+- **Bonded Arc Calls:** strict YES/NO calls that pass quality gates and are published with USDC accountability on Arc.
+- **Sports Live Calls:** non-bonded selected-outcome sports market intelligence for match winners, spreads, totals, over/under goals, and similar sports markets.
+
+Users see a locked preview first. Full reasoning, evidence, market links, risks, probability breakdowns, and agent votes unlock with Arc USDC. Precall is not financial advice and does not place trades for users.
+
+# 4. The Problem
+
+Prediction markets are powerful, but the experience is noisy. Users often have to interpret probability, spread, liquidity, edge, confidence, market movement, and evidence quality on their own.
+
+Most market calls online are also unstructured. They are often hype, screenshots, or opinions with no evidence trail and no accountability. That makes it hard to know whether a prediction is worth inspecting, whether the publisher has a real thesis, or whether the call should affect a user's decision.
+
+Precall exists to turn raw prediction markets into structured intelligence: what the market says, what the AI council thinks, where the edge may be, what evidence was used, and how the call performs over time.
+
+# 5. The Solution
+
+Precall combines market scanning, AI analysis, Arc USDC accountability, and Circle-powered evidence/payment rails.
+
+The system discovers markets, rejects low-quality or unclear candidates, builds an evidence packet, runs an AI council, calculates AI probability versus market probability, labels risk and confidence, and publishes only the right kind of output for the right surface.
+
+Bonded YES/NO calls use Arc as the accountability layer. Sports calls remain non-bonded selected-outcome intelligence until generalized selected-outcome resolution is implemented safely. Circle Gateway/x402 can be used to pay for premium evidence when the provider and network support it, and every paid evidence action is tracked honestly.
+
+# 6. Core Features
+
+## A. Bonded Arc Calls
+
+Bonded Arc Calls are the strictest Precall output.
+
+- High-conviction, strict YES/NO market calls.
+- Liquidity, spread, edge, confidence, price-band, and size gates.
+- Published only when the worker can safely produce a qualifying call.
+- USDC bond posted on Arc through `PrecallRegistry`.
+- Locked public preview before unlock.
+- Full thesis, evidence, probability, risk, sizing, and agent votes unlock with Arc USDC.
+- Expiry and resolution flow moves calls out of active views and into historical performance.
+- Leaderboard tracks resolved performance rather than hype.
+
+## B. Sports Live Calls
+
+Sports Live Calls are AI-generated market intelligence for sports markets.
+
+Supported categories and formats include:
+
+- Match winners and team win markets.
+- Spreads.
+- Over/under totals.
+- Soccer goal lines such as over/under 0.5, 1.5, 2.5, and 3.5 goals.
+- Goal ranges and selected-outcome markets when pricing is clear.
+- NBA, MLB, NHL, UFC, soccer, football, tennis, cricket, esports, and other daily sports markets when available on Polymarket.
+
+Sports calls use labels instead of disappearing just because they are not strong:
+
+- `strong_call`
+- `lean_call`
+- `high_risk_call`
+- `avoid_call`
+
+Sports Live Calls are not guaranteed outcomes and are not financial advice.
+
+## C. Arc USDC Unlock Flow
+
+Precall intentionally separates preview from full analysis.
+
+Before unlock, users see only the safe public preview. After a verified Arc USDC unlock, the app reveals:
+
+- Recommendation or selected option.
+- Market probability.
+- AI probability.
+- Edge.
+- Confidence.
+- Suggested size when relevant.
+- Thesis and reasoning.
+- Evidence and source URLs.
+- Risks and counterarguments.
+- Agent votes.
+- Polymarket link.
+
+## D. Circle Agent Stack / x402
+
+Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
+
+- Circle Gateway/x402 can pay allowlisted premium APIs for evidence.
+- The worker checks provider/network support before paying.
+- Paid evidence is recorded through `circle_actions`.
+- x402 may run on a provider-supported Gateway chain such as Arc Testnet, Base Sepolia, or Base.
+- Arc remains the settlement/unlock layer for Precall's own bonded calls and user unlocks.
+- Paid evidence is never faked. If x402 fails, Precall records the failure and only continues when required mode is disabled.
+
+## E. Admin / Worker Automation
+
+The worker runs outside the public web app.
+
+- Railway worker scans Polymarket markets.
+- Runs bonded YES/NO cycles.
+- Runs Sports Live Calls cycles.
+- Expires old calls and sports calls.
+- Resolves mature supported YES/NO calls.
+- Reports skipped reasons, failures, health, Gateway status, and x402 status.
+- Long worker jobs can be started asynchronously from the admin UI so Vercel requests do not have to wait 10-30 minutes.
+
+## F. Leaderboard / Top 5
+
+Precall separates active predictions from historical reputation.
+
+- Top 5 shows active bonded calls and top active sports calls separately.
+- Leaderboard tracks resolved bonded-call performance.
+- Wins and losses are shown after resolution.
+- Unresolved sports calls do not inflate reputation.
+- Old resolved calls are not shown as live recommendations.
+
+# 7. How It Works
+
+1. The Railway worker discovers live Polymarket markets.
+2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
+3. It builds an evidence packet from Polymarket data and optional x402 evidence.
+4. An AI council analyzes the market using supplied evidence IDs only.
+5. The system calculates market probability, AI probability, edge, confidence, and risk.
+6. Valid sports markets become Sports Live Calls with strong, lean, high-risk, or avoid labels.
+7. Bonded Arc Calls publish only if strict YES/NO quality gates pass.
+8. Users unlock full reasoning with Arc USDC.
+9. Expired or resolved calls move out of active views.
+10. The leaderboard records historical resolved performance.
+
+# 8. Architecture
+
+- **Frontend:** Next.js on Vercel.
+- **Worker:** Node/TypeScript worker on Railway.
+- **Database:** Supabase Postgres with Drizzle schema and migrations.
+- **Chain:** Arc Testnet.
+- **Smart contracts:** Solidity with Foundry.
+- **Payments:** Arc USDC for bonds and unlocks.
+- **Agentic payment/evidence:** Circle Agent Stack, Circle Gateway, and x402.
+- **Market data:** Polymarket Gamma and CLOB APIs.
+- **AI provider/model:** OpenAI-compatible provider configured through env vars.
 
 ```text
-live market -> verified evidence -> agent YES probability -> market edge -> bonded Arc call -> USDC thesis unlock -> resolution -> leaderboard reputation
+Polymarket Gamma/CLOB
+        |
+        v
+Railway Worker -> Evidence Packet -> AI Council -> Quality Gates
+        |                              |              |
+        |                              |              +--> Sports Live Calls
+        |                              |
+        +--> Circle Gateway/x402 -----+
+        |
+        +--> Arc PrecallRegistry -> Bonded Arc Calls -> USDC Unlocks
+                                      |
+                                      v
+                              Resolution + Leaderboard
+
+Vercel Web App reads Postgres, renders previews, verifies unlocks, and calls Railway through protected admin triggers.
 ```
 
-## Why It Matters
+# 9. Arc Usage
 
-Prediction-market advice is usually cheap talk. Precall makes agent calls auditable: every public recommendation has a timestamped market, supplied evidence IDs, an Arc call ID, a USDC bond, a thesis hash, an unlock trail, and a lifecycle state. The product does not custody user trading funds and does not claim to place trades. It gives non-custodial copy signals and links users to the current market page.
+Precall uses Arc Testnet as the accountability and settlement layer.
 
-## What Is Real Today
+- Bonded YES/NO calls are published through `PrecallRegistry`.
+- Agents post USDC bonds on Arc.
+- Users unlock full bonded-call reasoning with Arc USDC.
+- Sports Live Calls also unlock with Arc USDC, but they are not Arc-bonded yet.
+- Resolved bonded calls update historical reputation and leaderboard statistics.
+- Arc provides the settlement layer for the app's core trust loop.
 
-- Live Polymarket discovery through Gamma and CLOB/public market data adapters.
-- Strict V1 eligibility for active, future, binary YES/NO markets only.
-- Five separate role calls: `MacroScout`, `NewsHawk`, `CrowdPulse`, `BookWatcher`, and `Skeptic`.
-- Canonical probability semantics: `yesProbabilityBps` always means probability that YES/first outcome happens.
-- Quality gates for liquidity, spread, edge, confidence, and suggested size.
-- Arc Testnet registry for agent registration, bonded calls, thesis unlocks, and resolution events.
-- Circle Agent Stack tracking for agent USDC bonds, user thesis unlocks, and optional Gateway/x402 paid evidence calls.
-- Hosted Postgres persistence with Drizzle migrations.
-- Wallet-signed follows and feedback for new user traction events.
-- `/demo` page that shows live config booleans, latest run, latest locked call proof, latest Sports Live Calls, latest unlock, and Circle activity without faking empty states.
-- Sports Live Calls board for non-bonded selected-outcome sports predictions from Polymarket sports markets.
+# 10. Circle Usage
 
-## Intentionally Not Supported Yet
+Precall uses Circle in three main ways:
 
-- Arc-bonding and resolution for non-YES/NO selected-outcome markets. Sports Live Calls can analyze them as non-bonded predictions, but V1 does not bond/resolve them until generalized resolution is safe.
-- Custody or automated trade execution for users. Precall links to markets for manual copying.
-- Fake social/news enrichment. x402 evidence is shown only when real Circle/x402 enrichment is enabled and succeeds.
-- Overclaimed reputation. The leaderboard is honest when no resolved calls exist.
+- **USDC rails:** Arc USDC powers bonds and unlock payments.
+- **Circle Agent Stack / Gateway / x402:** the worker can pay for premium evidence from allowlisted providers.
+- **Circle action tracking:** `circle_actions` records x402 payments, Gateway deposits, Arc bonds, thesis unlocks, and sports unlocks.
 
-## Architecture
+x402 has optional and required modes:
 
-- `apps/web` - Next.js public arena, call pages, admin console, demo page, leaderboard, wallet unlocks, follows, feedback, and share routes.
-- `apps/worker` - Node runner for market discovery, eligibility filtering, evidence context, separate role model calls, publishing, expiry, and resolution.
-- `packages/contracts` - Foundry Solidity registry deployed on Arc Testnet.
-- `packages/shared` - Drizzle schema, migrations, Polymarket adapters, Circle Gateway/x402 buyer client, evidence providers, scoring, market eligibility, contract ABI, and shared types.
+- `REQUIRE_CIRCLE_GATEWAY_X402=false`: record failures and allow free evidence fallback.
+- `REQUIRE_CIRCLE_GATEWAY_X402=true`: fail the market if required x402 evidence cannot be fetched.
 
-## Setup
+Private keys stay in Railway/server environments only. They are never moved into `NEXT_PUBLIC_*` variables.
+
+# 11. Arc OSS Primitives
+
+Precall exposes several reusable primitives for Arc/Circle builders:
+
+- **USDC-backed agent accountability:** agents publish bonded calls with onchain consequences.
+- **Arc USDC unlockable reasoning:** users pay a small USDC unlock to reveal full analysis.
+- **Selected-outcome sports prediction model:** sports calls can select outcomes beyond YES/NO.
+- **Evidence-based agent analysis:** every agent vote must reference supplied evidence IDs.
+- **Public frontend + private worker architecture:** Vercel renders the product while Railway owns long-running, key-bearing work.
+- **Market filtering and quality gates:** liquidity, spread, price-band, confidence, edge, and expiry gates protect output quality.
+- **Performance tracking and leaderboard:** resolved calls drive reputation instead of unresolved hype.
+- **x402 paid evidence flow:** provider support detection, budget controls, allowlists, and paid-evidence metadata.
+
+How this differs from `circlefin/arc-*` reference repos:
+
+Existing Arc/Circle repos are excellent commerce and payment references. Precall builds a higher-level autonomous market-intelligence layer on top of those primitives. It combines Arc settlement, Circle payment rails, agent decision-making, evidence gating, sports selected-outcome calls, locked reasoning, and reputation tracking into one end-to-end app.
+
+# 12. Smart Contracts
+
+- **Contract:** `PrecallRegistry`
+- **Network:** Arc Testnet
+- **Registry address:** `0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76`
+- **Explorer:** https://testnet.arcscan.app/address/0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+
+`PrecallRegistry` handles:
+
+- Agent registration.
+- Bonded call publication.
+- USDC bond custody.
+- Unlock event tracking.
+- Resolver-controlled outcome updates.
+- Bond return/slash behavior based on resolution.
+
+Current defaults are configurable through env:
+
+- `BOND_AMOUNT_USDC=1`
+- `UNLOCK_PRICE_USDC=0.05`
+- `SPORTS_UNLOCK_PRICE_USDC=0.05`
+
+Sports Live Calls are not Arc-bonded yet. They are non-bonded intelligence outputs with Arc USDC unlocks.
+
+Run contract tests:
+
+```bash
+npm run contracts:test
+```
+
+# 13. Database
+
+Key tables:
+
+- `agents`: agent identities and onchain agent IDs.
+- `markets`: normalized Polymarket market metadata.
+- `calls`: bonded strict YES/NO call rows.
+- `sports_predictions`: selected-outcome Sports Live Calls.
+- `thesis_unlocks`: bonded-call unlock records.
+- `sports_unlocks`: sports-call unlock records.
+- `circle_actions`: normalized Circle/x402/bond/unlock activity.
+- `evidence_items`: evidence used by bonded calls.
+- `resolutions`: resolved call outcomes, ROI, Brier score, and resolver tx data.
+- `agent_runs`: worker run inputs, outputs, failures, and evidence context.
+
+This is intentionally high-level. No secrets or private keys belong in database migrations or public docs.
+
+# 14. Environment Variables
+
+## A. Vercel / Frontend Env
+
+These values are safe or required for the public web/server app. `WORKER_TRIGGER_SECRET` is server-side only on Vercel and must not be exposed to the browser.
+
+```bash
+NEXT_PUBLIC_ARC_CHAIN_ID=5042002
+NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS=0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+NEXT_PUBLIC_ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
+NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS=0xYourTreasuryOrReceiver
+NEXT_PUBLIC_ADMIN_WALLETS=0xAdminWallet1,0xAdminWallet2
+DATABASE_URL=postgresql://...
+WORKER_TRIGGER_URL=https://your-railway-worker-url.up.railway.app
+WORKER_TRIGGER_SECRET=generate-a-long-random-secret
+WORKER_ROUTE_TIMEOUT_MS=295000
+WORKER_ASYNC_COMMANDS=run-once,sports,resolve
+DISABLE_SCHEDULED_WORKERS=true
+```
+
+## B. Railway / Worker Env
+
+Railway should hold private worker keys, RPC credentials, model keys, and Circle buyer keys.
+
+```bash
+DATABASE_URL=postgresql://...
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4.1-mini
+MODEL_TIMEOUT_MS=45000
+MODEL_RETRY_COUNT=2
+
+ARC_TESTNET_RPC_URL=https://...
+PRECALL_REGISTRY_ADDRESS=0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
+DEFAULT_ONCHAIN_AGENT_ID=1
+AGENT_OWNER_PRIVATE_KEY=...
+AGENT_OWNER_WALLET=0x...
+RESOLVER_PRIVATE_KEY=...
+PUBLISH_ONCHAIN=true
+RESOLVE_ONCHAIN=true
+
+CIRCLE_AGENT_PRIVATE_KEY=...
+ENABLE_CIRCLE_GATEWAY_X402=true
+REQUIRE_CIRCLE_GATEWAY_X402=false
+CIRCLE_GATEWAY_CHAIN=arcTestnet
+CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
+CIRCLE_X402_MAX_PAYMENT_USDC=0.005
+CIRCLE_X402_DAILY_BUDGET_USDC=0.10
+CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
+
+ENABLE_SPORTS_EDGE=true
+SPORTS_DISCOVERY_MARKET_LIMIT=350
+SPORTS_DAILY_TARGET=8
+MAX_SPORTS_ANALYZED_PER_RUN=24
+SPORTS_LOOKAHEAD_HOURS=72
+SPORTS_MIN_START_LEAD_MINUTES=30
+SPORTS_EVENT_EXPIRY_GRACE_MINUTES=360
+SPORTS_MIN_LIQUIDITY_USD=25000
+SPORTS_MAX_SPREAD_BPS=500
+SPORTS_MIN_EDGE_BPS=300
+SPORTS_MIN_CONFIDENCE_BPS=5000
+SPORTS_MIN_PRICE_BPS=1000
+SPORTS_MAX_PRICE_BPS=9000
+
+DISCOVERY_MARKET_LIMIT=150
+MAX_ANALYZED_MARKETS_PER_RUN=8
+MIN_LIQUIDITY_USD=10000
+MAX_SPREAD_BPS=900
+MIN_EDGE_BPS=650
+MIN_CONFIDENCE_BPS=5200
+MIN_SUGGESTED_SIZE_BPS=100
+MIN_ANALYSIS_PRICE_BPS=100
+MAX_ANALYSIS_PRICE_BPS=9900
+
+WORKER_TRIGGER_SECRET=generate-a-long-random-secret
+```
+
+Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
+
+# 15. Local Development
 
 ```bash
 npm install
 cp .env.example .env
 npm run db:migrate
-npm run contracts:build
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm run contracts:test
+```
+
+For local web development:
+
+```bash
 npm run dev
 ```
 
-Install the Canteen ARC CLI for hackathon RPC/context:
+# 16. Worker Commands
 
 ```bash
-PATH="$HOME/.local/bin:$PATH" uv tool install git+https://github.com/the-canteen-dev/ARC-cli
-PATH="$HOME/.local/bin:$PATH" arc-canteen login
-PATH="$HOME/.local/bin:$PATH" arc-canteen context sync
-PATH="$HOME/.local/bin:$PATH" arc-canteen rpc-url
-```
-
-Set the returned RPC URL as server-side `ARC_TESTNET_RPC_URL`. Never expose the tokenized Canteen RPC through `NEXT_PUBLIC_*`.
-
-## Environment Variables
-
-Required for a real run:
-
-- `DATABASE_URL` - Postgres connection string.
-- `OPENAI_API_KEY` - OpenAI-compatible provider key. FreeModel works with `OPENAI_BASE_URL=https://api.freemodel.dev/v1`.
-- `OPENAI_MODEL` - chat-completions model ID.
-- `ARC_TESTNET_RPC_URL` - server-side Arc Testnet RPC.
-- `PRECALL_REGISTRY_ADDRESS` and `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS` - active registry address.
-- `ARC_USDC_ADDRESS` and `NEXT_PUBLIC_ARC_USDC_ADDRESS` - Arc ERC-20 USDC address, currently `0x3600000000000000000000000000000000000000`.
-- `AGENT_OWNER_PRIVATE_KEY` - secure worker key for bonded publishing.
-- `AGENT_OWNER_WALLET` - public address for the agent wallet.
-- `RESOLVER_PRIVATE_KEY` - secure resolver key, or omit to use the agent key.
-- `PROTOCOL_TREASURY_ADDRESS` - treasury receiving slashed wrong-call bonds in V2 deployments.
-- `SPORTS_UNLOCK_PRICE_USDC` - Arc USDC price to unlock full Sports Live Call analysis. Defaults to `UNLOCK_PRICE_USDC`.
-- `SPORTS_UNLOCK_RECEIVER_ADDRESS` and `NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS` - treasury/receiver for direct Arc USDC sports unlock transfers. This address is public, but private keys remain server-only.
-- `DEFAULT_ONCHAIN_AGENT_ID` - onchain agent ID after `register-agent`.
-- `ADMIN_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_ADMIN_WALLETS` - admin and automation protection.
-
-Useful hardening controls:
-
-- `MIN_LIQUIDITY_USD=10000`
-- `MIN_EDGE_BPS=650`
-- `MAX_SPREAD_BPS=900`
-- `MIN_CONFIDENCE_BPS=5200`
-- `MIN_SUGGESTED_SIZE_BPS=100`
-- `DISCOVERY_MARKET_LIMIT=150` - Polymarket markets fetched before eligibility/ranking.
-- `MAX_ANALYZED_MARKETS_PER_RUN=8` - top ranked eligible candidates allowed to spend x402/LLM calls.
-- `MIN_ANALYSIS_PRICE_BPS=100` and `MAX_ANALYSIS_PRICE_BPS=9900` - skip ultra-extreme lottery-ticket prices before paid/model analysis so runs focus on markets that can produce actionable edge.
-- `MODEL_TIMEOUT_MS=45000`
-- `MODEL_RETRY_COUNT=2`
-- `ALLOW_PUBLISH_FILTERED_RUN=false`
-
-Sports Live Calls controls:
-
-- `ENABLE_SPORTS_EDGE=true` - enables the non-bonded Sports Live Calls scanner.
-- `SPORTS_DISCOVERY_MARKET_LIMIT=350` - Polymarket markets fetched for sports classification.
-- `SPORTS_DAILY_TARGET=8` - target number of top sports calls to surface per day. Analyzed valid markets are still stored as strong, lean, high-risk, or avoid calls.
-- `MAX_SPORTS_ANALYZED_PER_RUN=24` - max sports markets allowed to spend x402/model calls per run.
-- `SPORTS_LOOKAHEAD_HOURS=72` - focus on near-term daily sports markets.
-- `SPORTS_MIN_START_LEAD_MINUTES=30` - prevents adding games that are already live or about to start.
-- `SPORTS_EVENT_EXPIRY_GRACE_MINUTES=360` - expiry safety window after event start; active UI also hides calls once event start passes.
-- `SPORTS_MIN_LIQUIDITY_USD=25000`, `SPORTS_MAX_SPREAD_BPS=500`, `SPORTS_MIN_EDGE_BPS=300`, `SPORTS_MIN_CONFIDENCE_BPS=5000`, `SPORTS_MIN_PRICE_BPS=1000`, `SPORTS_MAX_PRICE_BPS=9000`.
-
-Optional Circle Gateway/x402 paid evidence:
-
-- `ENABLE_CIRCLE_GATEWAY_X402=false` - master switch; when false the worker never attempts paid API calls.
-- `REQUIRE_CIRCLE_GATEWAY_X402=false` - keep false until at least one provider/chain pair passes `worker:x402:supports`; when false, paid-evidence failures are recorded and the worker may continue with free evidence.
-- `CIRCLE_GATEWAY_CHAIN=arcTestnet` - default Gateway chain for balance/deposit commands; Arc Testnet still remains the settlement chain for bonds/unlocks.
-- `CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base` - ordered candidate chains tested against each x402 seller URL before payment.
-- `CIRCLE_AGENT_PRIVATE_KEY=` - server-only buyer key for Gateway/x402 payments; do not reuse `AGENT_OWNER_PRIVATE_KEY` and never expose it as `NEXT_PUBLIC_*`.
-- `CIRCLE_GATEWAY_RPC_URL=` - optional Gateway RPC override; otherwise the Arc RPC is reused when appropriate.
-- `CIRCLE_X402_MAX_PAYMENT_USDC=0.005` - per-request spend cap.
-- `CIRCLE_X402_DAILY_BUDGET_USDC=0.10` - daily paid-evidence budget.
-- `CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one` - comma-separated x402 seller allowlist.
-- `CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25` - minimum Gateway balance before any paid request.
-- `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10` - safety cap for the worker Gateway deposit command.
-
-## Contract Deployment
-
-The hardened registry constructor is:
-
-```solidity
-constructor(address usdc_, address protocolTreasury_)
-```
-
-Deploy with a funded Arc Testnet account:
-
-```bash
-PATH="$HOME/.foundry/bin:$PATH" cast wallet import precall-deployer --interactive
-PATH="$HOME/.foundry/bin:$PATH" forge create src/PrecallRegistry.sol:PrecallRegistry \
-  --root packages/contracts \
-  --rpc-url "$ARC_TESTNET_RPC_URL" \
-  --account precall-deployer \
-  --broadcast \
-  --constructor-args "$ARC_USDC_ADDRESS" "$PROTOCOL_TREASURY_ADDRESS"
-```
-
-After deployment, update `PRECALL_REGISTRY_ADDRESS`, `NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS`, and keep old call rows with their original `registryAddress` so legacy calls can still be verified.
-
-## Worker Commands
-
-```bash
-npm run worker -- health
-npm run worker -- discover
-npm run worker -- register-agent
-npm run worker -- run-once
+npm run worker:health
+npm run worker:run-once
 npm run worker:sports
-npm run worker -- publish-run <agentRunId>
-npm run worker -- expire
-npm run worker -- resolve
+npm run worker:expire
+npm run worker:resolve
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
 npm run worker:gateway:balance -- arcTestnet
 npm run worker:gateway:balance -- baseSepolia
 npm run worker:gateway:deposit -- baseSepolia 1
-npm run worker:gateway:balance -- baseSepolia
 ```
 
-`worker:x402:supports -- <url>` checks each `CIRCLE_X402_CHAIN_CANDIDATES` entry and reports the first provider-supported chain. `worker:gateway:balance -- <chain>` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY` on that chain. `worker:gateway:deposit -- <chain> 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. Commands return public tx hashes and balances only; they never print the private key.
+What they do:
 
-`run-once` checks live strict YES/NO markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying bonded calls. `worker:sports` separately scans sports markets, rejects already-live/started events, runs a sports-focused council, stores non-bonded selected-outcome ideas, and never forces weak picks to satisfy the daily target. `expire` marks matured unresolved calls and sports calls whose event start has passed as inactive. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
+- `worker:health`: checks worker, DB, model, Polymarket, Arc, Circle, and config health.
+- `worker:run-once`: scans strict YES/NO markets and may publish bonded Arc Calls.
+- `worker:sports`: scans sports markets and stores Sports Live Calls.
+- `worker:expire`: expires mature bonded calls and sports calls whose event start has passed.
+- `worker:resolve`: runs expiry, then resolves supported mature YES/NO calls.
+- `worker:gateway:balance`: checks Gateway balance for the configured buyer wallet.
+- `worker:gateway:deposit`: deposits USDC into Gateway, subject to safety caps.
 
-## How Precall Uses Circle Agent Stack
+# 17. Railway Deployment
 
-Precall does not just generate text. The agent uses Circle-powered financial rails across three clearly separated rails:
+Recommended worker deployment:
 
-- Public market data: Polymarket Gamma/CLOB provide free market metadata, prices, spreads, and depth. Precall never labels these public requests as paid.
-- Paid agent evidence: when `ENABLE_CIRCLE_GATEWAY_X402=true`, the worker uses `@circle-fin/x402-batching` GatewayClient with `CIRCLE_AGENT_PRIVATE_KEY` to pay allowlisted premium APIs such as AISA (`api.aisa.one`) using USDC nanopayments. The seller API decides which x402 networks it supports; Precall checks `CIRCLE_X402_CHAIN_CANDIDATES` in order, pays on the first supported Gateway chain, and records the selected chain in `circle_actions`. Host allowlists, per-request caps, daily budgets, and minimum Gateway balance checks run before every payment.
-- Settlement and accountability: agents bond calls with USDC on Arc, users unlock reasoning with USDC on Arc, and `circle_actions` records normalized `x402_api_payment`, `arc_bond`, and `thesis_unlock` events.
+- **Build command:**
 
-If x402 is disabled or a paid request fails, the worker records the disabled/failure state and continues with free Polymarket evidence unless `REQUIRE_CIRCLE_GATEWAY_X402=true`. Do not set required=true until `worker:x402:supports -- <provider-url>` returns a supported chain and that chain has Gateway balance. It does not fake paid evidence, loosen publish gates, or expose secrets to the browser. `/admin`, `/demo`, and call pages show Gateway status, paid-evidence badges, USDC volumes, Arc tx links, and disabled states honestly.
+```bash
+npm -w @precall/shared run build && npm -w @precall/worker run build
+```
 
-## Demo Flow
+- **Persistent worker start command:**
 
-1. Open `/demo` to show DB, model, Arc registry, Circle/x402 status, latest run, latest call, and latest unlock.
-2. Open `/admin`, connect the whitelisted admin wallet, and run health.
-3. Run the agent. If no call is published, show the filtered reasons instead of forcing a weak signal.
-4. Open a live call and show only the locked title, Arc bond, unlock price, freshness, and unlock button.
-5. Unlock the thesis with USDC on Arc to reveal selected option, Polymarket link, thesis, evidence, sizing, risks, and agent votes.
-6. Return to `/demo` and `/leaderboard` to show unlock activity and reputation state.
-7. Run `resolve` for mature supported calls and show Brier/ROI after resolution.
+```bash
+npm run worker:serve
+```
 
-## Security Notes
+- **Migration command:**
 
-- Never commit `.env`, private keys, tokenized RPC URLs, admin secrets, cron secrets, or service-role database credentials.
-- Keep private keys in local/server env only. Browser env vars must be public addresses/config only.
-- New follows and feedback require wallet signatures. Existing unsigned rows are treated as legacy.
-- Vercel can host the app, but long-running bonded publishing is safest from a secure worker or protected admin action.
+```bash
+npm run db:migrate
+```
 
-## Verification
+- **Health command:**
+
+```bash
+npm run worker:health
+```
+
+Railway should own private execution:
+
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
+- `ARC_TESTNET_RPC_URL`
+- `AGENT_OWNER_PRIVATE_KEY`
+- `RESOLVER_PRIVATE_KEY`
+- `CIRCLE_AGENT_PRIVATE_KEY`
+- `WORKER_TRIGGER_SECRET`
+
+After deploying the HTTP worker, copy its URL into Vercel as `WORKER_TRIGGER_URL`.
+
+# 18. Railway Cron Jobs
+
+Recommended Railway cron jobs:
+
+| Job | Schedule | Command | Purpose |
+| --- | --- | --- | --- |
+| Sports Live Calls | Every 3 hours | `npm run worker:sports` | Scans daily sports markets and stores active Sports Live Calls. |
+| Bonded agent run | Every 4 hours | `npm run worker:run-once` | Scans strict YES/NO markets and publishes only quality-passing bonded calls. |
+| Expire calls | Every hour | `npm run worker:expire` | Removes expired or already-started calls from active views. |
+| Resolve calls | Every 4 hours | `npm run worker:resolve` | Resolves supported mature YES/NO calls and updates leaderboard history. |
+
+Cron jobs can share the same Railway env vars as the HTTP worker. Avoid running multiple copies of the same long worker job concurrently.
+
+# 19. Vercel Deployment
+
+Deploy the web app to Vercel from the GitHub repo.
+
+Vercel should hold public/web server values only:
+
+- `DATABASE_URL` for rendering pages and admin/demo data.
+- `NEXT_PUBLIC_*` public addresses/config.
+- `WORKER_TRIGGER_URL` and server-side `WORKER_TRIGGER_SECRET` for admin-triggered worker calls.
+- `DISABLE_SCHEDULED_WORKERS=true` so Vercel cron does not execute private worker code locally.
+
+Vercel calls Railway through `WORKER_TRIGGER_URL`. Long-running worker commands are started asynchronously so the admin UI does not wait for a 10-30 minute worker cycle.
+
+# 20. Testing
+
+Run the full verification suite:
 
 ```bash
 npm test
@@ -199,3 +463,79 @@ npm run lint
 npm run build
 npm run contracts:test
 ```
+
+Test coverage protects:
+
+- Sports classification and selected-outcome semantics.
+- Locked analysis behavior before unlock.
+- Unlock analysis visibility after verified unlock.
+- x402 provider support detection and failure handling.
+- Sports active/expired filtering.
+- Bonded YES/NO resolution flow.
+- Admin worker actions and async trigger behavior.
+- Contract bond, unlock, and resolve behavior.
+
+# 21. Security Notes
+
+- Private keys belong only in Railway/server env.
+- Do not commit `.env` files.
+- Do not put private keys, tokenized RPC URLs, model keys, or worker secrets in `NEXT_PUBLIC_*` variables.
+- Admin routes require wallet authorization.
+- Worker triggers are protected by `WORKER_TRIGGER_SECRET`.
+- Locked analysis must not be exposed before a verified unlock.
+- x402 hosts are allowlisted and spend-capped.
+- Gateway deposits are capped by `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC`.
+
+# 22. Product Safety / NFA
+
+Precall does not provide financial advice. Sports Live Calls and Bonded Arc Calls are AI-generated market intelligence, not guaranteed outcomes.
+
+Precall does not custody user trading funds and does not place trades for users. Users must do their own research and decide independently whether to act on any market information.
+
+# 23. Known Limitations
+
+- Precall does not execute trades.
+- Sports Live Calls are not fully Arc-bonded yet.
+- Sports selected-outcome resolution is expiry-safe for now; full selected-outcome settlement is future work.
+- Circle Gateway/x402 paid evidence depends on provider and network support.
+- Bonded calls are intentionally strict and may publish less often.
+- Model output depends on available evidence.
+- Railway worker cycles can be long-running, especially with deeper market scans and model calls.
+
+# 24. Roadmap
+
+- Generalized selected-outcome Arc bonding.
+- Stronger sports resolution against Polymarket outcomes.
+- More evidence providers.
+- Improved agent reputation scoring.
+- Richer leaderboard analytics.
+- Better mobile UX and call comparison views.
+- More market categories beyond current sports and YES/NO markets.
+- Better x402 provider discovery and support diagnostics.
+- User profiles, follows, and personalized alerts.
+
+# 25. Contributing
+
+Builders can fork Precall to reuse its Arc/Circle primitives:
+
+- Arc USDC unlock flows.
+- Agent accountability contracts.
+- Private worker + public frontend architecture.
+- Sports selected-outcome modeling.
+- Evidence-gated AI council patterns.
+- Circle Gateway/x402 payment checks.
+- Market quality gates and leaderboard tracking.
+
+To contribute:
+
+1. Fork the repo.
+2. Create a feature branch.
+3. Run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build`.
+4. Open a pull request with a clear explanation and screenshots if UI changed.
+5. Never include secrets, private keys, `.env` files, or tokenized RPC URLs.
+
+# 26. License
+
+No repository-level license file is present yet. The Solidity contracts currently include SPDX `MIT` headers, but the full repository license has not been selected.
+
+Before broad OSS reuse, the maintainer should choose and add a top-level license such as MIT, Apache-2.0, or another license that matches the intended open-source strategy.
