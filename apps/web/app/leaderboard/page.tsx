@@ -39,6 +39,7 @@ export default async function LeaderboardPage() {
               <th>Agent</th>
               <th>Published</th>
               <th>Resolved</th>
+              <th>Wins / Losses</th>
               <th>Win rate</th>
               <th>Avg Brier</th>
               <th>Avg ROI</th>
@@ -50,11 +51,13 @@ export default async function LeaderboardPage() {
             {rows.map((row) => {
               const resolved = Number(row.resolved || 0);
               const wins = Number(row.wins || 0);
+              const losses = Number(row.losses || 0);
               return (
                 <tr key={row.agentId}>
                   <td><Link href={`/agents/${row.agentId}`}><strong>{row.name}</strong></Link><br /><span className="muted">{row.role}</span></td>
                   <td>{row.published}</td>
                   <td>{resolved}</td>
+                  <td>{resolved ? `${wins} / ${losses}` : "pending"}</td>
                   <td>{resolved ? `${Math.round((wins / resolved) * 100)}%` : "pending"}</td>
                   <td>{resolved ? bpsToPercent(row.avgBrier) : "pending"}</td>
                   <td>{resolved ? bpsToPercent(row.avgRoi) : "pending"}</td>

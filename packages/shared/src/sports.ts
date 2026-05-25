@@ -34,6 +34,7 @@ export type SportsThresholds = {
   minPriceBps: number;
   maxPriceBps: number;
   lookaheadHours: number;
+  minStartLeadMinutes: number;
 };
 
 export type SportsCandidate = {
@@ -123,6 +124,7 @@ export function sportsThresholds(): SportsThresholds {
     minPriceBps: numberEnv("SPORTS_MIN_PRICE_BPS", 1_000),
     maxPriceBps: numberEnv("SPORTS_MAX_PRICE_BPS", 9_000),
     lookaheadHours: numberEnv("SPORTS_LOOKAHEAD_HOURS", 72),
+    minStartLeadMinutes: numberEnv("SPORTS_MIN_START_LEAD_MINUTES", 30),
   };
 }
 
@@ -131,15 +133,15 @@ export function sportsEnabled() {
 }
 
 export function sportsDiscoveryLimit() {
-  return numberEnv("SPORTS_DISCOVERY_MARKET_LIMIT", 250);
+  return numberEnv("SPORTS_DISCOVERY_MARKET_LIMIT", 350);
 }
 
 export function sportsDailyTarget() {
-  return numberEnv("SPORTS_DAILY_TARGET", 5);
+  return numberEnv("SPORTS_DAILY_TARGET", 8);
 }
 
 export function maxSportsAnalyzedPerRun() {
-  return numberEnv("MAX_SPORTS_ANALYZED_PER_RUN", 16);
+  return numberEnv("MAX_SPORTS_ANALYZED_PER_RUN", 24);
 }
 
 function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresholds) {
@@ -153,23 +155,31 @@ export function sportsEventTime(market: PolymarketMarket): string | null {
   const text = `${market.title} ${market.slug} ${market.url}`;
   const match = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
   if (!match?.[1]) return market.closeTime;
+
   const close = market.closeTime ? new Date(market.closeTime) : undefined;
+  const closeMs = close && Number.isFinite(close.getTime()) ? close.getTime() : Number.NaN;
+  const eventDateMs = Date.parse(`${match[1]}T00:00:00.000Z`);
+
+  // Polymarket sports slugs usually carry the event date, while closeTime often
+  // carries the actual UTC start/close hour. If closeTime is within the event
+  // day window, it is a better start-time proxy than midnight.
+  if (Number.isFinite(closeMs) && Number.isFinite(eventDateMs) && closeMs >= eventDateMs && closeMs - eventDateMs <= 36 * 3_600_000) {
+    return close!.toISOString();
+  }
+
   const hour = close && Number.isFinite(close.getTime()) ? close.getUTCHours() : 12;
   const minute = close && Number.isFinite(close.getTime()) ? close.getUTCMinutes() : 0;
   return `${match[1]}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`;
 }
 
-function closeTimeScore(market: PolymarketMarket, now: Date, lookaheadHours: number) {
+function closeTimeScore(market: PolymarketMarket, now: Date, lookaheadHours: number, minStartLeadMinutes: number) {
   const eventTime = sportsEventTime(market);
   if (!eventTime) return { ok: false, score: 0, reason: "missing_close_time" };
   const eventMs = new Date(eventTime).getTime();
   if (!Number.isFinite(eventMs)) return { ok: false, score: 0, reason: "expired" };
-  const closeMs = market.closeTime ? new Date(market.closeTime).getTime() : Number.NaN;
-  const scoreMs = eventMs <= now.getTime() && Number.isFinite(closeMs) && closeMs > now.getTime() && closeMs - eventMs <= 36 * 3_600_000
-    ? closeMs
-    : eventMs;
-  if (scoreMs <= now.getTime()) return { ok: false, score: 0, reason: "expired" };
-  const hours = (scoreMs - now.getTime()) / 3_600_000;
+  if (eventMs <= now.getTime()) return { ok: false, score: 0, reason: "event_started" };
+  if (eventMs - now.getTime() < minStartLeadMinutes * 60_000) return { ok: false, score: 0, reason: "event_starting_soon" };
+  const hours = (eventMs - now.getTime()) / 3_600_000;
   if (hours > lookaheadHours) return { ok: false, score: 0, reason: "outside_sports_window" };
   return { ok: true, score: Math.max(0, 20 * (1 - Math.abs(hours - 24) / Math.max(lookaheadHours, 1))), reason: "" };
 }
@@ -183,7 +193,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   const classification = classifySportsMarket(market);
   const reasons = [...classification.reasons];
   if (market.status !== "active") reasons.push("inactive");
-  const close = closeTimeScore(market, now, thresholds.lookaheadHours);
+  const close = closeTimeScore(market, now, thresholds.lookaheadHours, thresholds.minStartLeadMinutes);
   if (!close.ok) reasons.push(close.reason);
   if (market.outcomes.length < 2 || market.outcomePrices.length < 2) reasons.push("missing_outcomes_or_prices");
   if (market.outcomePrices.some((price) => !Number.isFinite(price) || price < 0 || price > 1)) reasons.push("invalid_prices");

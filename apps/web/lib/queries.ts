@@ -102,8 +102,17 @@ function activeSportsPredicate(statuses: readonly string[] = activeSportsCallSta
   return and(
     inArray(sportsPredictions.status, [...statuses]),
     sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
+    sql`(${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now())`,
   );
 }
+
+const sportsStatusRank = sql`case ${sportsPredictions.status}
+  when 'strong_call' then 1
+  when 'lean_call' then 2
+  when 'high_risk_call' then 3
+  when 'avoid_call' then 4
+  else 5
+end`;
 
 export type SportsPredictionRow = Awaited<ReturnType<typeof getSportsPredictions>>[number];
 
@@ -113,12 +122,16 @@ export async function getSportsPredictions(limit = 12, statuses: readonly string
     .select()
     .from(sportsPredictions)
     .where(activeSportsPredicate(statuses))
-    .orderBy(desc(sportsPredictions.updatedAt))
+    .orderBy(sportsStatusRank, desc(sportsPredictions.edgeBps), desc(sportsPredictions.confidenceBps), desc(sportsPredictions.updatedAt))
     .limit(limit);
 }
 
 export async function getStrongSportsPredictions(limit = 5) {
   return getSportsPredictions(limit, ["strong_call"]);
+}
+
+export async function getTopSportsPredictions(limit = 5) {
+  return getSportsPredictions(limit, ["strong_call", "lean_call", "high_risk_call"]);
 }
 
 export async function getActiveSportsCallCount() {
@@ -134,9 +147,9 @@ export async function getSportsActivitySummary() {
   const db = createDb();
   const [row] = await db
     .select({
-      active: sql<number>`count(*) filter (where ${sportsPredictions.status} in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now()))::int`,
+      active: sql<number>`count(*) filter (where ${sportsPredictions.status} in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now()) and (${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now()))::int`,
       unresolved: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'unresolved')::int`,
-      expired: sql<number>`count(*) filter (where ${sportsPredictions.status} = 'expired' or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= now()))::int`,
+      expired: sql<number>`count(*) filter (where ${sportsPredictions.status} = 'expired' or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= now()) or (${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= now()))::int`,
       unlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
     })
     .from(sportsPredictions);
@@ -179,6 +192,7 @@ export async function getLeaderboard() {
       published: sql<number>`count(distinct ${calls.id}) filter (where ${calls.status} = 'published')::int`,
       resolved: sql<number>`count(distinct ${resolutions.id})::int`,
       wins: sql<number>`count(distinct ${resolutions.id}) filter (where ${resolutions.roiBps} > 0)::int`,
+      losses: sql<number>`count(distinct ${resolutions.id}) filter (where ${resolutions.roiBps} <= 0)::int`,
       unlocks: sql<number>`count(distinct ${thesisUnlocks.id})::int`,
       followers: sql<number>`count(distinct ${follows.id})::int`,
       avgBrier: sql<number>`coalesce(avg(${resolutions.brierScoreBps}), 0)::int`,
@@ -199,7 +213,14 @@ export async function getAgent(id: number) {
   const agentCalls = await getCalls(100);
   const [followStats] = await db.select({ followers: sql<number>`count(*)::int` }).from(follows).where(eq(follows.agentId, id));
   const [feedbackStats] = await db.select({ feedbackCount: sql<number>`count(*)::int` }).from(feedback).where(eq(feedback.agentId, id));
-  return { agent, calls: agentCalls.filter((call) => call.agentId === id), followers: followStats?.followers ?? 0, feedbackCount: feedbackStats?.feedbackCount ?? 0 };
+  const now = Date.now();
+  const activeAgentCalls = agentCalls.filter((call) =>
+    call.agentId === id &&
+    call.status === "published" &&
+    !call.legacy &&
+    (!call.expiresAt || new Date(call.expiresAt).getTime() > now),
+  );
+  return { agent, calls: activeAgentCalls, followers: followStats?.followers ?? 0, feedbackCount: feedbackStats?.feedbackCount ?? 0 };
 }
 
 export async function getDemoData() {
@@ -224,8 +245,8 @@ export async function getDemoData() {
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
     sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,
-    activeSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (expires_at is null or expires_at > now()))`,
-    expiredSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'expired' or (expires_at is not null and expires_at <= now()))`,
+    activeSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (expires_at is null or expires_at > now()) and (event_start_time is null or event_start_time > now()))`,
+    expiredSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'expired' or (expires_at is not null and expires_at <= now()) or (event_start_time is not null and event_start_time <= now()))`,
     sportsUnlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
   }).from(sql`(select 1) as precall_counts`).limit(1);
 

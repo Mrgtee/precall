@@ -25,6 +25,8 @@ const workerCommandHints: Record<WorkerCommand, string> = {
   expire: "railway run npm run worker:expire",
 };
 
+const defaultAsyncRemoteCommands = new Set<WorkerCommand>(["run-once", "sports", "resolve"]);
+const maxAsyncAckTimeoutMs = 45_000;
 const maxHttpProxyTimeoutMs = 295_000;
 
 const defaultRemoteTimeoutMs: Record<WorkerCommand, number> = {
@@ -49,24 +51,28 @@ function remoteTimeoutMs(command: WorkerCommand) {
   return Math.min(Math.max(globalTimeout || baseline, baseline), maxHttpProxyTimeoutMs);
 }
 
-function workerTriggerConfig() {
-  const url = (process.env.WORKER_TRIGGER_URL || "").replace(/\/+$/, "");
-  const secret = process.env.WORKER_TRIGGER_SECRET || "";
-  return { url, secret, configured: Boolean(url && secret) };
+function asyncRemoteCommands() {
+  const configured = process.env.WORKER_ASYNC_COMMANDS;
+  if (!configured) return defaultAsyncRemoteCommands;
+  return new Set(configured.split(",").map((item) => item.trim()).filter(Boolean) as WorkerCommand[]);
 }
 
-async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number) {
-  const config = workerTriggerConfig();
-  const timeoutMs = remoteTimeoutMs(command);
+function shouldStartAsyncRemoteJob(command: WorkerCommand) {
+  return asyncRemoteCommands().has(command);
+}
+
+async function fetchRemoteWorker(config: { url: string; secret: string }, command: WorkerCommand, startedAt: number, asyncMode: boolean) {
+  const timeoutMs = asyncMode ? maxAsyncAckTimeoutMs : remoteTimeoutMs(command);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${config.url}/worker/${command}`, {
+    const response = await fetch(`${config.url}/worker/${command}${asyncMode ? "?mode=async" : ""}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${config.secret}`,
         "content-type": "application/json",
+        ...(asyncMode ? { "x-worker-async": "true" } : {}),
       },
       signal: controller.signal,
     });
@@ -77,8 +83,27 @@ async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number)
       command,
       proxiedToRailway: true,
       durationMs: Date.now() - startedAt,
+      suggestedCommand: workerCommandHints[command],
     };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function workerTriggerConfig() {
+  const url = (process.env.WORKER_TRIGGER_URL || "").replace(/\/+$/, "");
+  const secret = process.env.WORKER_TRIGGER_SECRET || "";
+  return { url, secret, configured: Boolean(url && secret) };
+}
+
+async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number) {
+  const config = workerTriggerConfig();
+  const asyncMode = shouldStartAsyncRemoteJob(command);
+
+  try {
+    return await fetchRemoteWorker(config, command, startedAt, asyncMode);
   } catch (error) {
+    const timeoutMs = asyncMode ? maxAsyncAckTimeoutMs : remoteTimeoutMs(command);
     if (isAbortError(error)) {
       return {
         ok: false,
@@ -89,7 +114,9 @@ async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number)
         durationMs: Date.now() - startedAt,
         timeoutMs,
         suggestedCommand: workerCommandHints[command],
-        error: `Railway worker did not return within ${Math.round(timeoutMs / 1000)}s. The run may still be executing or may have been cancelled by the HTTP proxy; check Railway logs before re-running.`,
+        error: asyncMode
+          ? `Railway did not acknowledge the async ${command} job within ${Math.round(timeoutMs / 1000)}s. Check Railway service health before re-running.`
+          : `Railway worker did not return within ${Math.round(timeoutMs / 1000)}s. The run may still be executing or may have been cancelled by the HTTP proxy; check Railway logs before re-running.`,
       };
     }
     return {
@@ -99,8 +126,6 @@ async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number)
       durationMs: Date.now() - startedAt,
       error: errorMessage(error),
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

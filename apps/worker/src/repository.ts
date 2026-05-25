@@ -266,6 +266,15 @@ export async function insertEvidenceItems(callId: number, evidence: EvidenceItem
   }
 }
 
+function sportsExpiryTime(eventStartTime?: string | null, marketCloseTime?: string | null) {
+  const event = eventStartTime ? new Date(eventStartTime) : null;
+  if (event && Number.isFinite(event.getTime())) {
+    const graceMinutes = Math.max(0, Number(optionalEnv("SPORTS_EVENT_EXPIRY_GRACE_MINUTES", "360")));
+    return new Date(event.getTime() + graceMinutes * 60_000);
+  }
+  return marketCloseTime ? new Date(marketCloseTime) : null;
+}
+
 export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status: SportsCallStatus; statusReason?: string | undefined; eventStartTime?: string | null | undefined }) {
   const status = input.status;
   const evidenceIds = input.idea.evidence.map((item) => item.evidenceId);
@@ -306,7 +315,7 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     statusReason: input.statusReason || "Sports Live Call generated from analyzed valid sports market.",
     sourceRunId: input.sourceRunId,
     eventStartTime: input.eventStartTime ? new Date(input.eventStartTime) : null,
-    expiresAt: input.idea.market.closeTime ? new Date(input.idea.market.closeTime) : null,
+    expiresAt: sportsExpiryTime(input.eventStartTime, input.idea.market.closeTime),
     updatedAt: new Date(),
   };
   const [row] = await db()
@@ -323,9 +332,17 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
 
 const activeSportsStatuses = ["strong_call", "lean_call", "high_risk_call", "avoid_call"];
 
+function activeSportsSql() {
+  return and(
+    inArray(sportsPredictions.status, activeSportsStatuses),
+    sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
+    sql`(${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now())`,
+  );
+}
+
 export async function getLatestSportsPredictions(limit = 10) {
   return db().query.sportsPredictions.findMany({
-    where: and(inArray(sportsPredictions.status, activeSportsStatuses), sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`),
+    where: activeSportsSql(),
     orderBy: desc(sportsPredictions.updatedAt),
     limit,
   });
@@ -337,10 +354,13 @@ export async function markExpiredSportsPredictions(now = new Date()) {
     .set({
       status: "expired",
       resolutionStatus: "expired",
-      statusReason: "Expired sports live call. Selected-outcome settlement is not enabled yet.",
+      statusReason: "Expired sports live call. Event start has passed or selected-outcome settlement is not enabled yet.",
       updatedAt: now,
     })
-    .where(and(inArray(sportsPredictions.status, activeSportsStatuses), lt(sportsPredictions.expiresAt, now)))
+    .where(and(
+      inArray(sportsPredictions.status, activeSportsStatuses),
+      sql`((${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= ${now}) or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= ${now}))`,
+    ))
     .returning({ id: sportsPredictions.id, marketId: sportsPredictions.marketId, selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex });
   return expired;
 }

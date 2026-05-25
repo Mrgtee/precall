@@ -110,10 +110,12 @@ NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS=0xYourTreasuryOrReceiver
 ALLOW_PUBLISH_FILTERED_RUN=false
 
 ENABLE_SPORTS_EDGE=true
-SPORTS_DISCOVERY_MARKET_LIMIT=250
-SPORTS_DAILY_TARGET=5
-MAX_SPORTS_ANALYZED_PER_RUN=16
+SPORTS_DISCOVERY_MARKET_LIMIT=350
+SPORTS_DAILY_TARGET=8
+MAX_SPORTS_ANALYZED_PER_RUN=24
 SPORTS_LOOKAHEAD_HOURS=72
+SPORTS_MIN_START_LEAD_MINUTES=30
+SPORTS_EVENT_EXPIRY_GRACE_MINUTES=360
 SPORTS_MIN_LIQUIDITY_USD=25000
 SPORTS_MAX_SPREAD_BPS=500
 SPORTS_MIN_EDGE_BPS=300
@@ -145,7 +147,8 @@ ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
 DISABLE_SCHEDULED_WORKERS=true
 WORKER_TRIGGER_URL=https://your-railway-worker-url.up.railway.app
 WORKER_TRIGGER_SECRET=same-value-as-railway
-WORKER_ROUTE_TIMEOUT_MS=240000
+WORKER_ROUTE_TIMEOUT_MS=295000
+WORKER_ASYNC_COMMANDS=run-once,sports,resolve
 ```
 
 Do not set these on Vercel in Railway mode unless you intentionally want Vercel to execute private worker code locally:
@@ -180,6 +183,7 @@ POST /worker/run-once
 POST /worker/sports
 POST /worker/expire
 POST /worker/resolve
+GET /worker/jobs/:id
 ```
 
 Every request must include one of:
@@ -195,11 +199,13 @@ Manual test examples:
 curl -sS -X POST "$WORKER_TRIGGER_URL/worker/health" \
   -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
 
-curl -sS -X POST "$WORKER_TRIGGER_URL/worker/run-once" \
-  -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
+curl -sS -X POST "$WORKER_TRIGGER_URL/worker/run-once?mode=async" \
+  -H "Authorization: Bearer $WORKER_TRIGGER_SECRET" \
+  -H "x-worker-async: true"
 
-curl -sS -X POST "$WORKER_TRIGGER_URL/worker/sports" \
-  -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
+curl -sS -X POST "$WORKER_TRIGGER_URL/worker/sports?mode=async" \
+  -H "Authorization: Bearer $WORKER_TRIGGER_SECRET" \
+  -H "x-worker-async: true"
 
 curl -sS -X POST "$WORKER_TRIGGER_URL/worker/expire" \
   -H "Authorization: Bearer $WORKER_TRIGGER_SECRET"
@@ -308,4 +314,5 @@ With `REQUIRE_CIRCLE_GATEWAY_X402=false`, admin-triggered `run-once` records pai
 - `WORKER_TRIGGER_SECRET` is a powerful server-to-server secret. Rotate it if exposed.
 - Gateway/x402 requires funded Gateway balance and a seller endpoint that actually supports x402. Public Polymarket APIs remain free and are never treated as paid.
 - `run-once` may publish no calls when markets fail strict YES/NO eligibility or quality gates. That is expected and healthier than forcing weak calls.
-- The current worker trigger is command-based, not a queue. Avoid running multiple `run-once` jobs concurrently.
+- The admin proxy starts `run-once`, `sports`, and `resolve` as async Railway jobs by default because they can take 10-30 minutes. The Railway service prevents duplicate concurrent jobs for the same command in one worker process.
+- The current worker trigger is command-based, not a durable queue. Avoid running multiple `run-once` jobs concurrently across separate Railway one-off commands.

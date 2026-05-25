@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CallCard } from "../../components/call-card";
 import { bpsToPercent, isExpiredDate } from "../../lib/format";
-import { getCalls, getStrongSportsPredictions } from "../../lib/queries";
+import { getCalls, getTopSportsPredictions } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export default async function TopFiveTodayPage() {
     .filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
     .sort((a, b) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
     .slice(0, 5);
-  const sportsCalls = await getStrongSportsPredictions(5);
+  const sportsCalls = await getTopSportsPredictions(5);
 
   return (
     <main className="shell page">
@@ -32,7 +32,7 @@ export default async function TopFiveTodayPage() {
       <section style={{ marginTop: 34 }}>
         <section className="section-heading">
           <div><p className="eyebrow">Sports Live Calls</p><h2>Top Sports Calls</h2></div>
-          <p>Strong active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
+          <p>Top active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
         </section>
         <section className="grid preview-grid">
           {sportsCalls.length ? sportsCalls.map((idea) => (
@@ -49,7 +49,7 @@ export default async function TopFiveTodayPage() {
               <p className="muted">Full reasoning and market link unlock on the Sports Live Calls board.</p>
               <Link className="button secondary" href="/sports">Open Sports Live Calls</Link>
             </article>
-          )) : <section className="empty"><h2>No active strong sports calls right now</h2><p className="muted">Sports scans may still create Lean, High Risk, or Avoid calls on the Sports Live Calls page.</p></section>}
+          )) : <section className="empty"><h2>No active top sports calls right now</h2><p className="muted">Sports scans may still create Lean, High Risk, or Avoid calls on the Sports Live Calls page.</p></section>}
         </section>
       </section>
     </main>

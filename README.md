@@ -97,10 +97,12 @@ Useful hardening controls:
 Sports Live Calls controls:
 
 - `ENABLE_SPORTS_EDGE=true` - enables the non-bonded Sports Live Calls scanner.
-- `SPORTS_DISCOVERY_MARKET_LIMIT=250` - Polymarket markets fetched for sports classification.
-- `SPORTS_DAILY_TARGET=5` - target number of strong sports calls to surface per day. Analyzed valid markets are still stored as strong, lean, high-risk, or avoid calls.
-- `MAX_SPORTS_ANALYZED_PER_RUN=16` - max sports markets allowed to spend x402/model calls per run.
+- `SPORTS_DISCOVERY_MARKET_LIMIT=350` - Polymarket markets fetched for sports classification.
+- `SPORTS_DAILY_TARGET=8` - target number of top sports calls to surface per day. Analyzed valid markets are still stored as strong, lean, high-risk, or avoid calls.
+- `MAX_SPORTS_ANALYZED_PER_RUN=24` - max sports markets allowed to spend x402/model calls per run.
 - `SPORTS_LOOKAHEAD_HOURS=72` - focus on near-term daily sports markets.
+- `SPORTS_MIN_START_LEAD_MINUTES=30` - prevents adding games that are already live or about to start.
+- `SPORTS_EVENT_EXPIRY_GRACE_MINUTES=360` - expiry safety window after event start; active UI also hides calls once event start passes.
 - `SPORTS_MIN_LIQUIDITY_USD=25000`, `SPORTS_MAX_SPREAD_BPS=500`, `SPORTS_MIN_EDGE_BPS=300`, `SPORTS_MIN_CONFIDENCE_BPS=5000`, `SPORTS_MIN_PRICE_BPS=1000`, `SPORTS_MAX_PRICE_BPS=9000`.
 
 Optional Circle Gateway/x402 paid evidence:
@@ -159,7 +161,7 @@ npm run worker:gateway:balance -- baseSepolia
 
 `worker:x402:supports -- <url>` checks each `CIRCLE_X402_CHAIN_CANDIDATES` entry and reports the first provider-supported chain. `worker:gateway:balance -- <chain>` checks the Circle Gateway wallet and unified balance for `CIRCLE_AGENT_PRIVATE_KEY` on that chain. `worker:gateway:deposit -- <chain> 1` deposits 1 USDC from that buyer wallet into Gateway using the Circle Gateway SDK. Commands return public tx hashes and balances only; they never print the private key.
 
-`run-once` checks live strict YES/NO markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying bonded calls. `worker:sports` separately scans sports markets, runs a sports-focused council, stores non-bonded selected-outcome ideas, and never forces weak picks to satisfy the daily target. `expire` marks matured unresolved calls as awaiting resolution. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
+`run-once` checks live strict YES/NO markets, computes real CLOB best bid/ask spread, skips unsupported or ultra-extreme markets with transparent reasons, builds verified evidence context, runs the five role agents, filters weak outputs, and publishes only qualifying bonded calls. `worker:sports` separately scans sports markets, rejects already-live/started events, runs a sports-focused council, stores non-bonded selected-outcome ideas, and never forces weak picks to satisfy the daily target. `expire` marks matured unresolved calls and sports calls whose event start has passed as inactive. `resolve` calls expiry first, resolves supported YES/NO markets, updates reputation metrics, and submits Arc resolver transactions when enabled.
 
 ## How Precall Uses Circle Agent Stack
 

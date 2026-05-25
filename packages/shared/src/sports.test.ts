@@ -107,16 +107,28 @@ test("sports event date keeps same-day markets eligible when Polymarket close ti
   assert.deepEqual(result.reasons, []);
 });
 
-test("sports event window falls back to near close time for late-night games", () => {
+test("sports event window uses close time for late-night games on the slug date", () => {
   const lateGame = market({
     title: "Thunder vs. Spurs",
     slug: "nba-okc-sas-2026-05-24",
     description: "NBA moneyline market.",
     closeTime: "2026-05-25T00:00:00.000Z",
   });
+  assert.equal(sportsEventTime(lateGame), "2026-05-25T00:00:00.000Z");
   const result = evaluateSportsCandidate(lateGame, undefined, new Date("2026-05-24T01:00:00.000Z"));
   assert.equal(result.eligible, true);
   assert.deepEqual(result.reasons, []);
+});
+
+test("sports candidate eligibility rejects already-started or nearly-live markets", () => {
+  const liveGame = market({ closeTime: "2026-05-24T20:00:00.000Z" });
+  const liveResult = evaluateSportsCandidate(liveGame, undefined, new Date("2026-05-24T20:01:00.000Z"));
+  assert.equal(liveResult.eligible, false);
+  assert.ok(liveResult.reasons.includes("event_started"));
+
+  const almostLiveResult = evaluateSportsCandidate(liveGame, undefined, new Date("2026-05-24T19:45:01.000Z"));
+  assert.equal(almostLiveResult.eligible, false);
+  assert.ok(almostLiveResult.reasons.includes("event_starting_soon"));
 });
 
 test("sports candidate eligibility allows non-YES/NO selected-outcome sports markets", () => {

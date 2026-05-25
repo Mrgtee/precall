@@ -11,6 +11,7 @@ test("active sports calls count only non-expired live sports statuses", () => {
   assert.match(queries, /getActiveSportsCallCount/);
   assert.match(queries, /strong_call.+lean_call.+high_risk_call.+avoid_call/s);
   assert.match(queries, /expiresAt.+is null.+expiresAt.+> now\(\)/s);
+  assert.match(queries, /eventStartTime.+is null.+eventStartTime.+> now\(\)/s);
   assert.match(queries, /expiredSportsCalls/);
 });
 
@@ -123,6 +124,35 @@ test("responsive audit styles support wide desktop detail pages and mobile stack
   assert.match(css, /evidence-grid[\s\S]+grid-template-columns: 1fr/);
 });
 
+
+test("top five uses active top sports calls beyond only strong calls", () => {
+  const queries = file("apps/web/lib/queries.ts");
+  const topFive = file("apps/web/app/top-5-today/page.tsx");
+  assert.match(queries, /getTopSportsPredictions/);
+  assert.match(queries, /strong_call", "lean_call", "high_risk_call/);
+  assert.match(topFive, /getTopSportsPredictions\(5\)/);
+  assert.doesNotMatch(topFive, /getStrongSportsPredictions/);
+});
+
+test("public homepage no longer displays old resolved call audit cards", () => {
+  const homepage = file("apps/web/app/page.tsx");
+  const leaderboard = file("apps/web/app/leaderboard/page.tsx");
+  const queries = file("apps/web/lib/queries.ts");
+  assert.doesNotMatch(homepage, /Past and legacy calls/);
+  assert.match(leaderboard, /Wins \/ Losses/);
+  assert.match(queries, /losses:/);
+});
+
+test("admin long-running commands start async Railway jobs and do not render nested expire objects", () => {
+  const runner = file("apps/web/lib/worker-runner.ts");
+  const admin = file("apps/web/components/admin-console.tsx");
+  const server = file("apps/worker/src/server.ts");
+  assert.match(runner, /defaultAsyncRemoteCommands/);
+  assert.match(runner, /mode=async/);
+  assert.match(server, /startAsyncJob/);
+  assert.match(admin, /resultCount/);
+  assert.match(admin, /Async Railway job/);
+});
 
 test("admin Railway proxy timeout is reported with direct command guidance", () => {
   const runner = file("apps/web/lib/worker-runner.ts");

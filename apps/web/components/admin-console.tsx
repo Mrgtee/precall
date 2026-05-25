@@ -37,6 +37,9 @@ type AdminResult = {
   };
   error?: string;
   status?: string;
+  async?: boolean;
+  alreadyRunning?: boolean;
+  job?: { id?: string; status?: string; startedAt?: string; durationMs?: number; error?: string };
   timedOut?: boolean;
   timeoutMs?: number;
   suggestedCommand?: string;
@@ -139,6 +142,21 @@ function Bool({ value }: { value: boolean }) {
   return <span className={`status-chip ${value ? "ok" : "warn"}`}>{value ? "true" : "false"}</span>;
 }
 
+function resultCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (typeof value === "number") return value;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.expired === "number") return record.expired;
+    if (Array.isArray(record.calls)) return record.calls.length;
+  }
+  return 0;
+}
+
+function resultArrayLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
 export function AdminConsole() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
@@ -153,14 +171,15 @@ export function AdminConsole() {
   const [adminWallets, setAdminWallets] = useState<AdminWallet[]>([]);
   const [targetWallet, setTargetWallet] = useState("");
   const [walletStatus, setWalletStatus] = useState("");
-  const publishedCount = result?.command === "run-once" ? (result.result?.published?.length ?? 0) : null;
-  const skippedCount = result?.command === "run-once" || result?.command === "sports" ? (result.result?.skipped?.length ?? 0) : null;
-  const sportsLiveCallsStored = result?.command === "sports" ? (result.result?.liveCallsStored ?? result.result?.sportsCalls?.length ?? 0) : null;
+  const publishedCount = result?.command === "run-once" ? resultArrayLength(result.result?.published) : null;
+  const skippedCount = result?.command === "run-once" || result?.command === "sports" ? resultArrayLength(result.result?.skipped) : null;
+  const sportsLiveCallsStored = result?.command === "sports" ? (result.result?.liveCallsStored ?? resultArrayLength(result.result?.sportsCalls)) : null;
   const sportsStatusCounts = result?.command === "sports" ? result.result?.callsByStatus : null;
-  const failedCount = result?.result?.failed?.length ?? 0;
-  const resolvedCount = result?.result?.resolved?.length ?? 0;
-  const expiredCount = result?.result?.expired ?? 0;
+  const failedCount = resultArrayLength(result?.result?.failed);
+  const resolvedCount = resultCount(result?.result?.resolved);
+  const expiredCount = resultCount(result?.result?.expired);
   const timedOut = Boolean(result?.timedOut || result?.status === "timeout");
+  const asyncStarted = Boolean(result?.async || result?.status === "running");
 
   const refreshAdminData = useCallback(async (currentAddress = address) => {
     if (!currentAddress) return;
@@ -237,7 +256,12 @@ export function AdminConsole() {
       const runPayload = (await runResponse.json()) as AdminResult;
       setResult(runPayload);
       const actionTimedOut = Boolean(runPayload.timedOut || runPayload.status === "timeout");
-      setStatus(runResponse.ok ? (runPayload.proxiedToRailway ? "Action complete via Railway." : "Action complete.") : actionTimedOut ? "Railway action did not finish before the Vercel proxy timeout. Check Railway logs before re-running." : "Action failed.");
+      const actionStartedAsync = Boolean(runPayload.async || runPayload.status === "running");
+      setStatus(runResponse.ok
+        ? actionStartedAsync
+          ? "Railway job started. Long-running worker commands continue in Railway; check logs or job status before re-running."
+          : runPayload.proxiedToRailway ? "Action complete via Railway." : "Action complete."
+        : actionTimedOut ? "Railway action did not finish before the Vercel proxy timeout. Check Railway logs before re-running." : "Action failed.");
       await refreshAdminData();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -386,21 +410,23 @@ export function AdminConsole() {
       <section className="panel admin-output">
         <h3>Run output</h3>
         {status ? <p className="muted">{status}</p> : <p className="muted">No action run yet.</p>}
+        {asyncStarted ? <p className="muted"><strong>Async Railway job:</strong> {result?.message || "The worker job has started and will continue outside this browser request."}{result?.job?.id ? <> Job ID <code>{result.job.id}</code>.</> : null} Use <code>{result?.suggestedCommand}</code> for a direct terminal run if needed.</p> : null}
         {timedOut ? <p className="muted"><strong>Timeout:</strong> Railway did not return before the Vercel proxy timeout. The worker may still be running; check Railway logs and use <code>{result?.suggestedCommand}</code> if you need to run it directly.</p> : null}
-        {result?.ok && publishedCount === 0 ? <p className="muted">No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out or failed required evidence/payment gates.</p> : null}
-        {publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
-        {sportsLiveCallsStored && sportsLiveCallsStored > 0 ? <p className="muted">Stored {sportsLiveCallsStored} Sports Live Call{sportsLiveCallsStored === 1 ? "" : "s"}. Refresh /sports to see the latest board.</p> : null}
-        {sportsStatusCounts ? <p className="muted">Sports status counts: strong {sportsStatusCounts.strong_call || 0}, lean {sportsStatusCounts.lean_call || 0}, high-risk {sportsStatusCounts.high_risk_call || 0}, avoid {sportsStatusCounts.avoid_call || 0}.</p> : null}
+        {result?.ok && !asyncStarted && publishedCount === 0 ? <p className="muted">No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out or failed required evidence/payment gates.</p> : null}
+        {!asyncStarted && publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
+        {!asyncStarted && sportsLiveCallsStored && sportsLiveCallsStored > 0 ? <p className="muted">Stored {sportsLiveCallsStored} Sports Live Call{sportsLiveCallsStored === 1 ? "" : "s"}. Refresh /sports to see the latest board.</p> : null}
+        {!asyncStarted && sportsStatusCounts ? <p className="muted">Sports status counts: strong {sportsStatusCounts.strong_call || 0}, lean {sportsStatusCounts.lean_call || 0}, high-risk {sportsStatusCounts.high_risk_call || 0}, avoid {sportsStatusCounts.avoid_call || 0}.</p> : null}
         {result?.command === "expire" && result.result?.sportsExpired !== undefined ? <p className="muted">Expired {result.result.sportsExpired} sports live call{result.result.sportsExpired === 1 ? "" : "s"}. Expired sports calls are excluded from active counts.</p> : null}
         {skippedCount && skippedCount > 0 ? <p className="muted">Skipped {skippedCount} market{skippedCount === 1 ? "" : "s"}. Sports skips are reserved for invalid, expired, low-liquidity, unsupported, or unclear markets.</p> : null}
         {result ? (
           <div className="admin-result-grid" aria-label="Latest admin run summary">
             <div><span>Command</span><strong>{result.command || "unknown"}</strong></div>
-            <div><span>Duration</span><strong>{result.durationMs ? `${Math.round(result.durationMs / 1000)}s` : "n/a"}</strong></div>
+            <div><span>Duration</span><strong>{result.durationMs ? `${Math.round(result.durationMs / 1000)}s` : asyncStarted ? "started" : "n/a"}</strong></div>
             <div><span>Skipped</span><strong>{skippedCount ?? 0}</strong></div>
             <div><span>Failed</span><strong>{failedCount}</strong></div>
             <div><span>Resolved</span><strong>{resolvedCount}</strong></div>
             <div><span>Expired</span><strong>{expiredCount}</strong></div>
+            {asyncStarted ? <div><span>Railway job</span><strong>{result.job?.status || "running"}</strong></div> : null}
             {timedOut ? <div><span>Timeout</span><strong>{result?.timeoutMs ? `${Math.round(result.timeoutMs / 1000)}s` : "yes"}</strong></div> : null}
           </div>
         ) : null}

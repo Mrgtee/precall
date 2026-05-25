@@ -26,8 +26,6 @@ export default async function HomePage() {
   }
 
   const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
-  const liveIds = new Set(live.map((call) => call.id));
-  const past = calls.filter((call) => !liveIds.has(call.id));
   const unlocks = leaderboard.reduce((sum, row) => sum + Number(row.unlocks || 0), 0);
   const agents = leaderboard.length;
 
@@ -124,20 +122,6 @@ export default async function HomePage() {
         )}
       </section>
 
-      {past.length > 0 ? (
-        <section className="section-spaced">
-          <section className="section-heading">
-            <div>
-              <p className="eyebrow">Past and legacy calls</p>
-              <h2>Audit trail</h2>
-            </div>
-            <p>Closed, resolved, failed-resolution, or legacy calls remain visible for auditability but are not live recommendations.</p>
-          </section>
-          <section className="grid">
-            {past.slice(0, 6).map((call) => <CallCard key={call.id} call={call} />)}
-          </section>
-        </section>
-      ) : null}
 
       <section className="metric-strip compact-metrics platform-strip" aria-label="Platform summary">
         <div className="metric"><span><RadioTower size={14} /> Council</span><strong>5 roles</strong></div>
