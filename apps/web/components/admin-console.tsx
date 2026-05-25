@@ -36,6 +36,11 @@ type AdminResult = {
     message?: string;
   };
   error?: string;
+  status?: string;
+  timedOut?: boolean;
+  timeoutMs?: number;
+  suggestedCommand?: string;
+  message?: string;
 };
 
 type AdminWallet = {
@@ -155,6 +160,7 @@ export function AdminConsole() {
   const failedCount = result?.result?.failed?.length ?? 0;
   const resolvedCount = result?.result?.resolved?.length ?? 0;
   const expiredCount = result?.result?.expired ?? 0;
+  const timedOut = Boolean(result?.timedOut || result?.status === "timeout");
 
   const refreshAdminData = useCallback(async (currentAddress = address) => {
     if (!currentAddress) return;
@@ -230,7 +236,8 @@ export function AdminConsole() {
       });
       const runPayload = (await runResponse.json()) as AdminResult;
       setResult(runPayload);
-      setStatus(runResponse.ok ? (runPayload.proxiedToRailway ? "Action complete via Railway." : "Action complete.") : "Action failed.");
+      const actionTimedOut = Boolean(runPayload.timedOut || runPayload.status === "timeout");
+      setStatus(runResponse.ok ? (runPayload.proxiedToRailway ? "Action complete via Railway." : "Action complete.") : actionTimedOut ? "Railway action did not finish before the Vercel proxy timeout. Check Railway logs before re-running." : "Action failed.");
       await refreshAdminData();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -379,6 +386,7 @@ export function AdminConsole() {
       <section className="panel admin-output">
         <h3>Run output</h3>
         {status ? <p className="muted">{status}</p> : <p className="muted">No action run yet.</p>}
+        {timedOut ? <p className="muted"><strong>Timeout:</strong> Railway did not return before the Vercel proxy timeout. The worker may still be running; check Railway logs and use <code>{result?.suggestedCommand}</code> if you need to run it directly.</p> : null}
         {result?.ok && publishedCount === 0 ? <p className="muted">No new call was published, so the dashboard will not change yet. The agent cycle ran, but every candidate was filtered out or failed required evidence/payment gates.</p> : null}
         {publishedCount && publishedCount > 0 ? <p className="muted">Published {publishedCount} new call{publishedCount === 1 ? "" : "s"}. Refresh the dashboard to see the latest bonded signal.</p> : null}
         {sportsLiveCallsStored && sportsLiveCallsStored > 0 ? <p className="muted">Stored {sportsLiveCallsStored} Sports Live Call{sportsLiveCallsStored === 1 ? "" : "s"}. Refresh /sports to see the latest board.</p> : null}
@@ -393,6 +401,7 @@ export function AdminConsole() {
             <div><span>Failed</span><strong>{failedCount}</strong></div>
             <div><span>Resolved</span><strong>{resolvedCount}</strong></div>
             <div><span>Expired</span><strong>{expiredCount}</strong></div>
+            {timedOut ? <div><span>Timeout</span><strong>{result?.timeoutMs ? `${Math.round(result.timeoutMs / 1000)}s` : "yes"}</strong></div> : null}
           </div>
         ) : null}
         {failedCount > 0 ? <p className="muted"><strong>Latest error:</strong> {(result?.result?.failed?.[0] as { error?: string } | undefined)?.error || result?.error || "See raw output for details."}</p> : null}

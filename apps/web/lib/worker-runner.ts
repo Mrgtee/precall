@@ -13,6 +13,32 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.stack || error.message : String(error);
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+const workerCommandHints: Record<WorkerCommand, string> = {
+  health: "railway run npm run worker:health",
+  "run-once": "railway run npm run worker:run-once",
+  sports: "railway run npm run worker:sports",
+  resolve: "railway run npm run worker:resolve",
+  expire: "railway run npm run worker:expire",
+};
+
+const defaultRemoteTimeoutMs: Record<WorkerCommand, number> = {
+  health: 45_000,
+  expire: 120_000,
+  resolve: 285_000,
+  sports: 285_000,
+  "run-once": 285_000,
+};
+
+function remoteTimeoutMs(command: WorkerCommand) {
+  const specific = process.env[`WORKER_${command.toUpperCase().replace(/-/g, "_")}_TIMEOUT_MS`];
+  const configured = Number(specific || process.env.WORKER_ROUTE_TIMEOUT_MS || defaultRemoteTimeoutMs[command]);
+  return Number.isFinite(configured) && configured > 0 ? configured : defaultRemoteTimeoutMs[command];
+}
+
 function workerTriggerConfig() {
   const url = (process.env.WORKER_TRIGGER_URL || "").replace(/\/+$/, "");
   const secret = process.env.WORKER_TRIGGER_SECRET || "";
@@ -21,7 +47,7 @@ function workerTriggerConfig() {
 
 async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number) {
   const config = workerTriggerConfig();
-  const timeoutMs = Number(process.env.WORKER_ROUTE_TIMEOUT_MS || 240_000);
+  const timeoutMs = remoteTimeoutMs(command);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -43,6 +69,19 @@ async function runRemoteWorkerCommand(command: WorkerCommand, startedAt: number)
       durationMs: Date.now() - startedAt,
     };
   } catch (error) {
+    if (isAbortError(error)) {
+      return {
+        ok: false,
+        command,
+        status: "timeout",
+        timedOut: true,
+        proxiedToRailway: true,
+        durationMs: Date.now() - startedAt,
+        timeoutMs,
+        suggestedCommand: workerCommandHints[command],
+        error: `Railway worker did not return within ${Math.round(timeoutMs / 1000)}s. The run may still be executing or may have been cancelled by the HTTP proxy; check Railway logs before re-running.`,
+      };
+    }
     return {
       ok: false,
       command,

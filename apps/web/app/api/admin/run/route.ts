@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runWorkerCommand, type WorkerCommand } from "../../../../lib/worker-runner";
 import { isWorkerAdminAction, verifyAdminSignature, type AdminChallenge } from "../../../../lib/admin-auth";
 
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;

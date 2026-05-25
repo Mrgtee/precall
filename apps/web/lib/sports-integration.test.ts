@@ -122,3 +122,16 @@ test("responsive audit styles support wide desktop detail pages and mobile stack
   assert.match(css, /@media \(max-width: 640px\)/);
   assert.match(css, /evidence-grid[\s\S]+grid-template-columns: 1fr/);
 });
+
+
+test("admin Railway proxy timeout is reported with direct command guidance", () => {
+  const runner = file("apps/web/lib/worker-runner.ts");
+  const admin = file("apps/web/components/admin-console.tsx");
+  const route = file("apps/web/app/api/admin/run/route.ts");
+  assert.match(runner, /status: "timeout"/);
+  assert.match(runner, /suggestedCommand: workerCommandHints\[command\]/);
+  assert.match(runner, /railway run npm run worker:run-once/);
+  assert.match(admin, /Railway action did not finish before the Vercel proxy timeout/);
+  assert.match(admin, /check Railway logs/i);
+  assert.match(route, /export const maxDuration = 300/);
+});
