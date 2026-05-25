@@ -25,18 +25,28 @@ const workerCommandHints: Record<WorkerCommand, string> = {
   expire: "railway run npm run worker:expire",
 };
 
+const maxHttpProxyTimeoutMs = 295_000;
+
 const defaultRemoteTimeoutMs: Record<WorkerCommand, number> = {
   health: 45_000,
   expire: 120_000,
-  resolve: 285_000,
-  sports: 285_000,
-  "run-once": 285_000,
+  resolve: maxHttpProxyTimeoutMs,
+  sports: maxHttpProxyTimeoutMs,
+  "run-once": maxHttpProxyTimeoutMs,
 };
 
+function validTimeout(value: string | undefined) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function remoteTimeoutMs(command: WorkerCommand) {
-  const specific = process.env[`WORKER_${command.toUpperCase().replace(/-/g, "_")}_TIMEOUT_MS`];
-  const configured = Number(specific || process.env.WORKER_ROUTE_TIMEOUT_MS || defaultRemoteTimeoutMs[command]);
-  return Number.isFinite(configured) && configured > 0 ? configured : defaultRemoteTimeoutMs[command];
+  const specific = validTimeout(process.env[`WORKER_${command.toUpperCase().replace(/-/g, "_")}_TIMEOUT_MS`]);
+  if (specific) return Math.min(specific, maxHttpProxyTimeoutMs);
+
+  const globalTimeout = validTimeout(process.env.WORKER_ROUTE_TIMEOUT_MS);
+  const baseline = defaultRemoteTimeoutMs[command];
+  return Math.min(Math.max(globalTimeout || baseline, baseline), maxHttpProxyTimeoutMs);
 }
 
 function workerTriggerConfig() {

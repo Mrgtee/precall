@@ -129,6 +129,8 @@ test("admin Railway proxy timeout is reported with direct command guidance", () 
   const admin = file("apps/web/components/admin-console.tsx");
   const route = file("apps/web/app/api/admin/run/route.ts");
   assert.match(runner, /status: "timeout"/);
+  assert.match(runner, /maxHttpProxyTimeoutMs = 295_000/);
+  assert.match(runner, /Math.max\(globalTimeout \|\| baseline, baseline\)/);
   assert.match(runner, /suggestedCommand: workerCommandHints\[command\]/);
   assert.match(runner, /railway run npm run worker:run-once/);
   assert.match(admin, /Railway action did not finish before the Vercel proxy timeout/);
