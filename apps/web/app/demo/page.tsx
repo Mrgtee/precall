@@ -20,9 +20,9 @@ export default async function DemoPage() {
       <section className="page-hero">
         <div>
           <p className="eyebrow">Judge demo</p>
-          <h1>Precall proof loop</h1>
+          <h1>Precall in 60 seconds</h1>
         </div>
-        <p>Everything on this page is pulled from real config, database rows, Arc transactions, and worker history. Empty states are shown honestly.</p>
+        <p>Live proof that Precall separates bonded Arc calls, Sports Live Calls, x402 evidence, and unlock rails without faking data. Empty states are shown honestly.</p>
       </section>
 
       <section className="metric-strip">
@@ -114,8 +114,8 @@ export default async function DemoPage() {
         <ol className="step-list">
           <li>Open Admin and run health to show DB, Polymarket, model, Arc, and Circle status.</li>
           <li>Run the agent. It either publishes a bonded call or explains filtered skip reasons.</li>
-          <li>Open a live call, inspect verified evidence and the Arc bond transaction.</li>
-          <li>Unlock the thesis with USDC on Arc and refresh this page to show the unlock.</li>
+          <li>Open a live call and inspect the public market title, Arc bond status, unlock price, freshness, and bond transaction.</li>
+          <li>Unlock the thesis with USDC on Arc to reveal the selected side, evidence, risk notes, and analysis, then refresh this page to show the unlock.</li>
           <li>Run resolution for mature YES/NO markets and show leaderboard reputation updates.</li>
           <li>Open Sports Live Calls to show active count, locked preview, and Arc USDC unlock flow.</li>
         </ol>

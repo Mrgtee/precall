@@ -152,6 +152,9 @@ export function AdminConsole() {
   const skippedCount = result?.command === "run-once" || result?.command === "sports" ? (result.result?.skipped?.length ?? 0) : null;
   const sportsLiveCallsStored = result?.command === "sports" ? (result.result?.liveCallsStored ?? result.result?.sportsCalls?.length ?? 0) : null;
   const sportsStatusCounts = result?.command === "sports" ? result.result?.callsByStatus : null;
+  const failedCount = result?.result?.failed?.length ?? 0;
+  const resolvedCount = result?.result?.resolved?.length ?? 0;
+  const expiredCount = result?.result?.expired ?? 0;
 
   const refreshAdminData = useCallback(async (currentAddress = address) => {
     if (!currentAddress) return;
@@ -382,7 +385,23 @@ export function AdminConsole() {
         {sportsStatusCounts ? <p className="muted">Sports status counts: strong {sportsStatusCounts.strong_call || 0}, lean {sportsStatusCounts.lean_call || 0}, high-risk {sportsStatusCounts.high_risk_call || 0}, avoid {sportsStatusCounts.avoid_call || 0}.</p> : null}
         {result?.command === "expire" && result.result?.sportsExpired !== undefined ? <p className="muted">Expired {result.result.sportsExpired} sports live call{result.result.sportsExpired === 1 ? "" : "s"}. Expired sports calls are excluded from active counts.</p> : null}
         {skippedCount && skippedCount > 0 ? <p className="muted">Skipped {skippedCount} market{skippedCount === 1 ? "" : "s"}. Sports skips are reserved for invalid, expired, low-liquidity, unsupported, or unclear markets.</p> : null}
-        {result ? <pre>{JSON.stringify(result, null, 2)}</pre> : null}
+        {result ? (
+          <div className="admin-result-grid" aria-label="Latest admin run summary">
+            <div><span>Command</span><strong>{result.command || "unknown"}</strong></div>
+            <div><span>Duration</span><strong>{result.durationMs ? `${Math.round(result.durationMs / 1000)}s` : "n/a"}</strong></div>
+            <div><span>Skipped</span><strong>{skippedCount ?? 0}</strong></div>
+            <div><span>Failed</span><strong>{failedCount}</strong></div>
+            <div><span>Resolved</span><strong>{resolvedCount}</strong></div>
+            <div><span>Expired</span><strong>{expiredCount}</strong></div>
+          </div>
+        ) : null}
+        {failedCount > 0 ? <p className="muted"><strong>Latest error:</strong> {(result?.result?.failed?.[0] as { error?: string } | undefined)?.error || result?.error || "See raw output for details."}</p> : null}
+        {result ? (
+          <details className="raw-json-toggle">
+            <summary>Show raw worker JSON</summary>
+            <pre>{JSON.stringify(result, null, 2)}</pre>
+          </details>
+        ) : null}
         <p className="muted">If a bonded run returns an empty <code>published</code> list, the dashboard will not gain new bonded calls. If a sports run returns zero <code>liveCallsStored</code>, every discovered sports market was invalid, unsupported, or failed before analysis.</p>
       </section>
     </section>

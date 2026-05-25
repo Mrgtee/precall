@@ -466,7 +466,7 @@ export async function getTodayX402SpendUsdc(now = new Date()) {
 export async function adminSummary() {
   const [counts] = await db().select({
     calls: sql<number>`count(*)::int`,
-    liveCalls: sql<number>`count(*) filter (where ${calls.status} = 'published')::int`,
+    liveCalls: sql<number>`count(*) filter (where ${calls.status} = 'published' and (${calls.expiresAt} is null or ${calls.expiresAt} > now()))::int`,
     expiredCalls: sql<number>`count(*) filter (where ${calls.status} = 'expired')::int`,
     resolvedCalls: sql<number>`count(*) filter (where ${calls.status} = 'resolved')::int`,
     sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,

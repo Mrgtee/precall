@@ -82,6 +82,15 @@ export async function getCall(id: number) {
   return row;
 }
 
+export async function getActiveBondedCallCount() {
+  const db = createDb();
+  const [row] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(calls)
+    .where(and(eq(calls.status, "published"), eq(calls.legacy, false), sql`(${calls.expiresAt} is null or ${calls.expiresAt} > now())`));
+  return row?.total ?? 0;
+}
+
 export async function getEvidence(callId: number) {
   const db = createDb();
   return db.select().from(evidenceItems).where(eq(evidenceItems.callId, callId));
@@ -199,7 +208,7 @@ export async function getDemoData() {
     markets: sql<number>`(select count(*)::int from ${markets})`,
     snapshots: sql<number>`(select count(*)::int from ${marketSnapshots})`,
     calls: sql<number>`(select count(*)::int from ${calls})`,
-    liveCalls: sql<number>`(select count(*)::int from ${calls} where status = 'published' and legacy = false)`,
+    liveCalls: sql<number>`(select count(*)::int from ${calls} where status = 'published' and legacy = false and (expires_at is null or expires_at > now()))`,
     expiredCalls: sql<number>`(select count(*)::int from ${calls} where status = 'expired')`,
     resolvedCalls: sql<number>`(select count(*)::int from ${calls} where status = 'resolved')`,
     unlocks: sql<number>`(select count(*)::int from ${thesisUnlocks})`,
@@ -236,7 +245,7 @@ export async function getDemoData() {
   return {
     counts,
     latestRuns,
-    latestLiveCall: latestCalls.find((call) => call.status === "published" && !call.legacy),
+    latestLiveCall: latestCalls.find((call) => call.status === "published" && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now())),
     awaitingResolution: latestCalls.filter((call) => call.status === "expired"),
     resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],

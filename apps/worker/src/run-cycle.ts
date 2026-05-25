@@ -45,7 +45,7 @@ export async function health() {
   const base = {
     worker: {
       commitSha: optionalEnv("RAILWAY_GIT_COMMIT_SHA", optionalEnv("GIT_COMMIT_SHA", "unknown")),
-      schemaRepair: "0009_sports_live_calls",
+      schemaRepair: "0010_sports_unlocks",
     },
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),

@@ -74,3 +74,51 @@ test("bonded YES\/NO resolve path remains strict and onchain-capable", () => {
   assert.match(runCycle, /fetchPolymarketResolution/);
   assert.match(runCycle, /resolveCallOnchain/);
 });
+
+
+test("bonded call detail keeps recommendation and evidence fields locked in the server-rendered preview", () => {
+  const callPage = file("apps/web/app/calls/[id]/page.tsx");
+  assert.match(callPage, /selected side, probability, edge, thesis, evidence, sizing/);
+  assert.match(callPage, /<UnlockThesis/);
+  assert.doesNotMatch(callPage, /call\.action/);
+  assert.doesNotMatch(callPage, /call\.edgeBps/);
+  assert.doesNotMatch(callPage, /call\.confidenceBps/);
+  assert.doesNotMatch(callPage, /call\.suggestedSizeBps/);
+  assert.doesNotMatch(callPage, /call\.copyUrl/);
+  assert.doesNotMatch(callPage, /call\.thesis/);
+});
+
+test("unlocked bonded analysis is organized into readable sections after verified unlock", () => {
+  const component = file("apps/web/components/unlock-thesis.tsx");
+  assert.match(component, /analysis-metric-grid/);
+  assert.match(component, /Recommendation summary/);
+  assert.match(component, /Counterarguments and risk notes/);
+  assert.match(component, /Evidence used/);
+  assert.match(component, /Agent votes/);
+});
+
+test("admin run output has readable summary before collapsible raw JSON", () => {
+  const admin = file("apps/web/components/admin-console.tsx");
+  assert.match(admin, /admin-result-grid/);
+  assert.match(admin, /Show raw worker JSON/);
+  assert.match(admin, /Latest error/);
+});
+
+test("homepage and top five exclude expired published bonded calls from active sections", () => {
+  const homepage = file("apps/web/app/page.tsx");
+  const topFive = file("apps/web/app/top-5-today/page.tsx");
+  const queries = file("apps/web/lib/queries.ts");
+  assert.match(homepage, /getActiveBondedCallCount/);
+  assert.match(homepage, /!isExpiredDate\(call\.expiresAt\)/);
+  assert.match(topFive, /!isExpiredDate\(call\.expiresAt\)/);
+  assert.match(queries, /getActiveBondedCallCount/);
+  assert.match(queries, /expiresAt.+> now\(\)/s);
+});
+
+test("responsive audit styles support wide desktop detail pages and mobile stacking", () => {
+  const css = file("apps/web/app/globals.css");
+  assert.match(css, /shell\.detail-layout/);
+  assert.match(css, /analysis-metric-grid/);
+  assert.match(css, /@media \(max-width: 640px\)/);
+  assert.match(css, /evidence-grid[\s\S]+grid-template-columns: 1fr/);
+});

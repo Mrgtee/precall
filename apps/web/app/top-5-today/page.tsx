@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { CallCard } from "../../components/call-card";
-import { bpsToPercent } from "../../lib/format";
+import { bpsToPercent, isExpiredDate } from "../../lib/format";
 import { getCalls, getStrongSportsPredictions } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function TopFiveTodayPage() {
   const calls = (await getCalls(50))
-    .filter((call) => call.status === "published" && !call.legacy)
+    .filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
     .sort((a, b) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
     .slice(0, 5);
   const sportsCalls = await getStrongSportsPredictions(5);
@@ -19,7 +19,7 @@ export default async function TopFiveTodayPage() {
           <p className="eyebrow">Daily shortlist</p>
           <h1>Top 5 Today</h1>
         </div>
-        <p>Shareable daily list of the strongest bonded Precall signals, plus a separate Sports Live Calls shortlist when active sports edges exist.</p>
+        <p>Shareable daily shortlist with bonded Arc calls separated from active Sports Live Calls so unresolved sports activity never masquerades as resolved reputation.</p>
       </section>
       <section className="section-heading">
         <div><p className="eyebrow">Bonded Arc Calls</p><h2>Top bonded calls</h2></div>
@@ -34,22 +34,22 @@ export default async function TopFiveTodayPage() {
           <div><p className="eyebrow">Sports Live Calls</p><h2>Top Sports Calls</h2></div>
           <p>Strong active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
         </section>
-        <section className="grid">
+        <section className="grid preview-grid">
           {sportsCalls.length ? sportsCalls.map((idea) => (
-            <article className="panel" key={idea.id}>
-              <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
+            <article className="panel sports-preview-card" key={idea.id}>
+              <p className="eyebrow">{idea.category} · {idea.marketKind} · active/unresolved</p>
               <h3>{idea.marketTitle}</h3>
               <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong></p>
-              <div className="pill-row">
-                <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
-                <span className="pill">AI {bpsToPercent(idea.agentProbabilityBps)}</span>
-                <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
-                <span className="pill">Risk {idea.riskLevel}</span>
+              <div className="analysis-metric-grid sports-metrics">
+                <div><span>Market</span><strong>{bpsToPercent(idea.marketPriceBps)}</strong></div>
+                <div><span>AI</span><strong>{bpsToPercent(idea.agentProbabilityBps)}</strong></div>
+                <div><span>Edge</span><strong>{bpsToPercent(idea.edgeBps)}</strong></div>
+                <div><span>Risk</span><strong>{idea.riskLevel}</strong></div>
               </div>
-              <p className="muted">Full reasoning unlocks on the Sports Live Calls board.</p>
+              <p className="muted">Full reasoning and market link unlock on the Sports Live Calls board.</p>
               <Link className="button secondary" href="/sports">Open Sports Live Calls</Link>
             </article>
-          )) : <p className="muted">No active strong sports calls right now.</p>}
+          )) : <section className="empty"><h2>No active strong sports calls right now</h2><p className="muted">Sports scans may still create Lean, High Risk, or Avoid calls on the Sports Live Calls page.</p></section>}
         </section>
       </section>
     </main>

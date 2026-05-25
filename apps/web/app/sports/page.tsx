@@ -46,23 +46,29 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
   const x402Status = idea.x402Status as { status?: unknown } | null;
   const paidEvidenceUsed = Boolean(idea.x402PaidEvidenceUsed || x402Status?.status === "success");
   return (
-    <article className="panel sports-call-card">
+    <article className={`panel sports-call-card sports-status-${idea.status}`}>
       <div className="sports-card-main">
-        <p className="eyebrow">{statusLabel(idea.status)} · {idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</p>
-        <h2 className="call-title">{idea.marketTitle}</h2>
-        <div className="pill-row">
-          <span className="pill">AI Prediction: {idea.selectedOption}</span>
-          <span className="pill">Market {bpsToPercent(idea.marketPriceBps)}</span>
-          <span className="pill">AI {bpsToPercent(idea.agentProbabilityBps)}</span>
-          <span className="pill">Edge {bpsToPercent(idea.edgeBps)}</span>
-          <span className="pill">Confidence {bpsToPercent(idea.confidenceBps)}</span>
-          <span className="pill">Risk {idea.riskLevel}</span>
-          <span className="pill">Unlock {usdc(idea.unlockPrice)}</span>
-          {paidEvidenceUsed ? <span className="pill">x402 evidence</span> : null}
+        <div className="card-topline">
+          <span className="status-chip ok">{statusLabel(idea.status)}</span>
+          <span className="muted">{idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</span>
         </div>
-        <p className="muted"><strong>Preview:</strong> {previewReason(idea.statusReason)}</p>
+        <h2 className="call-title">{idea.marketTitle}</h2>
+        <div className="sports-prediction-banner">
+          <span>AI Prediction</span>
+          <strong>{idea.selectedOption}</strong>
+        </div>
+        <div className="analysis-metric-grid sports-metrics" aria-label="Sports Live Call public metrics">
+          <div><span>Market price</span><strong>{bpsToPercent(idea.marketPriceBps)}</strong></div>
+          <div><span>AI probability</span><strong>{bpsToPercent(idea.agentProbabilityBps)}</strong></div>
+          <div><span>Edge</span><strong>{bpsToPercent(idea.edgeBps)}</strong></div>
+          <div><span>Confidence</span><strong>{bpsToPercent(idea.confidenceBps)}</strong></div>
+          <div><span>Risk</span><strong>{idea.riskLevel}</strong></div>
+          <div><span>Unlock</span><strong>{usdc(idea.unlockPrice)}</strong></div>
+        </div>
+        <p className="muted"><strong>Short reasoning preview:</strong> {previewReason(idea.statusReason)}</p>
         <p className="muted">Full reasoning, evidence, market link, probability breakdown, and risk notes unlock with Arc USDC.</p>
-        <p className="muted">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
+        <p className="muted nfa-note">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
+        {paidEvidenceUsed ? <span className="status-chip ok">x402 paid evidence used</span> : null}
       </div>
       <UnlockSportsCall sportsPredictionId={idea.id} unlockPrice={String(idea.unlockPrice)} />
     </article>
@@ -85,15 +91,15 @@ export default async function SportsPage() {
   }));
 
   return (
-    <main className="shell page">
+    <main className="shell page sports-page">
       <section className="hero compact-hero">
         <div>
           <p className="eyebrow">Sports Live Calls</p>
-          <h1>AI predictions for live Polymarket sports markets.</h1>
+          <h1>AI predictions for active Polymarket sports markets.</h1>
         </div>
         <div className="hero-card">
           <p>
-            Sports Live Calls are separate from bonded Arc calls. The prediction preview is public; full reasoning unlocks with Arc USDC.
+            Sports Live Calls show the AI selected side and public probability metrics first. The full analysis, evidence, and Polymarket link unlock with Arc USDC.
           </p>
           <div className="pill-row">
             <span className="pill"><Trophy size={14} /> {activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</span>
@@ -132,7 +138,7 @@ export default async function SportsPage() {
         </section>
       ) : (
         grouped.map((group) => group.ideas.length ? (
-          <section key={group.status} style={{ marginTop: 34 }}>
+          <section key={group.status} className="section-spaced">
             <section className="section-heading">
               <div>
                 <p className="eyebrow">{statusLabel(group.status)}</p>

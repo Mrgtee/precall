@@ -89,3 +89,13 @@ export function recommendationHelp(
   if (confidence < 5_200 || size < 100) return "Weak or legacy signal: Precall would not publish this under the hardened V1 quality gates.";
   return "Directional signal: the agent found enough edge and confidence to label this as a buy idea.";
 }
+
+export function isExpiredDate(date: Date | string | null | undefined, now = Date.now()): boolean {
+  if (!date) return false;
+  const time = new Date(date).getTime();
+  return Number.isFinite(time) && time <= now;
+}
+
+export function isActiveWindow(date: Date | string | null | undefined, now = Date.now()): boolean {
+  return !isExpiredDate(date, now);
+}
