@@ -143,6 +143,20 @@ export async function getActiveSportsCallCount() {
   return row?.total ?? 0;
 }
 
+export async function getTotalUnlockCount() {
+  const db = createDb();
+  const [row] = await db
+    .select({
+      total: sql<number>`(
+        (select count(*)::int from ${thesisUnlocks}) +
+        (select count(*)::int from ${sportsUnlocks})
+      )::int`,
+    })
+    .from(sql`(select 1) as unlock_counts`)
+    .limit(1);
+  return row?.total ?? 0;
+}
+
 export async function getSportsActivitySummary() {
   const db = createDb();
   const [row] = await db
@@ -232,7 +246,8 @@ export async function getDemoData() {
     liveCalls: sql<number>`(select count(*)::int from ${calls} where status = 'published' and legacy = false and (expires_at is null or expires_at > now()))`,
     expiredCalls: sql<number>`(select count(*)::int from ${calls} where status = 'expired')`,
     resolvedCalls: sql<number>`(select count(*)::int from ${calls} where status = 'resolved')`,
-    unlocks: sql<number>`(select count(*)::int from ${thesisUnlocks})`,
+    unlocks: sql<number>`((select count(*)::int from ${thesisUnlocks}) + (select count(*)::int from ${sportsUnlocks}))::int`,
+    thesisUnlocks: sql<number>`(select count(*)::int from ${thesisUnlocks})`,
     follows: sql<number>`(select count(*)::int from ${follows})`,
     feedback: sql<number>`(select count(*)::int from ${feedback})`,
     uniqueWallets: sql<number>`(select count(distinct wallet_address)::int from ${users})`,

@@ -59,6 +59,8 @@ type AdminSummary = {
     liveCalls?: number;
     expiredCalls?: number;
     resolvedCalls?: number;
+    unlocks?: number;
+    thesisUnlocks?: number;
     unlockVolume?: string;
     dailyX402Spend?: string;
     x402ApiPayments?: number;
@@ -368,6 +370,7 @@ export function AdminConsole() {
               <p className="muted">x402 API payments: {summary.counts?.x402ApiPayments ?? 0}</p>
               {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status}{summary.latestX402Payment.chain ? ` · ${summary.latestX402Payment.chain}` : ""}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
               <p className="muted">Arc bond volume: {usdc(summary.counts?.bondVolume || 0)}</p>
+              <p className="muted">Total unlocks: {summary.counts?.unlocks ?? 0} · Bonded thesis {summary.counts?.thesisUnlocks ?? 0} · Sports {summary.counts?.sportsUnlocks ?? 0}</p>
               <p className="muted">Thesis unlock volume: {usdc(summary.counts?.thesisUnlockVolume || summary.counts?.unlockVolume || 0)}</p>
               <p className="muted">Sports unlock volume: {usdc(summary.counts?.sportsUnlockVolume || 0)} · Active sports calls: {summary.counts?.activeSportsCalls ?? 0}</p>
             </aside>

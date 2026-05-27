@@ -28,7 +28,7 @@ export default async function DemoPage() {
       <section className="metric-strip">
         <div className="metric"><span><RadioTower size={14} /> Calls</span><strong>{data.counts?.calls ?? 0}</strong></div>
         <div className="metric"><span><ShieldCheck size={14} /> Live</span><strong>{data.counts?.liveCalls ?? 0}</strong></div>
-        <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>{data.counts?.unlocks ?? 0}</strong></div>
+        <div className="metric"><span><CircleDollarSign size={14} /> Total unlocks</span><strong>{data.counts?.unlocks ?? 0}</strong></div>
         <div className="metric"><span><Activity size={14} /> Active sports</span><strong>{data.counts?.activeSportsCalls ?? 0}</strong></div>
       </section>
 
@@ -86,10 +86,10 @@ export default async function DemoPage() {
           ) : <p className="muted">No current live call passes hardened V1 filters. Run the worker from admin or cron.</p>}
         </div>
         <aside className="panel info-note">
-          <h3>Latest unlock</h3>
-          {latestUnlock ? <p>{shortAddress(latestUnlock.userWallet)} paid {usdc(latestUnlock.amount)} <Link href={`https://testnet.arcscan.app/tx/${latestUnlock.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No thesis unlock recorded yet.</p>}
+          <h3>Latest bonded thesis unlock</h3>
+          {latestUnlock ? <p>{shortAddress(latestUnlock.userWallet)} paid {usdc(latestUnlock.amount)} <Link href={`https://testnet.arcscan.app/tx/${latestUnlock.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No bonded thesis unlock recorded yet.</p>}
           <h3>Circle-powered rails</h3>
-          <p className="muted">Agent bonds, thesis unlocks, and optional x402 evidence payments are tracked as Circle actions when real events exist.</p>
+          <p className="muted">Agent bonds, bonded thesis unlocks, sports unlocks, and optional x402 evidence payments are tracked as Circle actions when real events exist.</p>
         </aside>
       </section>
 

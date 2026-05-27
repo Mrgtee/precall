@@ -98,9 +98,6 @@ export default async function SportsPage() {
           <h1>AI predictions for active Polymarket sports markets.</h1>
         </div>
         <div className="hero-card">
-          <p>
-            Sports Live Calls show the AI selected side and public probability metrics first. The full analysis, evidence, and Polymarket link unlock with Arc USDC.
-          </p>
           <div className="pill-row">
             <span className="pill"><Trophy size={14} /> {activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</span>
             <span className="pill"><ShieldCheck size={14} /> Non-bonded sports intelligence</span>
@@ -120,12 +117,11 @@ export default async function SportsPage() {
           <p className="eyebrow">Today</p>
           <h2>{activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</h2>
         </div>
-        <p>Valid analyzed sports markets are labeled Strong, Lean, High Risk, or Avoid. Expired calls are not counted as active.</p>
       </section>
 
       <section className="panel info-note">
         <p>
-          Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.
+          Live calls are AI-generated market intelligence, and not financial advice.
         </p>
       </section>
 
@@ -134,7 +130,6 @@ export default async function SportsPage() {
       ) : activeCount === 0 ? (
         <section className="empty">
           <h2>No active Sports Live Calls</h2>
-          <p className="muted">Run <code>npm run worker:sports</code> on Railway. Expired, unsupported, unclear, or low-liquidity markets stay out of the active board.</p>
         </section>
       ) : (
         grouped.map((group) => group.ideas.length ? (

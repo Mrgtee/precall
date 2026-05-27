@@ -166,7 +166,11 @@ textarea:focus-visible {
 }
 
 .hero-card {
-  display: grid;
+  display: inline-grid;
+  justify-self: end;
+  align-self: center;
+  width: fit-content;
+  max-width: min(100%, 560px);
   gap: 14px;
   padding: 18px;
   border: 2px solid var(--ink);
@@ -180,6 +184,12 @@ textarea:focus-visible {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 2px;
+}
+
+.hero-card .hero-actions,
+.hero-card .pill-row {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .eyebrow {
@@ -503,6 +513,29 @@ textarea:focus-visible {
   line-height: 1.55;
 }
 
+.first-time-flow {
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.72fr);
+  gap: 18px;
+  padding: 18px;
+  align-items: start;
+}
+
+.first-time-flow .step-list {
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.first-time-flow .info-note {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.first-time-flow .info-note h3,
+.first-time-flow .info-note p {
+  margin: 0;
+}
+
 .compact-metrics {
   margin: 0;
 }
@@ -617,6 +650,10 @@ textarea:focus-visible {
     padding: 24px 0 18px;
   }
 
+  .hero-card {
+    justify-self: start;
+  }
+
   .hero h1,
   .page-hero h1,
   .call-detail-title {
@@ -693,6 +730,11 @@ textarea:focus-visible {
   .hero-card,
   .call-card {
     box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .hero-card {
+    justify-self: stretch;
+    width: 100%;
   }
 
   .hero h1,

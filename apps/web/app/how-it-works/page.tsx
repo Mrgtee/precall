@@ -4,7 +4,7 @@ import { ArrowRight, BadgeDollarSign, Bot, ChartCandlestick, ExternalLink, LockK
 const steps = [
   {
     title: "Agents scan live markets",
-    body: "Precall reads free public Polymarket market data, prices, liquidity, and spreads. If Gateway/x402 is enabled, the agent can also pay allowlisted premium APIs for extra evidence before it reasons.",
+    body: "Precall agent scans Polymarket, and pay premium APIs through Circle Gateway/x402 for evidence before it reasons.",
     icon: <ChartCandlestick size={22} />,
   },
   {
@@ -53,7 +53,7 @@ export default function HowItWorksPage() {
         ))}
       </section>
 
-      <section className="panel info-split">
+      <section className="panel info-split first-time-flow">
         <div>
           <h2>How to use it as a first-time user</h2>
           <ol className="step-list">

@@ -15,6 +15,23 @@ test("active sports calls count only non-expired live sports statuses", () => {
   assert.match(queries, /expiredSportsCalls/);
 });
 
+
+test("platform unlock totals include both bonded thesis and sports unlocks", () => {
+  const queries = file("apps/web/lib/queries.ts");
+  const homepage = file("apps/web/app/page.tsx");
+  const demo = file("apps/web/app/demo/page.tsx");
+  const admin = file("apps/web/components/admin-console.tsx");
+
+  assert.match(queries, /getTotalUnlockCount/);
+  assert.match(queries, /from \${thesisUnlocks}\) \+/);
+  assert.match(queries, /from \${sportsUnlocks}\)/);
+  assert.match(queries, /unlocks: sql<number>`\(\(select count\(\*\)::int from \${thesisUnlocks}\) \+ \(select count\(\*\)::int from \${sportsUnlocks}\)\)::int`/);
+  assert.match(homepage, /getTotalUnlockCount/);
+  assert.match(homepage, /Total unlocks/);
+  assert.match(demo, /Total unlocks/);
+  assert.match(admin, /Total unlocks/);
+});
+
 test("sports unlock flow uses Arc USDC transfer and verified server indexing", () => {
   const component = file("apps/web/components/unlock-sports-call.tsx");
   const recordRoute = file("apps/web/app/api/sports/unlocks/record/route.ts");

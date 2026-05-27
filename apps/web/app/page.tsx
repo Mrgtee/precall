@@ -3,7 +3,7 @@ import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Trophy, Users } 
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
 import { isExpiredDate } from "../lib/format";
-import { type CallRow, getActiveBondedCallCount, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions } from "../lib/queries";
+import { type CallRow, getActiveBondedCallCount, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions, getTotalUnlockCount } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,7 @@ export default async function HomePage() {
   let sportsIdeas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
   let activeSportsCalls = 0;
   let activeBondedCalls = 0;
+  let totalUnlocks = 0;
   let setupError = "";
 
   try {
@@ -21,12 +22,12 @@ export default async function HomePage() {
     sportsIdeas = await getSportsPredictions(3);
     activeSportsCalls = await getActiveSportsCallCount();
     activeBondedCalls = await getActiveBondedCallCount();
+    totalUnlocks = await getTotalUnlockCount();
   } catch (error) {
     setupError = error instanceof Error ? error.message : String(error);
   }
 
   const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
-  const unlocks = leaderboard.reduce((sum, row) => sum + Number(row.unlocks || 0), 0);
   const agents = leaderboard.length;
 
   return (
@@ -37,9 +38,6 @@ export default async function HomePage() {
           <h1>Agent calls you can inspect before you copy</h1>
         </div>
         <div className="hero-card">
-          <p>
-            Precall scans live markets, bonds strict YES/NO calls on Arc with USDC, and keeps full analysis locked until a verified unlock. Sports Live Calls are separate non-bonded intelligence with their own Arc USDC unlock.
-          </p>
           <div className="hero-actions">
             <ConnectWallet />
             <Link className="button secondary" href="/how-it-works">
@@ -53,7 +51,7 @@ export default async function HomePage() {
         <div className="metric"><span>Active bonded calls</span><strong>{activeBondedCalls}</strong></div>
         <div className="metric"><span>Sports Live Calls</span><strong>{activeSportsCalls}</strong></div>
         <div className="metric"><span>Agent desks</span><strong>{agents}</strong></div>
-        <div className="metric"><span>Thesis unlocks</span><strong>{unlocks}</strong></div>
+        <div className="metric"><span>Total unlocks</span><strong>{totalUnlocks}</strong></div>
       </section>
 
       <section className="product-split">
@@ -76,7 +74,6 @@ export default async function HomePage() {
           <p className="eyebrow">Dashboard</p>
           <h2>{activeBondedCalls} Active Bonded Arc Call{activeBondedCalls === 1 ? "" : "s"}</h2>
         </div>
-        <p>Only active, unexpired, strict YES/NO markets that passed hardened gates appear as live bonded calls.</p>
       </section>
 
       {setupError ? (
@@ -88,7 +85,7 @@ export default async function HomePage() {
       ) : live.length === 0 ? (
         <section className="empty">
           <h2>No active bonded calls pass the hardened V1 gates yet</h2>
-          <p className="muted">Precall publishes fewer calls on purpose. Expired calls are hidden from the active board and weak calls stay filtered out.</p>
+          <p className="muted">Precall publishes fewer calls on purpose</p>
         </section>
       ) : (
         <section className="grid">
@@ -105,7 +102,7 @@ export default async function HomePage() {
           <p>Sports calls are labeled by conviction and risk. They are not Arc-bonded yet and do not affect bonded-call reputation.</p>
         </section>
         {activeSportsCalls === 0 ? (
-          <section className="empty"><h2>No active Sports Live Calls</h2><p className="muted">Run the Sports Scan from Admin or Railway. Expired, unclear, and unsupported markets stay out of the active board.</p></section>
+          <section className="empty"><h2>No active Sports Live Calls</h2></section>
         ) : (
           <section className="grid preview-grid">
             {sportsIdeas.map((idea) => (
