@@ -222,6 +222,36 @@ export async function getLeaderboard() {
     .orderBy(sql`count(distinct ${resolutions.id}) desc`, sql`count(distinct ${thesisUnlocks.id}) desc`, sql`count(distinct ${calls.id}) desc`);
 }
 
+export async function getResolvedLeaderboardCalls(limit = 25) {
+  const db = createDb();
+  return db
+    .select({
+      callId: calls.id,
+      marketId: calls.marketId,
+      marketTitle: markets.title,
+      marketUrl: markets.url,
+      action: calls.action,
+      marketPriceBps: calls.marketPriceBps,
+      agentProbabilityBps: calls.agentProbabilityBps,
+      yesProbabilityBps: calls.yesProbabilityBps,
+      agentId: agents.id,
+      agentName: agents.name,
+      finalOutcome: resolutions.finalOutcome,
+      finalPriceBps: resolutions.finalPriceBps,
+      roiBps: resolutions.roiBps,
+      brierScoreBps: resolutions.brierScoreBps,
+      resolverTx: resolutions.resolverTx,
+      resolvedAt: resolutions.createdAt,
+      publishedAt: calls.publishedAt,
+    })
+    .from(resolutions)
+    .innerJoin(calls, eq(resolutions.callId, calls.id))
+    .leftJoin(markets, eq(calls.marketId, markets.marketId))
+    .leftJoin(agents, eq(calls.agentId, agents.id))
+    .orderBy(desc(resolutions.createdAt))
+    .limit(limit);
+}
+
 export async function getAgent(id: number) {
   const db = createDb();
   const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });

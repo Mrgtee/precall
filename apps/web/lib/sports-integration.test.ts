@@ -170,6 +170,20 @@ test("public homepage no longer displays old resolved call audit cards", () => {
   assert.match(queries, /losses:/);
 });
 
+test("leaderboard displays resolved call totals and resolved history", () => {
+  const leaderboard = file("apps/web/app/leaderboard/page.tsx");
+  const queries = file("apps/web/lib/queries.ts");
+  assert.match(queries, /getResolvedLeaderboardCalls/);
+  assert.match(queries, /from\(resolutions\)/);
+  assert.match(queries, /innerJoin\(calls/);
+  assert.match(leaderboard, /Resolved bonded calls/);
+  assert.match(leaderboard, /Total wins/);
+  assert.match(leaderboard, /Total losses/);
+  assert.match(leaderboard, /resolvedCalls\.map/);
+  assert.match(leaderboard, /Win/);
+  assert.match(leaderboard, /Loss/);
+});
+
 test("admin long-running commands start async Railway jobs and do not render nested expire objects", () => {
   const runner = file("apps/web/lib/worker-runner.ts");
   const admin = file("apps/web/components/admin-console.tsx");
