@@ -1,6 +1,6 @@
 import { ShieldCheck, Trophy } from "lucide-react";
 import { UnlockSportsCall } from "../../components/unlock-sports-call";
-import { bpsToPercent, usdc } from "../../lib/format";
+import { bpsToPercent, friendlySetupError, usdc } from "../../lib/format";
 import { getActiveSportsCallCount, getSportsPredictions } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +82,7 @@ export default async function SportsPage() {
   try {
     [ideas, activeCount] = await Promise.all([getSportsPredictions(40), getActiveSportsCallCount()]);
   } catch (error) {
-    setupError = error instanceof Error ? error.message : String(error);
+    setupError = friendlySetupError(error);
   }
 
   const grouped = ["strong_call", "lean_call", "high_risk_call", "avoid_call"].map((status) => ({
@@ -126,7 +126,7 @@ export default async function SportsPage() {
       </section>
 
       {setupError ? (
-        <section className="empty"><h2>Sports Live Calls setup required</h2><p className="muted">{setupError}</p></section>
+        <section className="empty"><h2>Sports Live Calls are temporarily unavailable</h2><p className="muted">Precall is waiting for the latest sports calls to load.</p></section>
       ) : activeCount === 0 ? (
         <section className="empty">
           <h2>No active Sports Live Calls</h2>

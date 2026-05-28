@@ -1,5 +1,14 @@
 import { selectedSideProbabilityBps } from "@precall/shared/scoring";
 
+
+export function friendlySetupError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/DATABASE_URL is required/i.test(message)) return "Database connection is not configured for this environment.";
+  if (/ECONNREFUSED|connect .*5432/i.test(message)) return "Database is not reachable from this local preview.";
+  if (/Failed query/i.test(message)) return "Database query failed. Check the database connection and migrations.";
+  return message || "This section is waiting for live platform data.";
+}
+
 export function bpsToPercent(value: number | null | undefined, digits = 1): string {
   const parsed = Number(value || 0) / 100;
   return `${parsed.toFixed(digits)}%`;

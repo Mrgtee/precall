@@ -10,7 +10,32 @@ function Bool({ value }: { value: boolean }) {
 }
 
 export default async function DemoPage() {
-  const data = await getDemoData();
+  let data: Awaited<ReturnType<typeof getDemoData>> | null = null;
+
+  try {
+    data = await getDemoData();
+  } catch {
+    data = null;
+  }
+
+  if (!data) {
+    return (
+      <main className="shell page info-page">
+        <section className="page-hero">
+          <div>
+            <p className="eyebrow">Judge demo</p>
+            <h1>Precall in 60 seconds</h1>
+          </div>
+          <p>Live proof loads from the platform database when available. The public app stays readable even while data is temporarily unavailable.</p>
+        </section>
+        <section className="empty">
+          <h2>Demo data is temporarily unavailable</h2>
+          <p className="muted">Precall is waiting for the latest platform data to load.</p>
+        </section>
+      </main>
+    );
+  }
+
   const call = data.latestLiveCall;
   const latestRun = data.latestRuns[0];
   const latestUnlock = data.latestUnlock;

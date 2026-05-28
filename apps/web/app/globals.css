@@ -1130,3 +1130,108 @@ textarea:focus-visible {
     line-height: 1.62;
   }
 }
+
+/* Safe professional polish: refine the existing layout without changing its geometry. */
+:root {
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-strong: rgba(255, 255, 255, 0.96);
+  --soft-shadow: 0 14px 34px rgba(16, 24, 39, 0.1);
+  --soft-shadow-hover: 0 18px 44px rgba(16, 24, 39, 0.14);
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% 4%, rgba(215, 255, 95, 0.2), transparent 30vw),
+    radial-gradient(circle at 88% 8%, rgba(31, 182, 166, 0.1), transparent 28vw),
+    linear-gradient(90deg, rgba(16, 24, 39, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(16, 24, 39, 0.03) 1px, transparent 1px),
+    var(--paper);
+  background-size: auto, auto, 36px 36px, 36px 36px, auto;
+  letter-spacing: -0.006em;
+}
+
+.header {
+  background: rgba(248, 250, 247, 0.94);
+  box-shadow: 0 10px 30px rgba(16, 24, 39, 0.06);
+}
+
+.brand-mark,
+.hero-card,
+.panel,
+.call-card,
+.table-wrap,
+.metric-strip,
+.empty,
+.thesis-lock,
+.sports-call-card,
+.raw-json-toggle {
+  box-shadow: var(--soft-shadow);
+}
+
+.hero-card,
+.panel,
+.call-card,
+.table-wrap,
+.metric-strip,
+.empty,
+.thesis-lock,
+.sports-call-card {
+  background: var(--surface-strong);
+}
+
+.call-card:hover,
+.info-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--soft-shadow-hover);
+}
+
+.button {
+  border-radius: 12px;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(16, 24, 39, 0.16);
+}
+
+.info-note,
+.thesis-lock {
+  background: linear-gradient(145deg, rgba(255, 253, 242, 0.96), rgba(255, 255, 255, 0.9));
+}
+
+.metric strong,
+.hero h1,
+.page-hero h1,
+.call-detail-title,
+.call-title {
+  text-wrap: balance;
+}
+
+p,
+li,
+.muted,
+.analysis-copy {
+  text-wrap: pretty;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.admin-output pre,
+.raw-json-toggle pre {
+  background: #101827;
+  color: #eef4ff;
+}
+
+@media (max-width: 640px) {
+  .hero-card,
+  .call-card,
+  .panel,
+  .empty,
+  .metric-strip,
+  .table-wrap {
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+}

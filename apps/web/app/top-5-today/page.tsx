@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { CallCard } from "../../components/call-card";
-import { bpsToPercent, isExpiredDate } from "../../lib/format";
+import { bpsToPercent, friendlySetupError, isExpiredDate } from "../../lib/format";
 import { getCalls, getTopSportsPredictions } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function TopFiveTodayPage() {
-  const calls = (await getCalls(50))
-    .filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
-    .sort((a, b) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
-    .slice(0, 5);
-  const sportsCalls = await getTopSportsPredictions(5);
+  let calls: Awaited<ReturnType<typeof getCalls>> = [];
+  let sportsCalls: Awaited<ReturnType<typeof getTopSportsPredictions>> = [];
+  let setupError = "";
+
+  try {
+    calls = (await getCalls(50))
+      .filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
+      .sort((a, b) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
+      .slice(0, 5);
+    sportsCalls = await getTopSportsPredictions(5);
+  } catch (error) {
+    setupError = friendlySetupError(error);
+  }
 
   return (
     <main className="shell page">
@@ -21,6 +29,12 @@ export default async function TopFiveTodayPage() {
         </div>
         <p>Shareable daily shortlist with bonded Arc calls separated from active Sports Live Calls so unresolved sports activity never masquerades as resolved reputation.</p>
       </section>
+      {setupError ? (
+        <section className="empty">
+          <h2>Top 5 data is temporarily unavailable</h2>
+          <p className="muted">Precall is waiting for the latest shortlist data to load.</p>
+        </section>
+      ) : null}
       <section className="section-heading">
         <div><p className="eyebrow">Bonded Arc Calls</p><h2>Top bonded calls</h2></div>
         <p>These are strict YES/NO calls bonded on Arc and resolved through the normal Precall flow.</p>

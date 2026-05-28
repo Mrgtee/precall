@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Trophy, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
-import { isExpiredDate } from "../lib/format";
+import { friendlySetupError, isExpiredDate } from "../lib/format";
 import { type CallRow, getActiveBondedCallCount, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions, getTotalUnlockCount } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function HomePage() {
     activeBondedCalls = await getActiveBondedCallCount();
     totalUnlocks = await getTotalUnlockCount();
   } catch (error) {
-    setupError = error instanceof Error ? error.message : String(error);
+    setupError = friendlySetupError(error);
   }
 
   const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
@@ -78,9 +78,8 @@ export default async function HomePage() {
 
       {setupError ? (
         <section className="empty">
-          <h2>Setup required</h2>
-          <p className="muted">{setupError}</p>
-          <p>Set `DATABASE_URL`, run migrations, then publish real calls with `npm run worker:run-once`.</p>
+          <h2>Live data is temporarily unavailable</h2>
+          <p className="muted">Precall is waiting for the latest call data to load.</p>
         </section>
       ) : live.length === 0 ? (
         <section className="empty">

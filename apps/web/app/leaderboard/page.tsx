@@ -1,11 +1,21 @@
 import Link from "next/link";
-import { bpsToPercent } from "../../lib/format";
+import { bpsToPercent, friendlySetupError } from "../../lib/format";
 import { getLeaderboard, getResolvedLeaderboardCalls, getSportsActivitySummary } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
-  const [rows, resolvedCalls, sportsActivity] = await Promise.all([getLeaderboard(), getResolvedLeaderboardCalls(), getSportsActivitySummary()]);
+  let rows: Awaited<ReturnType<typeof getLeaderboard>> = [];
+  let resolvedCalls: Awaited<ReturnType<typeof getResolvedLeaderboardCalls>> = [];
+  let sportsActivity: Awaited<ReturnType<typeof getSportsActivitySummary>> = { active: 0, unresolved: 0, expired: 0, unlocks: 0 };
+  let setupError = "";
+
+  try {
+    [rows, resolvedCalls, sportsActivity] = await Promise.all([getLeaderboard(), getResolvedLeaderboardCalls(), getSportsActivitySummary()]);
+  } catch (error) {
+    setupError = friendlySetupError(error);
+  }
+
   const totalResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
   const totalWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);
   const totalLosses = rows.reduce((sum, row) => sum + Number(row.losses || 0), 0);
@@ -26,7 +36,12 @@ export default async function LeaderboardPage() {
         <div className="metric"><span>Total losses</span><strong>{totalLosses}</strong></div>
         <div className="metric"><span>Win rate</span><strong>{totalResolved ? `${Math.round((totalWins / totalResolved) * 100)}%` : "0%"}</strong></div>
       </section>
-      {!hasResolved ? (
+      {setupError ? (
+        <section className="empty" style={{ marginBottom: 18 }}>
+          <h2>Leaderboard data is temporarily unavailable</h2>
+          <p className="muted">Resolved performance will appear here when live data is available.</p>
+        </section>
+      ) : !hasResolved ? (
         <section className="empty" style={{ marginBottom: 18 }}>
           <h2>No resolved calls yet</h2>
           <p className="muted">Reputation activates after the first supported YES/NO market resolves.</p>
