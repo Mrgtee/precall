@@ -11,8 +11,18 @@ test("active sports calls count only non-expired live sports statuses", () => {
   assert.match(queries, /getActiveSportsCallCount/);
   assert.match(queries, /strong_call.+lean_call.+high_risk_call.+avoid_call/s);
   assert.match(queries, /expiresAt.+is null.+expiresAt.+> now\(\)/s);
-  assert.match(queries, /eventStartTime.+is null.+eventStartTime.+> now\(\)/s);
+  assert.match(queries, /eventStartTime.+is not null/s);
+  assert.match(queries, /eventStartTime.+> now\(\)/s);
   assert.match(queries, /expiredSportsCalls/);
+});
+
+test("worker sports expiry uses typed cutoff and backfills missing event starts", () => {
+  const repository = file("apps/worker/src/repository.ts");
+  assert.match(repository, /const cutoffIso = now\.toISOString\(\)/);
+  assert.match(repository, /::timestamptz/);
+  assert.match(repository, /backfillMissingSportsEventTimes/);
+  assert.match(repository, /sportsEventTime/);
+  assert.match(repository, /eventStartTime: eventStartTime|eventStartTime,/);
 });
 
 

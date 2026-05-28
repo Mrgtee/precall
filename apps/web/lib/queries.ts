@@ -102,7 +102,8 @@ function activeSportsPredicate(statuses: readonly string[] = activeSportsCallSta
   return and(
     inArray(sportsPredictions.status, [...statuses]),
     sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
-    sql`(${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now())`,
+    sql`${sportsPredictions.eventStartTime} is not null`,
+    sql`${sportsPredictions.eventStartTime} > now()`,
   );
 }
 
@@ -161,7 +162,7 @@ export async function getSportsActivitySummary() {
   const db = createDb();
   const [row] = await db
     .select({
-      active: sql<number>`count(*) filter (where ${sportsPredictions.status} in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now()) and (${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now()))::int`,
+      active: sql<number>`count(*) filter (where ${sportsPredictions.status} in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now()) and ${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} > now())::int`,
       unresolved: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'unresolved')::int`,
       expired: sql<number>`count(*) filter (where ${sportsPredictions.status} = 'expired' or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= now()) or (${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= now()))::int`,
       unlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
@@ -260,7 +261,7 @@ export async function getDemoData() {
     x402ApiPayments: sql<number>`(select count(*)::int from ${circleActions} where action_type in ('x402_api_payment', 'x402_evidence_payment'))`,
     circleActions: sql<number>`(select count(*)::int from ${circleActions})`,
     sportsIdeas: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call'))`,
-    activeSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (expires_at is null or expires_at > now()) and (event_start_time is null or event_start_time > now()))`,
+    activeSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status in ('strong_call', 'lean_call', 'high_risk_call', 'avoid_call') and (expires_at is null or expires_at > now()) and event_start_time is not null and event_start_time > now())`,
     expiredSportsCalls: sql<number>`(select count(*)::int from ${sportsPredictions} where status = 'expired' or (expires_at is not null and expires_at <= now()) or (event_start_time is not null and event_start_time <= now()))`,
     sportsUnlocks: sql<number>`(select count(*)::int from ${sportsUnlocks})`,
   }).from(sql`(select 1) as precall_counts`).limit(1);

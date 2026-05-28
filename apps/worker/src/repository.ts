@@ -13,6 +13,7 @@ import {
 } from "@precall/shared/db/schema";
 import { optionalEnv } from "@precall/shared/env";
 import { hashText } from "@precall/shared/scoring";
+import { sportsEventTime } from "@precall/shared/sports";
 import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SportsPredictionIdea } from "@precall/shared/types";
 import type { SportsCallStatus } from "@precall/shared/sports";
 
@@ -336,7 +337,8 @@ function activeSportsSql() {
   return and(
     inArray(sportsPredictions.status, activeSportsStatuses),
     sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
-    sql`(${sportsPredictions.eventStartTime} is null or ${sportsPredictions.eventStartTime} > now())`,
+    sql`${sportsPredictions.eventStartTime} is not null`,
+    sql`${sportsPredictions.eventStartTime} > now()`,
   );
 }
 
@@ -349,6 +351,7 @@ export async function getLatestSportsPredictions(limit = 10) {
 }
 
 export async function markExpiredSportsPredictions(now = new Date()) {
+  const cutoffIso = now.toISOString();
   const expired = await db()
     .update(sportsPredictions)
     .set({
@@ -359,9 +362,72 @@ export async function markExpiredSportsPredictions(now = new Date()) {
     })
     .where(and(
       inArray(sportsPredictions.status, activeSportsStatuses),
-      sql`((${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= ${now}) or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= ${now}))`,
+      sql`((${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= ${cutoffIso}::timestamptz) or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= ${cutoffIso}::timestamptz))`,
     ))
     .returning({ id: sportsPredictions.id, marketId: sportsPredictions.marketId, selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex });
+  const backfilledExpired = await backfillMissingSportsEventTimes(now);
+  return [...expired, ...backfilledExpired];
+}
+
+async function backfillMissingSportsEventTimes(now: Date) {
+  const candidates = await db()
+    .select({
+      id: sportsPredictions.id,
+      marketId: sportsPredictions.marketId,
+      marketTitle: sportsPredictions.marketTitle,
+      marketUrl: sportsPredictions.marketUrl,
+      expiresAt: sportsPredictions.expiresAt,
+      selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex,
+    })
+    .from(sportsPredictions)
+    .where(and(
+      inArray(sportsPredictions.status, activeSportsStatuses),
+      sql`${sportsPredictions.eventStartTime} is null`,
+    ));
+
+  const expired = [];
+  for (const candidate of candidates) {
+    const derivedEventTime = sportsEventTime({
+      source: "polymarket",
+      marketId: candidate.marketId,
+      conditionId: "",
+      slug: candidate.marketUrl,
+      title: candidate.marketTitle,
+      description: "",
+      url: candidate.marketUrl,
+      outcomes: [],
+      outcomePrices: [],
+      clobTokenIds: [],
+      liquidityUsd: 0,
+      volume24hUsd: 0,
+      closeTime: candidate.expiresAt ? candidate.expiresAt.toISOString() : null,
+      status: "active",
+    });
+    if (!derivedEventTime) continue;
+
+    const eventStartTime = new Date(derivedEventTime);
+    if (!Number.isFinite(eventStartTime.getTime())) continue;
+
+    if (eventStartTime <= now) {
+      const [row] = await db()
+        .update(sportsPredictions)
+        .set({
+          eventStartTime,
+          status: "expired",
+          resolutionStatus: "expired",
+          statusReason: "Expired sports live call. Event start has passed or selected-outcome settlement is not enabled yet.",
+          updatedAt: now,
+        })
+        .where(eq(sportsPredictions.id, candidate.id))
+        .returning({ id: sportsPredictions.id, marketId: sportsPredictions.marketId, selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex });
+      if (row) expired.push(row);
+    } else {
+      await db()
+        .update(sportsPredictions)
+        .set({ eventStartTime, updatedAt: now })
+        .where(eq(sportsPredictions.id, candidate.id));
+    }
+  }
   return expired;
 }
 
