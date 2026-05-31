@@ -10,11 +10,19 @@ export default async function LeaderboardPage() {
   let sportsActivity: Awaited<ReturnType<typeof getSportsActivitySummary>> = { active: 0, unresolved: 0, expired: 0, unlocks: 0 };
   let setupError = "";
 
-  try {
-    [rows, resolvedCalls, sportsActivity] = await Promise.all([getLeaderboard(), getResolvedLeaderboardCalls(), getSportsActivitySummary()]);
-  } catch (error) {
-    setupError = friendlySetupError(error);
-  }
+  const [leaderboardResult, resolvedResult, sportsResult] = await Promise.allSettled([
+    getLeaderboard(),
+    getResolvedLeaderboardCalls(),
+    getSportsActivitySummary(),
+  ]);
+
+  if (leaderboardResult.status === "fulfilled") rows = leaderboardResult.value;
+  else setupError = friendlySetupError(leaderboardResult.reason);
+
+  if (resolvedResult.status === "fulfilled") resolvedCalls = resolvedResult.value;
+  else setupError ||= friendlySetupError(resolvedResult.reason);
+
+  if (sportsResult.status === "fulfilled") sportsActivity = sportsResult.value;
 
   const totalResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
   const totalWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);

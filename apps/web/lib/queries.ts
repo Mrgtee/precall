@@ -203,21 +203,21 @@ export async function getLeaderboard() {
       agentId: agents.id,
       name: agents.name,
       role: agents.role,
-      calls: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = ${agents.id})`,
-      published: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = ${agents.id} and c.status = 'published' and c.legacy = false and (c.expires_at is null or c.expires_at > now()))`,
-      resolved: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id})`,
-      wins: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id} and r.roi_bps > 0)`,
-      losses: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id} and r.roi_bps <= 0)`,
-      unlocks: sql<number>`(select count(*)::int from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = ${agents.id})`,
-      followers: sql<number>`(select count(*)::int from ${follows} f where f.agent_id = ${agents.id})`,
-      avgBrier: sql<number>`coalesce((select avg(r.brier_score_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}), 0)`,
-      avgRoi: sql<number>`coalesce((select avg(r.roi_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}), 0)`,
+      calls: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = agents.id)`,
+      published: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = agents.id and c.status = 'published' and c.legacy = false and (c.expires_at is null or c.expires_at > now()))`,
+      resolved: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id)`,
+      wins: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id and r.roi_bps > 0)`,
+      losses: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id and r.roi_bps <= 0)`,
+      unlocks: sql<number>`(select count(*)::int from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = agents.id)`,
+      followers: sql<number>`(select count(*)::int from ${follows} f where f.agent_id = agents.id)`,
+      avgBrier: sql<number>`coalesce((select avg(r.brier_score_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id), 0)`,
+      avgRoi: sql<number>`coalesce((select avg(r.roi_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id), 0)`,
     })
     .from(agents)
     .orderBy(
-      sql`(select count(*) from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}) desc`,
-      sql`(select count(*) from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = ${agents.id}) desc`,
-      sql`(select count(*) from ${calls} c where c.agent_id = ${agents.id}) desc`,
+      sql`(select count(*) from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = agents.id) desc`,
+      sql`(select count(*) from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = agents.id) desc`,
+      sql`(select count(*) from ${calls} c where c.agent_id = agents.id) desc`,
     );
 }
 

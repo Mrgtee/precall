@@ -174,6 +174,8 @@ test("leaderboard displays resolved call totals and resolved history", () => {
   const leaderboard = file("apps/web/app/leaderboard/page.tsx");
   const queries = file("apps/web/lib/queries.ts");
   assert.match(queries, /getResolvedLeaderboardCalls/);
+  assert.match(queries, /c\.agent_id = agents\.id/);
+  assert.doesNotMatch(queries, /c\.agent_id = \${agents\.id}/);
   assert.match(queries, /from\(resolutions\)/);
   assert.match(queries, /innerJoin\(calls/);
   assert.match(leaderboard, /Resolved bonded calls/);

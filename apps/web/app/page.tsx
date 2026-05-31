@@ -16,18 +16,27 @@ export default async function HomePage() {
   let totalUnlocks = 0;
   let setupError = "";
 
-  try {
-    calls = await getCalls(30);
-    leaderboard = await getLeaderboard();
-    sportsIdeas = await getSportsPredictions(3);
-    activeSportsCalls = await getActiveSportsCallCount();
-    activeBondedCalls = await getActiveBondedCallCount();
-    totalUnlocks = await getTotalUnlockCount();
-  } catch (error) {
-    setupError = friendlySetupError(error);
-  }
+  const [callsResult, leaderboardResult, sportsIdeasResult, activeSportsResult, activeBondedResult, totalUnlocksResult] = await Promise.allSettled([
+    getCalls(30),
+    getLeaderboard(),
+    getSportsPredictions(3),
+    getActiveSportsCallCount(),
+    getActiveBondedCallCount(),
+    getTotalUnlockCount(),
+  ]);
+
+  if (callsResult.status === "fulfilled") calls = callsResult.value;
+  else setupError = friendlySetupError(callsResult.reason);
+
+  if (leaderboardResult.status === "fulfilled") leaderboard = leaderboardResult.value;
+  if (sportsIdeasResult.status === "fulfilled") sportsIdeas = sportsIdeasResult.value;
+  if (activeSportsResult.status === "fulfilled") activeSportsCalls = activeSportsResult.value;
+  if (activeBondedResult.status === "fulfilled") activeBondedCalls = activeBondedResult.value;
+  if (totalUnlocksResult.status === "fulfilled") totalUnlocks = totalUnlocksResult.value;
 
   const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
+  if (callsResult.status === "fulfilled" && activeBondedResult.status !== "fulfilled") activeBondedCalls = live.length;
+  if (sportsIdeasResult.status === "fulfilled" && activeSportsResult.status !== "fulfilled") activeSportsCalls = sportsIdeas.length;
   const agents = leaderboard.length;
 
   return (
@@ -76,7 +85,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {setupError ? (
+      {setupError && live.length === 0 ? (
         <section className="empty">
           <h2>Live data is temporarily unavailable</h2>
           <p className="muted">Precall is waiting for the latest call data to load.</p>
