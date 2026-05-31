@@ -43,8 +43,8 @@ test("successful x402 payment becomes paid evidence", async () => {
       maxPaymentUsdc: "0.005",
       dailySpendUsdc: "0.000000",
       dailyBudgetUsdc: "0.10",
-      paymentNetwork: "eip155:84532",
-      selectedChain: "baseSepolia",
+      paymentNetwork: "eip155:8453",
+      selectedChain: "base",
       paymentRef: "0xpayment",
       txHash: "0xpayment",
       data: { response: { tweets: [{ text: "BTC option flow is pricing upside.", url: "https://x.com/a/status/1", author: { userName: "analyst" } }] } } as T,
@@ -53,14 +53,14 @@ test("successful x402 payment becomes paid evidence", async () => {
 
   assert.equal(result.status, "success");
   assert.equal(result.paymentAmountUsdc, "0.005000");
-  assert.equal(result.selectedChain, "baseSepolia");
+  assert.equal(result.selectedChain, "base");
   assert.equal(result.evidence.length, 1);
   assert.equal(result.evidence[0]?.sourceType, "circle_x402_social");
   assert.equal(result.evidence[0]?.provider, "aisa_x402_social");
   assert.equal(result.evidence[0]?.paid, true);
   assert.equal(result.evidence[0]?.paymentRef, "0xpayment");
-  assert.equal(result.evidence[0]?.paymentNetwork, "eip155:84532");
-  assert.equal(result.evidence[0]?.metadata?.selectedChain, "baseSepolia");
+  assert.equal(result.evidence[0]?.paymentNetwork, "eip155:8453");
+  assert.equal(result.evidence[0]?.metadata?.selectedChain, "base");
 });
 
 test("failed x402 payment returns no paid evidence but keeps failure metadata", async () => {
@@ -103,15 +103,14 @@ test("unsupported x402 chains return no paid evidence and keep unsupported_netwo
       dailyBudgetUsdc: "0.10",
       failureReason: "unsupported_network",
       supportChecks: [
-        { chain: "arcTestnet", status: "unsupported", supported: false, error: "No Gateway batching option available" },
-        { chain: "baseSepolia", status: "unsupported", supported: false, error: "No Gateway batching option available" },
+        { chain: "base", status: "unsupported", supported: false, error: "No Gateway batching option available" },
       ],
-      error: "unsupported_network: no Gateway batching option available for candidate chains arcTestnet, baseSepolia",
+      error: "unsupported_network: no Gateway batching option available for candidate chains base",
     }),
   });
 
   assert.equal(result.status, "unsupported");
   assert.equal(result.failureReason, "unsupported_network");
   assert.equal(result.evidence.length, 0);
-  assert.equal(result.supportChecks?.length, 2);
+  assert.equal(result.supportChecks?.length, 1);
 });

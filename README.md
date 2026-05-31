@@ -308,7 +308,7 @@ CIRCLE_AGENT_PRIVATE_KEY=...
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
+CIRCLE_X402_CHAIN_CANDIDATES=base
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
@@ -372,8 +372,8 @@ npm run worker:expire
 npm run worker:resolve
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
 npm run worker:gateway:balance -- arcTestnet
-npm run worker:gateway:balance -- baseSepolia
-npm run worker:gateway:deposit -- baseSepolia 1
+npm run worker:gateway:balance -- base
+npm run worker:gateway:deposit -- base 1
 ```
 
 What they do:

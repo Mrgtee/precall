@@ -68,25 +68,19 @@ export default async function DemoPage() {
       <section className="panel info-split">
         <div>
           <h2>Circle Agent Stack proof</h2>
-          <p className="muted">Public market data comes from Polymarket Gamma/CLOB. Paid agent evidence comes from Circle Gateway/x402 providers. Settlement uses USDC on Arc. Private worker execution can run on Railway and be triggered from Vercel admin without exposing worker keys.</p>
-          {data.circleStack.gatewayX402Enabled ? (
+          {data.latestX402Payment ? (
             <div className="pill-row">
-              <span className="pill">Arc settlement: Arc Testnet</span>
-              <span className="pill">Gateway default: {data.circleStack.gatewayChain}</span>
-              <span className="pill">x402 candidates: {(data.circleStack.x402ChainCandidates || [data.circleStack.gatewayChain]).join(", ")}</span>
-              <span className="pill">Daily x402 {usdc(data.counts?.dailyX402Spend || 0)} / {usdc(data.circleStack.dailyBudgetUsdc)}</span>
-              <span className="pill">Allowed {data.circleStack.allowedHosts.join(", ")}</span>
+              <span className="pill">Successful payment</span>
+              <span className="pill">Cost {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)}</span>
+              <span className="pill">Network {data.latestX402Payment.chain || data.circleStack.latestX402SelectedChain || "base"}</span>
             </div>
           ) : (
-            <p className="muted">x402 paid evidence disabled — enable ENABLE_CIRCLE_GATEWAY_X402 and configure Circle Gateway env to activate paid API evidence.</p>
+            <p className="muted">No successful x402 payment recorded yet.</p>
           )}
-          {data.circleStack.gatewayBalancesByChain?.length ? <p className="muted">Gateway balances by candidate: {data.circleStack.gatewayBalancesByChain.map((balance) => `${balance.chain}: ${balance.gatewayAvailableUsdc ? usdc(balance.gatewayAvailableUsdc) : balance.status}`).join(" · ")}</p> : null}
-          {data.circleStack.latestX402SelectedChain ? <p className="muted">Latest provider-selected x402 chain: {data.circleStack.latestX402SelectedChain}</p> : null}
-          {data.circleStack.latestX402FailureReason ? <p className="muted">Latest x402 failure reason: {data.circleStack.latestX402FailureReason}</p> : null}
         </div>
         <aside className="panel info-note">
           <h3>Latest paid evidence</h3>
-          {data.latestX402Payment ? <p>{data.latestX402Payment.provider || "x402"} · {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)} · {data.latestX402Payment.status}{data.latestX402Payment.chain ? ` · ${data.latestX402Payment.chain}` : ""}</p> : <p className="muted">No x402 evidence payment recorded yet.</p>}
+          {data.latestX402Payment ? <p>success · {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)} · {data.latestX402Payment.chain || data.circleStack.latestX402SelectedChain || "base"}</p> : <p className="muted">No successful x402 payment recorded yet.</p>}
           <h3>Latest Arc bond</h3>
           {data.latestArcBond?.txHash ? <p>{usdc(data.latestArcBond.amountUsdc || data.latestArcBond.amount)} <Link href={`https://testnet.arcscan.app/tx/${data.latestArcBond.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No Arc bond action recorded yet.</p>}
           <h3>Latest thesis unlock</h3>

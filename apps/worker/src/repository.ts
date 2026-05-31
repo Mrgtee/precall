@@ -433,7 +433,7 @@ async function backfillMissingSportsEventTimes(now: Date) {
 
 export async function getOpenPublishedCalls() {
   return db().query.calls.findMany({
-    where: inArray(calls.status, ["published", "expired"]),
+    where: inArray(calls.status, ["published", "expired", "failed_resolution"]),
     orderBy: desc(calls.publishedAt),
   });
 }
@@ -452,7 +452,7 @@ export async function markCallResolving(callId: number) {
 }
 
 export async function markCallResolutionFailed(callId: number, reason: string) {
-  await db().update(calls).set({ status: "failed_resolution", statusReason: reason.slice(0, 500) }).where(eq(calls.id, callId));
+  await db().update(calls).set({ status: "failed_resolution", statusReason: `Resolution failed; retryable. ${reason}`.slice(0, 500) }).where(eq(calls.id, callId));
 }
 
 export async function insertResolution(input: {

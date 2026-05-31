@@ -166,7 +166,7 @@ The app can run real market agents without paid evidence. Turn this on only afte
 ```env
 ENABLE_CIRCLE_GATEWAY_X402=true
 CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
+CIRCLE_X402_CHAIN_CANDIDATES=base
 CIRCLE_AGENT_PRIVATE_KEY=0x...
 CIRCLE_GATEWAY_RPC_URL=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005

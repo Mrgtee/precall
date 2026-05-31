@@ -203,23 +203,22 @@ export async function getLeaderboard() {
       agentId: agents.id,
       name: agents.name,
       role: agents.role,
-      calls: sql<number>`count(distinct ${calls.id})::int`,
-      published: sql<number>`count(distinct ${calls.id}) filter (where ${calls.status} = 'published')::int`,
-      resolved: sql<number>`count(distinct ${resolutions.id})::int`,
-      wins: sql<number>`count(distinct ${resolutions.id}) filter (where ${resolutions.roiBps} > 0)::int`,
-      losses: sql<number>`count(distinct ${resolutions.id}) filter (where ${resolutions.roiBps} <= 0)::int`,
-      unlocks: sql<number>`count(distinct ${thesisUnlocks.id})::int`,
-      followers: sql<number>`count(distinct ${follows.id})::int`,
-      avgBrier: sql<number>`coalesce(avg(${resolutions.brierScoreBps}), 0)::int`,
-      avgRoi: sql<number>`coalesce(avg(${resolutions.roiBps}), 0)::int`,
+      calls: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = ${agents.id})`,
+      published: sql<number>`(select count(*)::int from ${calls} c where c.agent_id = ${agents.id} and c.status = 'published' and c.legacy = false and (c.expires_at is null or c.expires_at > now()))`,
+      resolved: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id})`,
+      wins: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id} and r.roi_bps > 0)`,
+      losses: sql<number>`(select count(*)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id} and r.roi_bps <= 0)`,
+      unlocks: sql<number>`(select count(*)::int from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = ${agents.id})`,
+      followers: sql<number>`(select count(*)::int from ${follows} f where f.agent_id = ${agents.id})`,
+      avgBrier: sql<number>`coalesce((select avg(r.brier_score_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}), 0)`,
+      avgRoi: sql<number>`coalesce((select avg(r.roi_bps)::int from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}), 0)`,
     })
     .from(agents)
-    .leftJoin(calls, eq(calls.agentId, agents.id))
-    .leftJoin(thesisUnlocks, eq(thesisUnlocks.callId, calls.id))
-    .leftJoin(resolutions, eq(resolutions.callId, calls.id))
-    .leftJoin(follows, eq(follows.agentId, agents.id))
-    .groupBy(agents.id)
-    .orderBy(sql`count(distinct ${resolutions.id}) desc`, sql`count(distinct ${thesisUnlocks.id}) desc`, sql`count(distinct ${calls.id}) desc`);
+    .orderBy(
+      sql`(select count(*) from ${resolutions} r inner join ${calls} c on c.id = r.call_id where c.agent_id = ${agents.id}) desc`,
+      sql`(select count(*) from ${thesisUnlocks} u inner join ${calls} c on c.id = u.call_id where c.agent_id = ${agents.id}) desc`,
+      sql`(select count(*) from ${calls} c where c.agent_id = ${agents.id}) desc`,
+    );
 }
 
 export async function getResolvedLeaderboardCalls(limit = 25) {
@@ -276,7 +275,7 @@ export async function getDemoData() {
     calls: sql<number>`(select count(*)::int from ${calls})`,
     liveCalls: sql<number>`(select count(*)::int from ${calls} where status = 'published' and legacy = false and (expires_at is null or expires_at > now()))`,
     expiredCalls: sql<number>`(select count(*)::int from ${calls} where status = 'expired')`,
-    resolvedCalls: sql<number>`(select count(*)::int from ${calls} where status = 'resolved')`,
+    resolvedCalls: sql<number>`(select count(*)::int from ${resolutions})`,
     unlocks: sql<number>`((select count(*)::int from ${thesisUnlocks}) + (select count(*)::int from ${sportsUnlocks}))::int`,
     thesisUnlocks: sql<number>`(select count(*)::int from ${thesisUnlocks})`,
     follows: sql<number>`(select count(*)::int from ${follows})`,
@@ -301,7 +300,7 @@ export async function getDemoData() {
   const latestSportsIdeas = await getSportsPredictions(5);
   const latestUnlocks = await db.query.thesisUnlocks.findMany({ orderBy: desc(thesisUnlocks.createdAt), limit: 5 });
   const latestCircleActions = await db.query.circleActions.findMany({ orderBy: desc(circleActions.createdAt), limit: 8 });
-  const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment')`, orderBy: desc(circleActions.createdAt) });
+  const latestX402Payment = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('x402_api_payment', 'x402_evidence_payment') and ${circleActions.status} = 'success' and ${circleActions.amountUsdc} > 0`, orderBy: desc(circleActions.createdAt) });
   const latestArcBond = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('arc_bond', 'bond_call')`, orderBy: desc(circleActions.createdAt) });
   const latestThesisUnlock = await db.query.circleActions.findFirst({ where: sql`${circleActions.actionType} in ('thesis_unlock', 'unlock_thesis')`, orderBy: desc(circleActions.createdAt) });
   const gatewayConfig = gatewayRuntimeConfig();
@@ -313,7 +312,7 @@ export async function getDemoData() {
     counts,
     latestRuns,
     latestLiveCall: latestCalls.find((call) => call.status === "published" && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now())),
-    awaitingResolution: latestCalls.filter((call) => call.status === "expired"),
+    awaitingResolution: latestCalls.filter((call) => call.status === "expired" || call.status === "failed_resolution"),
     resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],
     latestSportsIdeas,

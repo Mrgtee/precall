@@ -19,6 +19,12 @@ export type GatewayX402Status =
   | "success"
   | "failed";
 
+const X402_PAYMENT_CHAIN: SupportedChainName = "base";
+
+function x402PaymentChainCandidates() {
+  return [X402_PAYMENT_CHAIN];
+}
+
 export type GatewayRuntimeConfig = {
   enabled: boolean;
   chain: SupportedChainName;
@@ -188,7 +194,7 @@ export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = 
   return {
     enabled: overrides.enabled ?? boolEnv("ENABLE_CIRCLE_GATEWAY_X402", false),
     chain,
-    chainCandidates: overrides.chainCandidates ?? parseChainCandidates(optionalEnv("CIRCLE_X402_CHAIN_CANDIDATES", "arcTestnet,baseSepolia,base"), chain),
+    chainCandidates: overrides.chainCandidates ?? x402PaymentChainCandidates(),
     privateKey: overrides.privateKey ?? (optionalEnv("CIRCLE_AGENT_PRIVATE_KEY") as Hex | ""),
     rpcUrl: overrides.rpcUrl ?? optionalEnv("CIRCLE_GATEWAY_RPC_URL", chain === "arcTestnet" ? optionalEnv("ARC_TESTNET_RPC_URL") : undefined),
     maxPaymentUsdc: overrides.maxPaymentUsdc ?? optionalEnv("CIRCLE_X402_MAX_PAYMENT_USDC", "0.005"),
@@ -348,7 +354,7 @@ export async function depositGatewayUsdc(input: DepositGatewayUsdcInput): Promis
 
 export async function supportsX402Resource(url: string, input: { client?: GatewayClientLike; clients?: Partial<Record<SupportedChainName, GatewayClientLike>>; chainCandidates?: SupportedChainName[] | undefined; config?: Partial<GatewayRuntimeConfig> } = {}) {
   const config = gatewayRuntimeConfig(input.config);
-  const chainCandidates = input.chainCandidates || config.chainCandidates;
+  const chainCandidates = x402PaymentChainCandidates();
   const supportChecks: GatewaySupportCheck[] = [];
   if (!config.enabled) return { enabled: false, supported: false, status: "disabled" as const, url, supportChecks, error: "Gateway x402 is disabled." };
   if (!isAllowedX402Host(url, config.allowedHosts)) return { enabled: true, supported: false, status: "blocked" as const, url, supportChecks, error: `Host is not allowlisted: ${hostnameForUrl(url)}` };
@@ -395,7 +401,7 @@ export async function supportsX402Resource(url: string, input: { client?: Gatewa
 export async function payX402Resource<T = unknown>(input: PayX402ResourceInput): Promise<PayX402ResourceResult<T>> {
   const config = gatewayRuntimeConfig(input.config);
   const dailySpend = toNumber(input.dailySpendUsdc, 0);
-  const chainCandidates = input.chainCandidates || config.chainCandidates;
+  const chainCandidates = x402PaymentChainCandidates();
   const supportChecks: GatewaySupportCheck[] = [];
   const base = {
     enabled: config.enabled,

@@ -140,7 +140,7 @@ test("non-allowlisted x402 host is rejected before support/payment", async () =>
 });
 
 test("per-request max payment is enforced", async () => {
-  const client = mockClient({ amountAtomic: "10000" });
+  const client = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "10000" });
   const result = await payX402Resource({
     url: "https://api.aisa.one/paid",
     client,
@@ -153,7 +153,7 @@ test("per-request max payment is enforced", async () => {
 });
 
 test("daily budget is enforced before payment", async () => {
-  const client = mockClient({ amountAtomic: "5000" });
+  const client = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "5000" });
   const result = await payX402Resource({
     url: "https://api.aisa.one/paid",
     client,
@@ -167,7 +167,7 @@ test("daily budget is enforced before payment", async () => {
 });
 
 test("insufficient Gateway balance is handled safely", async () => {
-  const client = mockClient({ amountAtomic: "5000", availableUsdc: "0.001000" });
+  const client = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "5000", availableUsdc: "0.001000" });
   const result = await payX402Resource({
     url: "https://api.aisa.one/paid",
     client,
@@ -179,7 +179,7 @@ test("insufficient Gateway balance is handled safely", async () => {
 });
 
 test("successful payment returns Circle payment metadata", async () => {
-  const client = mockClient({ amountAtomic: "5000", availableUsdc: "1.000000" });
+  const client = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "5000", availableUsdc: "1.000000" });
   const result = await payX402Resource<{ ok: boolean }>({
     url: "https://api.aisa.one/paid",
     client,
@@ -189,7 +189,8 @@ test("successful payment returns Circle payment metadata", async () => {
   assert.equal(result.status, "success");
   assert.equal(result.paid, true);
   assert.equal(result.amountUsdc, "0.005000");
-  assert.equal(result.paymentNetwork, "eip155:5042002");
+  assert.equal(result.paymentNetwork, "eip155:8453");
+  assert.equal(result.selectedChain, "base");
   assert.equal(result.paymentRef, "0xpayment");
   assert.equal(client.payCalls(), 1);
 });
@@ -206,66 +207,66 @@ test("supportsX402Resource blocks non-allowlisted hosts", async () => {
 });
 
 
-test("x402 payment records Arc Testnet when the provider supports Arc", async () => {
-  const client = mockClient({ chainName: "arcTestnet", network: "eip155:5042002", amountAtomic: "5000", availableUsdc: "1.000000" });
+test("x402 payment uses Base even when Arc is supplied as a candidate", async () => {
+  const arc = mockClient({ chainName: "arcTestnet", network: "eip155:5042002", amountAtomic: "5000", availableUsdc: "1.000000" });
+  const base = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "5000", availableUsdc: "1.000000" });
   const result = await payX402Resource<{ ok: boolean }>({
     url: "https://api.aisa.one/paid",
-    clients: { arcTestnet: client },
-    chainCandidates: ["arcTestnet"],
+    clients: { arcTestnet: arc, base },
+    chainCandidates: ["arcTestnet", "base"],
     config: { enabled: true, privateKey: "", maxPaymentUsdc: "0.005", allowedHosts: ["api.aisa.one"] },
   });
 
   assert.equal(result.status, "success");
-  assert.equal(result.selectedChain, "arcTestnet");
-  assert.equal(result.paymentNetwork, "eip155:5042002");
-  assert.equal(result.supportChecks?.[0]?.chain, "arcTestnet");
+  assert.equal(result.selectedChain, "base");
+  assert.equal(result.paymentNetwork, "eip155:8453");
+  assert.equal(arc.payCalls(), 0);
+  assert.equal(base.payCalls(), 1);
+  assert.deepEqual(result.supportChecks?.map((check) => [check.chain, check.status]), [["base", "success"]]);
 });
 
-test("x402 payment falls forward when Arc is unsupported but Base Sepolia is supported", async () => {
+test("x402 payment uses Base as the only paid-evidence chain", async () => {
   const arc = mockClient({ chainName: "arcTestnet", supported: false });
-  const baseSepolia = mockClient({ chainName: "baseSepolia", network: "eip155:84532", amountAtomic: "5000", availableUsdc: "1.000000" });
+  const base = mockClient({ chainName: "base", network: "eip155:8453", amountAtomic: "5000", availableUsdc: "1.000000" });
   const result = await payX402Resource<{ ok: boolean }>({
     url: "https://api.aisa.one/paid",
-    clients: { arcTestnet: arc, baseSepolia },
-    chainCandidates: ["arcTestnet", "baseSepolia"],
+    clients: { arcTestnet: arc, base },
+    chainCandidates: ["arcTestnet", "base"],
     config: { enabled: true, privateKey: "", maxPaymentUsdc: "0.005", allowedHosts: ["api.aisa.one"] },
   });
 
   assert.equal(result.status, "success");
-  assert.equal(result.selectedChain, "baseSepolia");
-  assert.equal(result.paymentNetwork, "eip155:84532");
+  assert.equal(result.selectedChain, "base");
+  assert.equal(result.paymentNetwork, "eip155:8453");
   assert.equal(arc.payCalls(), 0);
-  assert.equal(baseSepolia.payCalls(), 1);
-  assert.deepEqual(result.supportChecks?.map((check) => [check.chain, check.status]), [["arcTestnet", "unsupported"], ["baseSepolia", "success"]]);
+  assert.equal(base.payCalls(), 1);
+  assert.deepEqual(result.supportChecks?.map((check) => [check.chain, check.status]), [["base", "success"]]);
 });
 
 test("no supported x402 chains returns unsupported_network without paying", async () => {
-  const arc = mockClient({ chainName: "arcTestnet", supported: false });
-  const baseSepolia = mockClient({ chainName: "baseSepolia", supported: false });
+  const base = mockClient({ chainName: "base", supported: false });
   const result = await payX402Resource({
     url: "https://api.aisa.one/paid",
-    clients: { arcTestnet: arc, baseSepolia },
-    chainCandidates: ["arcTestnet", "baseSepolia"],
+    clients: { base },
+    chainCandidates: ["arcTestnet", "base"],
     config: { enabled: true, privateKey: "", allowedHosts: ["api.aisa.one"] },
   });
 
   assert.equal(result.status, "unsupported");
   assert.equal(result.failureReason, "unsupported_network");
   assert.equal(result.paid, false);
-  assert.equal(arc.payCalls(), 0);
-  assert.equal(baseSepolia.payCalls(), 0);
+  assert.equal(base.payCalls(), 0);
 });
 
 test("supportsX402Resource reports selected fallback chain", async () => {
-  const arc = mockClient({ chainName: "arcTestnet", supported: false });
-  const baseSepolia = mockClient({ chainName: "baseSepolia", network: "eip155:84532" });
+  const base = mockClient({ chainName: "base", network: "eip155:8453" });
   const result = await supportsX402Resource("https://api.aisa.one/paid", {
-    clients: { arcTestnet: arc, baseSepolia },
-    chainCandidates: ["arcTestnet", "baseSepolia"],
+    clients: { base },
+    chainCandidates: ["arcTestnet", "base"],
     config: { enabled: true, privateKey: "", allowedHosts: ["api.aisa.one"] },
   });
 
   assert.equal(result.status, "success");
-  assert.equal(result.selectedChain, "baseSepolia");
-  assert.equal(result.supportChecks.length, 2);
+  assert.equal(result.selectedChain, "base");
+  assert.equal(result.supportChecks.length, 1);
 });

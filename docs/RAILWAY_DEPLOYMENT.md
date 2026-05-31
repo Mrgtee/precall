@@ -52,8 +52,8 @@ npm run worker:expire
 npm run worker:resolve
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
 npm run worker:gateway:balance -- arcTestnet
-npm run worker:gateway:balance -- baseSepolia
-npm run worker:gateway:deposit -- baseSepolia 1
+npm run worker:gateway:balance -- base
+npm run worker:gateway:deposit -- base 1
 ```
 
 The CLI commands close DB connections after completion and exit cleanly. Discovery now fetches deeper market pools, computes CLOB best bid/ask spread, and skips ultra-extreme prices before spending x402/model calls so the worker has a better chance of finding publishable signals without lowering quality gates. The HTTP trigger server closes DB connections after every request and during SIGTERM/SIGINT shutdown.
@@ -84,7 +84,7 @@ RESOLVE_ONCHAIN=true
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
+CIRCLE_X402_CHAIN_CANDIDATES=base
 CIRCLE_AGENT_PRIVATE_KEY=
 CIRCLE_GATEWAY_RPC_URL=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
@@ -238,14 +238,14 @@ Run these commands from Railway shell, a Railway one-off command, or locally wit
 ```bash
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
 npm run worker:gateway:balance -- arcTestnet
-npm run worker:gateway:balance -- baseSepolia
-npm run worker:gateway:deposit -- baseSepolia 1
-npm run worker:gateway:balance -- baseSepolia
+npm run worker:gateway:balance -- base
+npm run worker:gateway:deposit -- base 1
+npm run worker:gateway:balance -- base
 ```
 
 Safety notes:
 
-- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has USDC on the chain you deposit from, and Gateway balance on at least one provider-supported `CIRCLE_X402_CHAIN_CANDIDATES` chain.
+- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has USDC on the chain you deposit from, and Gateway balance on at least one provider-supported Base `CIRCLE_X402_CHAIN_CANDIDATES` chain.
 - `ENABLE_CIRCLE_GATEWAY_X402=true` must be set, otherwise deposit returns a disabled result and moves no funds.
 - `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC` defaults to `10`; deposits above that cap are blocked before any transaction.
 - The deposit command uses the Circle Gateway SDK `deposit()` method, which approves the Gateway Wallet if needed, then deposits the requested USDC.
@@ -259,7 +259,7 @@ Safety notes:
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_AGENT_PRIVATE_KEY=0x...
-CIRCLE_X402_CHAIN_CANDIDATES=arcTestnet,baseSepolia,base
+CIRCLE_X402_CHAIN_CANDIDATES=base
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
