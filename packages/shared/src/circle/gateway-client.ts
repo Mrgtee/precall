@@ -1,5 +1,7 @@
-import { GatewayClient, type Balances, type DepositResult, type PayResult, type SupportedChainName, type SupportsResult } from "@circle-fin/x402-batching/client";
+import { CHAIN_CONFIGS, GatewayClient, registerBatchScheme, type Balances, type DepositResult, type PayResult, type SupportedChainName, type SupportsResult } from "@circle-fin/x402-batching/client";
+import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client, type PaymentRequirements } from "@x402/fetch";
 import { formatUnits, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { boolEnv, optionalEnv } from "../env";
 
 export type GatewayClientLike = {
@@ -69,6 +71,7 @@ export type DepositGatewayUsdcInput = {
   chain?: SupportedChainName | undefined;
   client?: GatewayClientLike | undefined;
   config?: Partial<GatewayRuntimeConfig> | undefined;
+  fetch?: typeof globalThis.fetch | undefined;
 };
 
 export type GatewaySupportCheck = {
@@ -91,6 +94,7 @@ export type PayX402ResourceInput = {
   clients?: Partial<Record<SupportedChainName, GatewayClientLike>> | undefined;
   chainCandidates?: SupportedChainName[] | undefined;
   config?: Partial<GatewayRuntimeConfig> | undefined;
+  fetch?: typeof globalThis.fetch | undefined;
 };
 
 export type PayX402ResourceResult<T = unknown> = {
@@ -398,27 +402,197 @@ export async function supportsX402Resource(url: string, input: { client?: Gatewa
   };
 }
 
-export async function payX402Resource<T = unknown>(input: PayX402ResourceInput): Promise<PayX402ResourceResult<T>> {
-  const config = gatewayRuntimeConfig(input.config);
-  const dailySpend = toNumber(input.dailySpendUsdc, 0);
-  const chainCandidates = x402PaymentChainCandidates();
-  const supportChecks: GatewaySupportCheck[] = [];
-  const base = {
-    enabled: config.enabled,
-    paid: false,
-    url: input.url,
-    maxPaymentUsdc: config.maxPaymentUsdc,
-    dailySpendUsdc: dailySpend.toFixed(6),
-    dailyBudgetUsdc: config.dailyBudgetUsdc,
-    supportChecks,
-  };
+function networkForChain(chain: SupportedChainName): `${string}:${string}` {
+  return `eip155:${CHAIN_CONFIGS[chain].chain.id}` as `${string}:${string}`;
+}
 
-  if (!config.enabled) return { ...base, status: "disabled", error: "Gateway x402 is disabled." };
-  if (!isAllowedX402Host(input.url, config.allowedHosts)) {
-    const providerHost = hostnameForUrl(input.url);
-    return { ...base, status: "blocked", providerHost, error: `Host is not allowlisted: ${providerHost}` };
+function isGatewayBatchingRequirement(requirement: PaymentRequirements) {
+  return requirement.scheme === "exact" &&
+    typeof requirement.network === "string" &&
+    requirement.network.startsWith("eip155:") &&
+    requirement.extra?.name === "GatewayWalletBatched" &&
+    requirement.extra?.version === "1" &&
+    typeof requirement.extra?.verifyingContract === "string";
+}
+
+function readPaymentResponseRef(response: Response) {
+  const header = response.headers.get("PAYMENT-RESPONSE") || response.headers.get("X-PAYMENT-RESPONSE");
+  if (!header) return undefined;
+  try {
+    const decoded = decodePaymentResponseHeader(header) as unknown as Record<string, unknown>;
+    for (const key of ["transaction", "txHash", "id", "paymentId"]) {
+      const value = decoded[key];
+      if (typeof value === "string" && value.length > 0) return value;
+    }
+  } catch {
+    return undefined;
   }
-  if (!config.privateKey && !input.client && !input.clients) return { ...base, status: "failed", error: "CIRCLE_AGENT_PRIVATE_KEY is required when Gateway x402 is enabled." };
+  return undefined;
+}
+
+function statusFromPaymentError(message: string): GatewayX402Status {
+  if (/not allowlisted|exceeds|budget|amount was not published/i.test(message)) return "blocked";
+  if (/insufficient|below required minimum/i.test(message)) return "insufficient_balance";
+  if (/unsupported|no Gateway batching|no supported/i.test(message)) return "unsupported";
+  return "failed";
+}
+
+async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput, config: GatewayRuntimeConfig, dailySpend: number, base: Omit<PayX402ResourceResult<T>, "status">): Promise<PayX402ResourceResult<T>> {
+  const chainCandidates = x402PaymentChainCandidates();
+  const supportChecks = base.supportChecks || [];
+  const primaryChain = chainCandidates[0] || config.chain;
+  let selectedChain: SupportedChainName | undefined;
+  let selectedRequirement: PaymentRequirements | undefined;
+  let selectedAmountUsdc: string | undefined;
+  let selectedPaymentNetwork: string | undefined;
+
+  try {
+    const balanceClient = await resolveClient(undefined, config, primaryChain);
+    if (!balanceClient) return { ...base, status: "disabled", error: "Gateway x402 is disabled." };
+    const balances = await balanceClient.getBalances();
+    const available = toNumber(balances.gateway.formattedAvailable);
+    const minGatewayBalance = toNumber(config.minGatewayBalanceUsdc);
+    if (available < minGatewayBalance) {
+      supportChecks.push({ chain: primaryChain, status: "failed", supported: false, gatewayAvailableUsdc: balances.gateway.formattedAvailable, error: `Gateway available balance ${balances.gateway.formattedAvailable} USDC is below required minimum ${config.minGatewayBalanceUsdc} USDC.` });
+      return {
+        ...base,
+        status: "insufficient_balance",
+        selectedChain: primaryChain,
+        error: `Gateway available balance ${balances.gateway.formattedAvailable} USDC is below required minimum ${config.minGatewayBalanceUsdc} USDC.`,
+      };
+    }
+  } catch (error) {
+    return { ...base, status: "failed", selectedChain: primaryChain, error: error instanceof Error ? error.message : String(error) };
+  }
+
+  const privateKey = config.privateKey;
+  if (!privateKey) return { ...base, status: "failed", selectedChain: primaryChain, error: "CIRCLE_AGENT_PRIVATE_KEY is required when Gateway x402 is enabled." };
+  const account = privateKeyToAccount(privateKey);
+  const paymentClient = new x402Client((_, requirements) => {
+    const seen = new Set<string>();
+    for (const chain of chainCandidates) {
+      const network = networkForChain(chain);
+      if (seen.has(network)) continue;
+      seen.add(network);
+      const requirement = requirements.find((candidate) => candidate.network === network && isGatewayBatchingRequirement(candidate));
+      if (!requirement) {
+        supportChecks.push({ chain, status: "unsupported", supported: false, paymentNetwork: network, error: "Seller did not advertise a Circle Gateway batching option for this chain." });
+        continue;
+      }
+
+      const amountUsdc = extractRequirementAmountUsdc(requirement);
+      const paymentNetwork = extractRequirementNetwork(requirement) || requirement.network;
+      if (!amountUsdc) {
+        throw new Error("x402 payment amount was not published by the seller.");
+      }
+      const amount = toNumber(amountUsdc);
+      const maxPayment = toNumber(config.maxPaymentUsdc);
+      const budget = toNumber(config.dailyBudgetUsdc);
+      if (amount > maxPayment) {
+        throw new Error(`x402 payment ${amountUsdc} USDC exceeds per-request cap ${config.maxPaymentUsdc} USDC.`);
+      }
+      if (dailySpend + amount > budget) {
+        throw new Error(`Daily x402 budget would be exceeded (${(dailySpend + amount).toFixed(6)} > ${config.dailyBudgetUsdc} USDC).`);
+      }
+
+      selectedChain = chain;
+      selectedRequirement = requirement;
+      selectedAmountUsdc = amountUsdc;
+      selectedPaymentNetwork = paymentNetwork;
+      supportChecks.push({ chain, status: "success", supported: true, amountUsdc, paymentNetwork });
+      return requirement;
+    }
+
+    const acceptedNetworks = [...new Set(requirements.map((requirement) => requirement.network).filter(Boolean))].join(", ") || "none";
+    throw new Error(`unsupported_network: no Circle Gateway batching option for candidate chains ${chainCandidates.join(", ")}. Seller accepts: ${acceptedNetworks}`);
+  });
+
+  registerBatchScheme(paymentClient, {
+    signer: account,
+    networks: chainCandidates.map(networkForChain),
+  });
+
+  const fetchWithPayment = wrapFetchWithPayment(input.fetch || globalThis.fetch, paymentClient);
+  const requestInit: RequestInit = {
+    headers: { "Content-Type": "application/json", ...(input.headers || {}) },
+  };
+  if (input.method) requestInit.method = input.method;
+  if (input.body !== undefined) {
+    requestInit.body = typeof input.body === "string" ? input.body : JSON.stringify(input.body);
+  }
+
+  try {
+    const response = await fetchWithPayment(input.url, requestInit);
+    const rawBody = await response.text();
+    let data: T | undefined;
+    try {
+      data = rawBody ? JSON.parse(rawBody) as T : undefined;
+    } catch {
+      data = rawBody as T;
+    }
+
+    if (response.status === 401) {
+      return {
+        ...base,
+        status: "failed",
+        selectedChain,
+        amountUsdc: selectedAmountUsdc,
+        paymentNetwork: selectedPaymentNetwork,
+        error: `x402 provider returned 401 instead of HTTP 402 Payment Required. Body: ${rawBody.slice(0, 240)}`,
+      };
+    }
+    if (response.status === 402) {
+      return {
+        ...base,
+        status: "failed",
+        selectedChain,
+        amountUsdc: selectedAmountUsdc,
+        paymentNetwork: selectedPaymentNetwork,
+        error: "x402 payment was attempted but the provider still returned HTTP 402 Payment Required.",
+      };
+    }
+    if (!response.ok) {
+      return {
+        ...base,
+        status: "failed",
+        selectedChain,
+        amountUsdc: selectedAmountUsdc,
+        paymentNetwork: selectedPaymentNetwork,
+        error: `x402 provider request failed with HTTP ${response.status}. Body: ${rawBody.slice(0, 240)}`,
+      };
+    }
+
+    const paymentRef = readPaymentResponseRef(response);
+    return {
+      ...base,
+      status: "success",
+      paid: toNumber(selectedAmountUsdc) > 0,
+      supported: true,
+      selectedChain,
+      amountUsdc: selectedAmountUsdc,
+      paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
+      paymentRef,
+      txHash: paymentRef,
+      data,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ...base,
+      status: statusFromPaymentError(message),
+      supported: selectedRequirement ? true : false,
+      selectedChain,
+      amountUsdc: selectedAmountUsdc,
+      paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
+      failureReason: /unsupported|no Gateway batching/i.test(message) ? "unsupported_network" : undefined,
+      error: message,
+    };
+  }
+}
+
+async function payX402ResourceWithGatewayClient<T = unknown>(input: PayX402ResourceInput, config: GatewayRuntimeConfig, dailySpend: number, base: Omit<PayX402ResourceResult<T>, "status">): Promise<PayX402ResourceResult<T>> {
+  const chainCandidates = x402PaymentChainCandidates();
+  const supportChecks = base.supportChecks || [];
 
   for (const chain of chainCandidates) {
     try {
@@ -491,4 +665,32 @@ export async function payX402Resource<T = unknown>(input: PayX402ResourceInput):
     failureReason: "unsupported_network",
     error: `unsupported_network: no Gateway batching option available for candidate chains ${chainCandidates.join(", ")}`,
   };
+}
+
+export async function payX402Resource<T = unknown>(input: PayX402ResourceInput): Promise<PayX402ResourceResult<T>> {
+  const config = gatewayRuntimeConfig(input.config);
+  const dailySpend = toNumber(input.dailySpendUsdc, 0);
+  const supportChecks: GatewaySupportCheck[] = [];
+  const base = {
+    enabled: config.enabled,
+    paid: false,
+    url: input.url,
+    maxPaymentUsdc: config.maxPaymentUsdc,
+    dailySpendUsdc: dailySpend.toFixed(6),
+    dailyBudgetUsdc: config.dailyBudgetUsdc,
+    supportChecks,
+  };
+
+  if (!config.enabled) return { ...base, status: "disabled", error: "Gateway x402 is disabled." };
+  if (!isAllowedX402Host(input.url, config.allowedHosts)) {
+    const providerHost = hostnameForUrl(input.url);
+    return { ...base, status: "blocked", providerHost, error: `Host is not allowlisted: ${providerHost}` };
+  }
+  if (!config.privateKey && !input.client && !input.clients) return { ...base, status: "failed", error: "CIRCLE_AGENT_PRIVATE_KEY is required when Gateway x402 is enabled." };
+
+  if (input.client || input.clients) {
+    return payX402ResourceWithGatewayClient(input, config, dailySpend, base);
+  }
+
+  return payX402ResourceWithFetch(input, config, dailySpend, base);
 }

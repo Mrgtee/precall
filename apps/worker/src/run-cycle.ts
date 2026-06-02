@@ -597,7 +597,7 @@ export async function runSportsEdge() {
   const discoveryLimit = sportsDiscoveryLimit();
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
-  const requireX402 = boolEnv("REQUIRE_SPORTS_X402", false);
+  const requireX402 = boolEnv("REQUIRE_SPORTS_X402", true);
   const expiryUpdate = await expirePublishedCalls();
   const markets = await discoverPolymarketMarkets(discoveryLimit);
   const skipped: SportsSkip[] = [];

@@ -1,7 +1,12 @@
 import type { EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../../types";
+import { optionalEnv } from "../../env";
 import { payX402Resource, supportsX402Resource, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
 
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
+
+function aisaTwitterSearchEndpoint() {
+  return optionalEnv("AISA_X402_TWITTER_SEARCH_ENDPOINT", AISA_TWITTER_SEARCH_ENDPOINT);
+}
 
 export type X402EvidenceProviderStatus = "disabled" | "unsupported" | "blocked" | "insufficient_balance" | "success" | "failed";
 
@@ -26,7 +31,7 @@ function nowIso() {
 }
 
 function buildAisaSearchUrl(query: string) {
-  const url = new URL(AISA_TWITTER_SEARCH_ENDPOINT);
+  const url = new URL(aisaTwitterSearchEndpoint());
   url.searchParams.set("query", query);
   url.searchParams.set("queryType", "Top");
   return url.toString();
@@ -73,7 +78,7 @@ function evidenceFromAisaTweets(input: {
         txHash: input.payment.txHash,
         metadata: {
           provider: "aisa_x402_social",
-          endpoint: AISA_TWITTER_SEARCH_ENDPOINT,
+          endpoint: aisaTwitterSearchEndpoint(),
           marketId: input.market.marketId,
           selectedChain: input.payment.selectedChain,
           supportChecks: input.payment.supportChecks,

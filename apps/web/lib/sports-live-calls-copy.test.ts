@@ -20,7 +20,7 @@ test("sports product copy and worker output avoid legacy filtered terminology", 
   }
 });
 
-test("sports scans do not hard-require global x402 evidence", () => {
+test("sports scans require sports x402 evidence before AI storage by default", () => {
   const worker = readFileSync("apps/worker/src/run-cycle.ts", "utf8");
   const sportsStart = worker.indexOf("export async function runSportsEdge()");
   const nextExport = worker.indexOf("export async function publishStoredRun", sportsStart);
@@ -28,6 +28,6 @@ test("sports scans do not hard-require global x402 evidence", () => {
   assert.ok(nextExport > sportsStart);
   const sportsRun = worker.slice(sportsStart, nextExport);
   assert.match(worker, /const requireX402 = boolEnv\("REQUIRE_CIRCLE_GATEWAY_X402", false\)/);
-  assert.match(sportsRun, /const requireX402 = boolEnv\("REQUIRE_SPORTS_X402", false\)/);
+  assert.match(sportsRun, /const requireX402 = boolEnv\("REQUIRE_SPORTS_X402", true\)/);
   assert.doesNotMatch(sportsRun, /const requireX402 = boolEnv\("REQUIRE_CIRCLE_GATEWAY_X402"/);
 });
