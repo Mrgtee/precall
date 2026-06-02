@@ -11,10 +11,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@precall/shared": "*",
     "@precall/worker": "*",
     "@tanstack/react-query": "^5.80.7",
     "drizzle-orm": "^0.45.2",
+    "gsap": "^3.15.0",
     "lucide-react": "^0.468.0",
     "next": "^15.3.3",
     "postgres": "^3.4.7",

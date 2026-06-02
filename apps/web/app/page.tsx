@@ -2,10 +2,12 @@ import Link from "next/link";
 import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Trophy, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
+import { HomeMotion } from "../components/home-motion";
 import { friendlySetupError, isExpiredDate } from "../lib/format";
 import { type CallRow, getActiveBondedCallCount, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions, getTotalUnlockCount } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
+
 
 export default async function HomePage() {
   let calls: CallRow[] = [];
@@ -40,99 +42,123 @@ export default async function HomePage() {
   const agents = leaderboard.length;
 
   return (
-    <main className="shell page">
-      <section className="hero dashboard-hero">
-        <div>
-          <p className="eyebrow">Arc-native prediction intelligence</p>
+    <main className="taste-page">
+      <HomeMotion />
+      <section className="taste-hero taste-shell">
+        <div className="taste-hero-copy">
+          <p className="taste-kicker">Arc-native prediction intelligence</p>
           <h1>Agent calls you can inspect before you copy</h1>
+          <p className="taste-hero-lede">Precall scans live markets, separates public signal from paid reasoning, and lets users unlock the full thesis only after a verified Arc USDC payment.</p>
         </div>
-        <div className="hero-card">
-          <div className="hero-actions">
-            <ConnectWallet />
-            <Link className="button secondary" href="/how-it-works">
-              How it works <ArrowRight size={16} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="metric-strip" aria-label="Precall activity summary">
-        <div className="metric"><span>Active bonded calls</span><strong>{activeBondedCalls}</strong></div>
-        <div className="metric"><span>Sports Live Calls</span><strong>{activeSportsCalls}</strong></div>
-        <div className="metric"><span>Agent desks</span><strong>{agents}</strong></div>
-        <div className="metric"><span>Total unlocks</span><strong>{totalUnlocks}</strong></div>
-      </section>
-
-      <section className="product-split">
-        <article className="panel product-explainer">
-          <p className="eyebrow">Bonded Arc Calls</p>
-          <h2>Strict YES/NO calls with onchain accountability</h2>
-          <p className="muted">Cards show the market, agent, bond status, unlock price, and freshness. Direction, probability, thesis, evidence, sizing, and copy link stay locked until the Arc USDC unlock is verified.</p>
-          <Link className="button secondary" href="/top-5-today">Open Top 5 Today</Link>
-        </article>
-        <article className="panel product-explainer info-note">
-          <p className="eyebrow">Sports Live Calls</p>
-          <h2>{activeSportsCalls} active sports call{activeSportsCalls === 1 ? "" : "s"}</h2>
-          <p className="muted">Sports cards can show the AI selected outcome and public probability metrics up front. Full reasoning, evidence, and market link still unlock with Arc USDC.</p>
-          <Link className="button" href="/sports"><Trophy size={17} /> Open Sports Live Calls</Link>
-        </article>
-      </section>
-
-      <section className="section-heading">
-        <div>
-          <p className="eyebrow">Dashboard</p>
-          <h2>{activeBondedCalls} Active Bonded Arc Call{activeBondedCalls === 1 ? "" : "s"}</h2>
+        <div className="taste-hero-actions">
+          <ConnectWallet />
+          <Link className="taste-button taste-button-light" href="/how-it-works">
+            How it works <ArrowRight size={16} />
+          </Link>
         </div>
       </section>
 
-      {setupError && live.length === 0 ? (
-        <section className="empty">
-          <h2>Live data is temporarily unavailable</h2>
-          <p className="muted">Precall is waiting for the latest call data to load.</p>
-        </section>
-      ) : live.length === 0 ? (
-        <section className="empty">
-          <h2>No active bonded calls pass the hardened V1 gates yet</h2>
-          <p className="muted">Precall publishes fewer calls on purpose</p>
-        </section>
-      ) : (
-        <section className="grid">
-          {live.map((call) => <CallCard key={call.id} call={call} />)}
-        </section>
-      )}
+      <section className="taste-metrics taste-shell" aria-label="Precall activity summary">
+        <div><span>Active bonded calls</span><strong>{activeBondedCalls}</strong></div>
+        <div><span>Sports Live Calls</span><strong>{activeSportsCalls}</strong></div>
+        <div><span>Agent desks</span><strong>{agents}</strong></div>
+        <div><span>Total unlocks</span><strong>{totalUnlocks}</strong></div>
+      </section>
 
-      <section className="section-spaced">
-        <section className="section-heading">
+      <section className="taste-bento taste-shell" aria-label="Precall product surfaces">
+        <article className="taste-bento-card taste-bento-large group-card">
           <div>
-            <p className="eyebrow">Sports Live Calls</p>
-            <h2>Latest active sports previews</h2>
+            <p className="taste-kicker">Bonded Arc Calls</p>
+            <h2>Strict YES/NO calls with onchain accountability.</h2>
           </div>
-          <p>Sports calls are labeled by conviction and risk. They are not Arc-bonded yet and do not affect bonded-call reputation.</p>
-        </section>
-        {activeSportsCalls === 0 ? (
-          <section className="empty"><h2>No active Sports Live Calls</h2></section>
-        ) : (
-          <section className="grid preview-grid">
-            {sportsIdeas.map((idea) => (
-              <article className="panel sports-preview-card" key={idea.id}>
-                <p className="eyebrow">{idea.status.replace("_call", "").replace("_", " ")} · {idea.category} · {idea.marketKind}</p>
-                <h3>{idea.marketTitle}</h3>
-                <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong> · Risk {idea.riskLevel}</p>
-                <p className="muted">Preview: {idea.statusReason}</p>
-                <p className="muted">Full reasoning and market link unlock with Arc USDC.</p>
-                <Link className="button secondary" href="/sports">Open Sports Live Calls <ArrowRight size={16} /></Link>
-              </article>
-            ))}
-          </section>
-        )}
+          <p>Cards show market, agent, bond status, unlock price, and freshness. Direction, probability, thesis, evidence, sizing, and copy link stay locked until the Arc USDC unlock is verified.</p>
+          <Link className="taste-button taste-button-light" href="/top-5-today">Open Top 5 Today</Link>
+        </article>
+
+        <article className="taste-bento-card taste-bento-accent group-card">
+          <p className="taste-kicker">Sports Live Calls</p>
+          <h2>{activeSportsCalls} active sports call{activeSportsCalls === 1 ? "" : "s"}</h2>
+          <p>Sports calls stay separate from bonded reputation, but still show selected outcome, risk, confidence, and Arc USDC unlock flow.</p>
+          <Link className="taste-button" href="/sports"><Trophy size={17} /> Open Sports</Link>
+        </article>
+
+        <article className="taste-bento-card group-card">
+          <CircleDollarSign size={22} />
+          <h3>Reasoning unlocks</h3>
+          <p>Full analysis reveals only after verified Arc USDC payment.</p>
+        </article>
+
+        <article className="taste-bento-card group-card">
+          <RadioTower size={22} />
+          <h3>Five-role council</h3>
+          <p>Macro, news, crowd, book, and skeptic agents challenge every call.</p>
+        </article>
+
+        <article className="taste-bento-card group-card">
+          <ShieldCheck size={22} />
+          <h3>Resolved reputation</h3>
+          <p>Leaderboards count real resolved wins and losses, not unresolved hype.</p>
+        </article>
       </section>
 
+      <section className="taste-marquee" aria-label="Precall platform loop">
+        <div>Polymarket prediction call live on Arc testnet, powered by Circle agentic stack x402 nanopayment. </div>
+        <div aria-hidden="true">Polymarket prediction call live on Arc testnet, powered by Circle agentic stack x402 nanopayment. </div>
+      </section>
 
-      <section className="metric-strip compact-metrics platform-strip" aria-label="Platform summary">
-        <div className="metric"><span><RadioTower size={14} /> Council</span><strong>5 roles</strong></div>
-        <div className="metric"><span><ShieldCheck size={14} /> Bonds</span><strong>USDC</strong></div>
-        <div className="metric"><span><CircleDollarSign size={14} /> Unlocks</span><strong>$0.05</strong></div>
-        <div className="metric"><span><Users size={14} /> Growth</span><strong>Arena</strong></div>
+      <section className="taste-desire taste-shell">
+        <div className="taste-live-grid">
+          <section className="taste-stack">
+            <div className="taste-section-head">
+              <p className="taste-kicker">Dashboard</p>
+              <h2>{activeBondedCalls} Active Bonded Arc Call{activeBondedCalls === 1 ? "" : "s"}</h2>
+            </div>
+            {setupError && live.length === 0 ? (
+              <section className="empty taste-stack-card">
+                <h2>Live data is temporarily unavailable</h2>
+                <p className="muted">Precall is waiting for the latest call data to load.</p>
+              </section>
+            ) : live.length === 0 ? (
+              <section className="empty taste-stack-card">
+                <h2>No active bonded calls pass the hardened V1 gates yet</h2>
+                <p className="muted">Precall publishes fewer calls on purpose</p>
+              </section>
+            ) : (
+              <section className="grid taste-stack-list">
+                {live.map((call) => <div className="taste-stack-card" key={call.id}><CallCard call={call} /></div>)}
+              </section>
+            )}
+          </section>
+
+          <section className="taste-accordion" aria-label="Sports Live Calls preview">
+            <div className="taste-section-head">
+              <p className="taste-kicker">Sports Live Calls</p>
+              <h2>Latest active sports previews</h2>
+            </div>
+            {activeSportsCalls === 0 ? (
+              <section className="empty"><h2>No active Sports Live Calls</h2></section>
+            ) : (
+              <div className="taste-accordion-track">
+                {sportsIdeas.map((idea) => (
+                  <article className="taste-accordion-item group-card" key={idea.id}>
+                    <p className="taste-kicker">{idea.status.replace("_call", "").replace("_", " ")} · {idea.category}</p>
+                    <h3>{idea.marketTitle}</h3>
+                    <p>AI Prediction: <strong>{idea.selectedOption}</strong></p>
+                    <span>Risk {idea.riskLevel}</span>
+                    <Link href="/sports">Open board <ArrowRight size={14} /></Link>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </section>
+
+      <section className="taste-platform-strip taste-shell" aria-label="Platform summary">
+        <div><span><RadioTower size={14} /> Council</span><strong>5 roles</strong></div>
+        <div><span><ShieldCheck size={14} /> Bonds</span><strong>USDC</strong></div>
+        <div><span><CircleDollarSign size={14} /> Unlocks</span><strong>$0.05</strong></div>
+        <div><span><Users size={14} /> Growth</span><strong>Arena</strong></div>
       </section>
     </main>
   );

@@ -560,6 +560,13 @@ export async function runOnce() {
     }
   }
 
+  let resolutionUpdate: unknown;
+  try {
+    resolutionUpdate = await resolveMatureCalls();
+  } catch (error) {
+    resolutionUpdate = { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+
   return {
     discoveryLimit,
     maxAnalyzedMarkets,
@@ -572,6 +579,7 @@ export async function runOnce() {
     published,
     skipped,
     failed,
+    resolutionUpdate,
     skippedByReason: summarizeSkipReasons(skipped),
     topRejectedMarkets: discovery.topRejectedMarkets,
     topEligibleCandidates: discovery.topEligibleCandidates,
@@ -590,6 +598,7 @@ export async function runSportsEdge() {
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
   const requireX402 = boolEnv("REQUIRE_CIRCLE_GATEWAY_X402", false);
+  const expiryUpdate = await expirePublishedCalls();
   const markets = await discoverPolymarketMarkets(discoveryLimit);
   const skipped: SportsSkip[] = [];
   const failed: RunFailedMarket[] = [];
@@ -693,6 +702,7 @@ export async function runSportsEdge() {
     analyzed,
     liveCallsStored: sportsCalls.length,
     callsByStatus,
+    expiryUpdate,
     sportsCalls,
     skipped,
     failed,

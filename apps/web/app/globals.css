@@ -34,7 +34,7 @@ body {
 }
 
 main {
-  padding-bottom: 56px;
+  padding-bottom: 36px;
 }
 
 a {
@@ -393,6 +393,14 @@ textarea:focus-visible {
 .button.secondary {
   background: var(--white);
   color: var(--ink);
+}
+
+:where(button:not(:disabled), .button:not(:disabled), .taste-button, .pill:not(:disabled), .option-pill:not(:disabled), .fit-button):active {
+  transform: translateY(1px) scale(0.96);
+  background: var(--taste-lime, var(--lime));
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: 0 8px 18px rgba(16, 24, 39, 0.14);
 }
 
 .detail-layout {
@@ -925,7 +933,7 @@ textarea:focus-visible {
 .analysis-header h3 {
   margin: 0 0 8px;
   font-size: clamp(26px, 3vw, 40px);
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 
 .analysis-metric-grid {
@@ -1233,5 +1241,484 @@ li,
   .metric-strip,
   .table-wrap {
     box-shadow: 3px 3px 0 var(--ink);
+  }
+}
+
+/* Taste redesign: editorial Arc intelligence homepage. */
+:root {
+  --taste-ink: #09111f;
+  --taste-cream: #f6f1e4;
+  --taste-paper: #eef3e9;
+  --taste-card: rgba(255, 255, 255, 0.9);
+  --taste-lime: #ddff55;
+  --taste-cyan: #9fe7dc;
+  --taste-line: rgba(9, 17, 31, 0.16);
+  --taste-shadow: 0 28px 80px rgba(9, 17, 31, 0.14);
+}
+
+body {
+  font-family: "Cabinet Grotesk", "Aptos", "Segoe UI", sans-serif;
+}
+
+.taste-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  color: var(--taste-ink);
+  background:
+    radial-gradient(circle at 16% 8%, rgba(221, 255, 85, 0.22), transparent 28vw),
+    radial-gradient(circle at 84% 12%, rgba(159, 231, 220, 0.24), transparent 30vw),
+    linear-gradient(180deg, rgba(246, 241, 228, 0.92), rgba(238, 243, 233, 0.96));
+}
+
+.taste-shell {
+  width: min(1280px, calc(100vw - 40px));
+  margin: 0 auto;
+}
+
+.taste-kicker {
+  margin: 0;
+  color: rgba(9, 17, 31, 0.58);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.taste-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 780px) minmax(260px, 420px);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: start;
+  justify-content: space-between;
+  min-height: auto;
+  padding: clamp(42px, 6vw, 72px) 0 clamp(30px, 4vw, 48px);
+}
+
+.taste-hero-copy {
+  display: grid;
+  gap: 18px;
+  max-width: min(1060px, 100%);
+}
+
+.taste-hero h1 {
+  max-width: min(880px, 100%);
+  margin: 0;
+  font-size: clamp(2.7rem, 5.1vw, 5.45rem);
+  line-height: 0.92;
+  letter-spacing: -0.07em;
+  text-wrap: balance;
+}
+
+.taste-hero-lede {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(9, 17, 31, 0.68);
+  font-size: clamp(18px, 1.8vw, 24px);
+  line-height: 1.45;
+}
+
+.taste-hero-actions,
+.taste-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.taste-hero > .taste-hero-actions {
+  justify-self: end;
+  align-self: start;
+  justify-content: flex-end;
+  padding-top: clamp(6px, 1.5vw, 18px);
+}
+
+.taste-button,
+.taste-hero-actions .button {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px 20px;
+  border: 1px solid var(--taste-ink);
+  border-radius: 999px;
+  background: var(--taste-ink);
+  color: #fff;
+  font-weight: 950;
+  box-shadow: none;
+  transition: transform 160ms ease, box-shadow 180ms ease, background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.taste-button:hover,
+.taste-hero-actions .button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(9, 17, 31, 0.18);
+}
+
+.taste-button:active,
+.taste-hero-actions .button:active,
+.button:active {
+  transform: translateY(1px) scale(0.96);
+  background: var(--taste-lime);
+  border-color: var(--taste-ink);
+  color: var(--taste-ink);
+  box-shadow: 0 8px 18px rgba(9, 17, 31, 0.14);
+}
+
+.taste-button-light,
+.taste-hero-actions .button.secondary {
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--taste-ink);
+}
+
+.taste-metrics,
+.taste-platform-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--taste-line);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 50px rgba(9, 17, 31, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.taste-metrics {
+  margin-bottom: clamp(40px, 5vw, 64px);
+}
+
+.taste-metrics div,
+.taste-platform-strip div {
+  padding: clamp(16px, 2vw, 24px);
+  border-right: 1px solid var(--taste-line);
+}
+
+.taste-metrics div:last-child,
+.taste-platform-strip div:last-child {
+  border-right: 0;
+}
+
+.taste-metrics strong,
+.taste-platform-strip strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(30px, 4vw, 54px);
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+}
+
+.taste-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 14px;
+  margin-bottom: clamp(42px, 5vw, 72px);
+}
+
+.taste-bento-card {
+  min-height: 190px;
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  grid-column: span 4;
+  overflow: hidden;
+  padding: clamp(20px, 2.2vw, 28px);
+  border: 1px solid var(--taste-line);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 54px rgba(9, 17, 31, 0.09);
+  transition: transform 700ms ease, box-shadow 700ms ease;
+}
+
+.taste-bento-card:hover,
+.group-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 30px 80px rgba(9, 17, 31, 0.16);
+}
+
+.taste-bento-large {
+  grid-column: span 7;
+  min-height: 250px;
+  background: var(--taste-ink);
+  color: #fff;
+}
+
+.taste-bento-large p:not(.taste-kicker) {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.taste-bento-accent {
+  grid-column: span 5;
+  min-height: 250px;
+  color: var(--taste-ink);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(221, 255, 85, 0.55), transparent 34%),
+    radial-gradient(circle at 82% 0%, rgba(159, 231, 220, 0.52), transparent 30%),
+    rgba(255, 255, 255, 0.84);
+}
+
+.taste-bento-accent .taste-button {
+  width: fit-content;
+}
+
+.taste-bento h2,
+.taste-action h2,
+.taste-section-head h2 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.taste-bento h3 {
+  margin: 0;
+  font-size: clamp(23px, 2.2vw, 30px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.taste-bento p {
+  margin: 0;
+  color: rgba(9, 17, 31, 0.66);
+  font-size: 16px;
+  line-height: 1.58;
+}
+
+.taste-marquee {
+  display: flex;
+  overflow: hidden;
+  border-block: 1px solid var(--taste-line);
+  background: rgba(9, 17, 31, 0.96);
+  color: var(--taste-lime);
+  font-size: clamp(16px, 2vw, 26px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.taste-marquee div {
+  min-width: max-content;
+  padding: clamp(9px, 1.1vw, 13px) 0;
+  animation: tasteMarquee 36s linear infinite;
+}
+
+@keyframes tasteMarquee {
+  to { transform: translateX(-100%); }
+}
+
+.taste-desire {
+  padding: clamp(32px, 4vw, 54px) 0 clamp(42px, 5vw, 72px);
+}
+
+.taste-live-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: clamp(18px, 3vw, 36px);
+  align-items: start;
+}
+
+.taste-section-head {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.taste-stack-list {
+  gap: 18px;
+}
+
+.taste-stack-card {
+  transform-origin: center top;
+}
+
+.taste-accordion-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--taste-line);
+  border-radius: 34px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.taste-accordion-item {
+  min-width: 0;
+  display: grid;
+  align-content: end;
+  gap: 16px;
+  padding: 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(circle at 24% 12%, rgba(221, 255, 85, 0.28), transparent 32%),
+    linear-gradient(155deg, rgba(35, 50, 78, 0.96), rgba(9, 17, 31, 0.98));
+  color: #fff;
+  transition: transform 320ms ease, filter 320ms ease, background 320ms ease;
+  filter: saturate(0.95);
+}
+
+.taste-accordion-item:last-child {
+  border-right: 0;
+}
+
+.taste-accordion-track:hover .taste-accordion-item {
+  filter: saturate(0.78) brightness(0.92);
+}
+
+.taste-accordion-track .taste-accordion-item:hover {
+  transform: translateY(-4px);
+  filter: saturate(1.08) brightness(1.05);
+}
+
+.taste-accordion-item h3 {
+  margin: 0;
+  font-size: clamp(22px, 2.3vw, 36px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.taste-accordion-item p,
+.taste-accordion-item span {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.taste-accordion-item a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 950;
+  color: #fff;
+}
+
+.taste-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: end;
+  margin-bottom: 34px;
+  padding: clamp(34px, 5vw, 72px);
+  border-radius: 42px;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(221, 255, 85, 0.18), transparent 28vw),
+    var(--taste-ink);
+  color: #fff;
+  box-shadow: var(--taste-shadow);
+}
+
+.taste-action .taste-kicker,
+.taste-bento-large .taste-kicker,
+.taste-bento-accent .taste-kicker {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.taste-action h2 {
+  max-width: 920px;
+  font-size: clamp(34px, 5vw, 76px);
+}
+
+.taste-action .taste-button-light {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: #fff;
+}
+
+.taste-platform-strip {
+  margin-bottom: 42px;
+}
+
+.taste-platform-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(9, 17, 31, 0.58);
+}
+
+@media (max-width: 980px) {
+  .taste-hero,
+  .taste-live-grid,
+  .taste-action {
+    grid-template-columns: 1fr;
+  }
+
+  .taste-hero {
+    min-height: auto;
+  }
+
+  .taste-bento-large,
+  .taste-bento-accent,
+  .taste-bento-card {
+    grid-column: span 12;
+  }
+
+  .taste-metrics,
+  .taste-platform-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taste-metrics div:nth-child(2n),
+  .taste-platform-strip div:nth-child(2n) {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .taste-shell {
+    width: min(100% - 24px, 1280px);
+  }
+
+  .taste-hero {
+    padding-top: 32px;
+    padding-bottom: 28px;
+  }
+
+  .taste-hero h1 {
+    font-size: clamp(2.35rem, 11vw, 3.25rem);
+  }
+
+  .taste-hero-actions,
+  .taste-action-buttons {
+    flex-direction: column;
+  }
+
+  .taste-hero > .taste-hero-actions {
+    justify-self: stretch;
+    justify-content: stretch;
+    padding-top: 0;
+  }
+
+  .taste-button,
+  .taste-hero-actions .button {
+    width: 100%;
+  }
+
+  .taste-metrics,
+  .taste-platform-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .taste-metrics div,
+  .taste-platform-strip div {
+    border-right: 0;
+    border-bottom: 1px solid var(--taste-line);
+  }
+
+  .taste-metrics div:last-child,
+  .taste-platform-strip div:last-child {
+    border-bottom: 0;
+  }
+
+  .taste-accordion-track {
+    grid-template-columns: 1fr;
+  }
+
+  .taste-accordion-track {
+    min-height: auto;
+  }
+
+  .taste-accordion-item {
+    min-height: 210px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.24);
   }
 }

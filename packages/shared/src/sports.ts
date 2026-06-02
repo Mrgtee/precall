@@ -151,6 +151,13 @@ function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresho
     .map((item) => item.index);
 }
 
+function pricedOutcomeIndexes(market: PolymarketMarket) {
+  return market.outcomePrices
+    .map((price, index) => ({ priceBps: Math.round(price * 10_000), index }))
+    .filter((item) => Number.isFinite(item.priceBps) && item.priceBps > 0 && item.priceBps < 10_000)
+    .map((item) => item.index);
+}
+
 export function sportsEventTime(market: PolymarketMarket): string | null {
   const text = `${market.title} ${market.slug} ${market.url}`;
   const match = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
@@ -197,10 +204,11 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   if (!close.ok) reasons.push(close.reason);
   if (market.outcomes.length < 2 || market.outcomePrices.length < 2) reasons.push("missing_outcomes_or_prices");
   if (market.outcomePrices.some((price) => !Number.isFinite(price) || price < 0 || price > 1)) reasons.push("invalid_prices");
-  if (market.liquidityUsd < thresholds.minLiquidityUsd) reasons.push("low_liquidity");
+  if (!Number.isFinite(market.liquidityUsd) || market.liquidityUsd <= 0) reasons.push("low_liquidity");
   if (classification.isSports && classification.marketKind === "other") reasons.push("unsupported_market_format");
   const outcomeIndexes = validOutcomeIndexes(market, thresholds);
-  if (outcomeIndexes.length === 0) reasons.push("no_reasonable_price_band");
+  const analyzableOutcomeIndexes = outcomeIndexes.length > 0 ? outcomeIndexes : pricedOutcomeIndexes(market);
+  if (analyzableOutcomeIndexes.length === 0) reasons.push("unclear_outcome_mapping");
 
   if (reasons.length > 0) return { eligible: false, reasons };
 
@@ -211,7 +219,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   const kindBoost = classification.marketKind === "over_under" || classification.marketKind === "moneyline" || classification.marketKind === "spread" || classification.marketKind === "team_total" ? 10 : 5;
   const candidateScore = Math.round((volume + liquidity + close.score + evidenceDepth + outcomeDepth + kindBoost) * 100) / 100;
 
-  return { eligible: true, reasons: [], candidate: { market, classification, outcomeIndexes, candidateScore } };
+  return { eligible: true, reasons: [], candidate: { market, classification, outcomeIndexes: analyzableOutcomeIndexes, candidateScore } };
 }
 
 export function rankSportsCandidates(candidates: SportsCandidate[]) {

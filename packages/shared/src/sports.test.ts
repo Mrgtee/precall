@@ -64,19 +64,21 @@ test("sports classifier catches club-name soccer markets without explicit soccer
 
 
 test("sports classifier supports soccer over/under goal markets", () => {
-  const goalMarket = market({
-    title: "Arsenal vs Chelsea: Over 2.5 goals",
-    slug: "epl-ars-che-2026-05-24-total-goals-over-2pt5",
-    description: "Soccer total goals market.",
-    outcomes: ["Yes", "No"],
-    outcomePrices: [0.52, 0.48],
-  });
-  const classification = classifySportsMarket(goalMarket);
-  assert.equal(classification.isSports, true);
-  assert.equal(classification.category, "soccer");
-  assert.equal(classification.marketKind, "over_under");
-  assert.equal(selectedSportsOptionLabel(goalMarket, 0), "Over 2.5 goals");
-  assert.equal(selectedSportsOptionLabel(goalMarket, 1), "Under 2.5 goals");
+  for (const line of ["0.5", "1.5", "2.5", "3.5"]) {
+    const goalMarket = market({
+      title: `Arsenal vs Chelsea: Over ${line} goals`,
+      slug: `epl-ars-che-2026-05-24-total-goals-over-${line.replace(".", "pt")}`,
+      description: "Soccer total goals market.",
+      outcomes: ["Yes", "No"],
+      outcomePrices: [0.52, 0.48],
+    });
+    const classification = classifySportsMarket(goalMarket);
+    assert.equal(classification.isSports, true);
+    assert.equal(classification.category, "soccer");
+    assert.equal(classification.marketKind, "over_under");
+    assert.equal(selectedSportsOptionLabel(goalMarket, 0), `Over ${line} goals`);
+    assert.equal(selectedSportsOptionLabel(goalMarket, 1), `Under ${line} goals`);
+  }
 });
 
 test("sports classifier supports match winner and spread markets", () => {
@@ -138,11 +140,26 @@ test("sports candidate eligibility allows non-YES/NO selected-outcome sports mar
   assert.deepEqual(result.candidate?.outcomeIndexes, [0, 1]);
 });
 
-test("sports candidate eligibility rejects non-sports and extreme prices", () => {
-  const result = evaluateSportsCandidate(market({ title: "Will Congress pass a bill?", slug: "politics", description: "A legislative market with no sport context.", outcomePrices: [0.02, 0.98] }), undefined, now);
-  assert.equal(result.eligible, false);
-  assert.ok(result.reasons.includes("not_sports"));
-  assert.ok(result.reasons.includes("no_reasonable_price_band"));
+test("sports candidate eligibility rejects non-sports but lets soft price bands become labels", () => {
+  const nonSports = evaluateSportsCandidate(market({ title: "Will Congress pass a bill?", slug: "politics", description: "A legislative market with no sport context.", outcomePrices: [0.02, 0.98] }), undefined, now);
+  assert.equal(nonSports.eligible, false);
+  assert.ok(nonSports.reasons.includes("not_sports"));
+  assert.ok(!nonSports.reasons.includes("no_reasonable_price_band"));
+
+  const extremeSports = evaluateSportsCandidate(market({ title: "Arsenal vs Chelsea: Over 3.5 goals", slug: "epl-ars-che-2026-05-24-total-goals-over-3pt5", description: "Soccer total goals market.", outcomes: ["Yes", "No"], outcomePrices: [0.08, 0.92] }), undefined, now);
+  assert.equal(extremeSports.eligible, true);
+  assert.deepEqual(extremeSports.reasons, []);
+  assert.deepEqual(extremeSports.candidate?.outcomeIndexes, [0, 1]);
+});
+
+test("sports candidate eligibility treats below-threshold liquidity as soft but zero liquidity as invalid", () => {
+  const thinButReal = evaluateSportsCandidate(market({ liquidityUsd: 500 }), undefined, now);
+  assert.equal(thinButReal.eligible, true);
+  assert.deepEqual(thinButReal.reasons, []);
+
+  const deadMarket = evaluateSportsCandidate(market({ liquidityUsd: 0 }), undefined, now);
+  assert.equal(deadMarket.eligible, false);
+  assert.ok(deadMarket.reasons.includes("low_liquidity"));
 });
 
 test("sports aggregation uses selected outcome probability and edge semantics", () => {
