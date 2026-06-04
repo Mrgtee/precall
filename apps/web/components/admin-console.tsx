@@ -82,6 +82,7 @@ type AdminSummary = {
   circleStack: {
     gatewayX402Enabled: boolean;
     gatewayX402Required?: boolean;
+    x402RailStatusLabel?: string;
     gatewayChain: string;
     x402PaymentNetworkLabel?: string;
     x402AcceptedNetworks?: string[];
@@ -357,8 +358,9 @@ export function AdminConsole() {
           <section className="panel info-split">
             <div>
               <h2>Circle Agent Stack status</h2>
-              <p>Gateway x402 enabled <Bool value={summary.circleStack.gatewayX402Enabled} /></p>
-              <p>Gateway x402 required <Bool value={Boolean(summary.circleStack.gatewayX402Required)} /></p>
+              <p>x402 rail: {summary.circleStack.x402RailStatusLabel || "Worker-managed on Railway"}</p>
+              {summary.circleStack.gatewayX402Required ? <p>Required mode: enabled for this runtime</p> : null}
+              <p className="muted">Vercel does not hold the Circle buyer private key; Railway worker health is the source of truth for live x402 execution.</p>
               <p className="muted">Settlement chain: Arc · x402 payment network: {summary.circleStack.x402PaymentNetworkLabel || summary.circleStack.gatewayChain}</p>
               <p className="muted">Gateway chain: {summary.circleStack.gatewayChain} · Accepted networks: {(summary.circleStack.x402AcceptedNetworks || []).join(", ") || "not configured"}</p>
               <p className="muted">Facilitator: {summary.circleStack.x402FacilitatorUrl || "not configured"}</p>

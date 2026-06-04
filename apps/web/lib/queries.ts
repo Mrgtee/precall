@@ -307,6 +307,14 @@ export async function getDemoData() {
   const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) }]) : [];
   const primaryGatewayBalance = gatewayBalances.find((balance) => balance.chain === gatewayConfig.chain) || gatewayBalances[0];
   const latestX402Metadata = objectMetadata(latestX402Payment?.metadata);
+  const workerTriggerConfigured = Boolean(process.env.WORKER_TRIGGER_URL && process.env.WORKER_TRIGGER_SECRET);
+  const x402RailStatusLabel = latestX402Payment
+    ? "Active: paid evidence recorded"
+    : gatewayConfig.enabled
+      ? "Enabled in this runtime"
+      : workerTriggerConfigured
+        ? "Worker-managed on Railway"
+        : "Not configured in this runtime";
 
   return {
     counts,
@@ -323,6 +331,7 @@ export async function getDemoData() {
     circleStack: {
       gatewayX402Enabled: gatewayConfig.enabled,
       gatewayX402Required: process.env.REQUIRE_CIRCLE_GATEWAY_X402 === "true",
+      x402RailStatusLabel,
       gatewayChain: gatewayConfig.chain,
       x402PaymentNetworkLabel: gatewayConfig.paymentNetworkLabel,
       x402AcceptedNetworks: gatewayConfig.acceptedNetworks,
@@ -355,7 +364,7 @@ export async function getDemoData() {
       model: Boolean(process.env.OPENAI_API_KEY),
       circleEnrichment: gatewayConfig.enabled,
       circleWallet: Boolean(gatewayConfig.privateKey),
-      workerTriggerConfigured: Boolean(process.env.WORKER_TRIGGER_URL && process.env.WORKER_TRIGGER_SECRET),
+      workerTriggerConfigured,
       scheduledWorkersDisabled: process.env.DISABLE_SCHEDULED_WORKERS === "true",
     },
   };

@@ -138,11 +138,17 @@ test("admin and demo expose explicit x402 payment network labels", () => {
   const queries = file("apps/web/lib/queries.ts");
 
   assert.match(queries, /x402PaymentNetworkLabel: gatewayConfig\.paymentNetworkLabel/);
+  assert.match(queries, /x402RailStatusLabel/);
+  assert.match(admin, /x402 rail:/);
   assert.match(admin, /x402 payment network/);
+  assert.match(admin, /Railway worker health is the source of truth/);
   assert.match(admin, /x402PaymentNetworkLabel/);
   assert.match(admin, /Accepted networks/);
+  assert.doesNotMatch(admin, /Gateway x402 enabled/);
+  assert.match(demo, /x402 rail:/);
   assert.match(demo, /Network: \{data\.circleStack\.x402PaymentNetworkLabel/);
   assert.match(demo, /Daily spend/);
+  assert.doesNotMatch(demo, /Gateway x402 <Bool/);
 });
 
 test("homepage and top five exclude expired published bonded calls from active sections", () => {
