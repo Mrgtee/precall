@@ -101,10 +101,11 @@ Before unlock, users see only the safe public preview. After a verified Arc USDC
 Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
 
 - Circle Gateway/x402 can pay allowlisted premium APIs for evidence.
-- The worker checks provider/network support before paying.
-- Paid evidence is recorded through `circle_actions`.
-- x402 may run on a provider-supported Gateway chain such as Arc Testnet, Base Sepolia, or Base.
+- Base Mainnet is the recommended production x402 payment network when the provider supports it.
+- Arc Testnet remains available for hackathon/demo x402 flows and Arc-bonded settlement demos.
+- The worker checks provider/network support before paying and records paid evidence through `circle_actions`.
 - Arc remains the settlement/unlock layer for Precall's own bonded calls and user unlocks.
+- The x402 payment network affects paid-evidence settlement, not AI analysis quality. Analysis quality depends on evidence, model behavior, and agent logic.
 - Paid evidence is never faked. If x402 fails, Precall records the failure and only continues when required mode is disabled.
 
 ## E. Admin / Worker Automation
@@ -188,7 +189,7 @@ Precall uses Arc Testnet as the accountability and settlement layer.
 Precall uses Circle in three main ways:
 
 - **USDC rails:** Arc USDC powers bonds and unlock payments.
-- **Circle Agent Stack / Gateway / x402:** the worker can pay for premium evidence from allowlisted providers.
+- **Circle Agent Stack / Gateway / x402:** the worker can pay for premium evidence from allowlisted providers. Production paid evidence should use Base Mainnet when supported; Arc Testnet remains available for hackathon/demo configuration.
 - **Circle action tracking:** `circle_actions` records x402 payments, Gateway deposits, Arc bonds, thesis unlocks, and sports unlocks.
 
 x402 has optional and required modes:
@@ -307,12 +308,18 @@ RESOLVE_ONCHAIN=true
 CIRCLE_AGENT_PRIVATE_KEY=...
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
-CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=base
+# Production paid evidence on Base Mainnet. This spends real USDC.
+CIRCLE_GATEWAY_CHAIN=base
+X402_ACCEPTED_NETWORKS=eip155:8453
+X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
+# Demo/hackathon alternative:
+# CIRCLE_GATEWAY_CHAIN=arcTestnet
+# X402_ACCEPTED_NETWORKS=eip155:5042002
+# X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
 
 ENABLE_SPORTS_EDGE=true
 SPORTS_DISCOVERY_MARKET_LIMIT=350

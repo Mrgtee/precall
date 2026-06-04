@@ -132,6 +132,19 @@ test("admin run output has readable summary before collapsible raw JSON", () => 
   assert.match(admin, /Latest error/);
 });
 
+test("admin and demo expose explicit x402 payment network labels", () => {
+  const admin = file("apps/web/components/admin-console.tsx");
+  const demo = file("apps/web/app/demo/page.tsx");
+  const queries = file("apps/web/lib/queries.ts");
+
+  assert.match(queries, /x402PaymentNetworkLabel: gatewayConfig\.paymentNetworkLabel/);
+  assert.match(admin, /x402 payment network/);
+  assert.match(admin, /x402PaymentNetworkLabel/);
+  assert.match(admin, /Accepted networks/);
+  assert.match(demo, /Network: \{data\.circleStack\.x402PaymentNetworkLabel/);
+  assert.match(demo, /Daily spend/);
+});
+
 test("homepage and top five exclude expired published bonded calls from active sections", () => {
   const homepage = file("apps/web/app/page.tsx");
   const topFive = file("apps/web/app/top-5-today/page.tsx");

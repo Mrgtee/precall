@@ -165,17 +165,24 @@ The app can run real market agents without paid evidence. Turn this on only afte
 
 ```env
 ENABLE_CIRCLE_GATEWAY_X402=true
-CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=base
+# Production paid evidence on Base Mainnet. This spends real USDC.
+CIRCLE_GATEWAY_CHAIN=base
+X402_ACCEPTED_NETWORKS=eip155:8453
+X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_AGENT_PRIVATE_KEY=0x...
-CIRCLE_GATEWAY_RPC_URL=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
+
+# Demo/hackathon alternative:
+# CIRCLE_GATEWAY_CHAIN=arcTestnet
+# X402_ACCEPTED_NETWORKS=eip155:5042002
+# X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
+# CIRCLE_GATEWAY_RPC_URL=
 ```
 
-`CIRCLE_AGENT_PRIVATE_KEY` is server-only and must never be committed or exposed as `NEXT_PUBLIC_*`. It is intentionally separate from `AGENT_OWNER_PRIVATE_KEY`: Gateway/x402 pays premium API sellers, while the Arc owner key publishes bonded calls.
+`CIRCLE_AGENT_PRIVATE_KEY` is server-only and must never be committed or exposed as `NEXT_PUBLIC_*`. It is intentionally separate from `AGENT_OWNER_PRIVATE_KEY`: Gateway/x402 pays premium API sellers, while the Arc owner key publishes bonded calls. The x402 payment network affects paid-evidence settlement only; AI analysis quality still depends on evidence, model behavior, and agent logic.
 
 ## Final Smoke Test
 

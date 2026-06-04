@@ -83,15 +83,21 @@ RESOLVE_ONCHAIN=true
 
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
-CIRCLE_GATEWAY_CHAIN=arcTestnet
-CIRCLE_X402_CHAIN_CANDIDATES=base
+# Production paid evidence on Base Mainnet. This spends real USDC.
+CIRCLE_GATEWAY_CHAIN=base
+X402_ACCEPTED_NETWORKS=eip155:8453
+X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_AGENT_PRIVATE_KEY=
-CIRCLE_GATEWAY_RPC_URL=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10
+# Demo/hackathon alternative:
+# CIRCLE_GATEWAY_CHAIN=arcTestnet
+# X402_ACCEPTED_NETWORKS=eip155:5042002
+# X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
+# CIRCLE_GATEWAY_RPC_URL=
 
 MIN_LIQUIDITY_USD=10000
 MIN_EDGE_BPS=650
@@ -245,7 +251,7 @@ npm run worker:gateway:balance -- base
 
 Safety notes:
 
-- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has USDC on the chain you deposit from, and Gateway balance on at least one provider-supported Base `CIRCLE_X402_CHAIN_CANDIDATES` chain.
+- `CIRCLE_AGENT_PRIVATE_KEY` must control a wallet that already has USDC on the configured Gateway chain. For production paid evidence, use Base Mainnet with `CIRCLE_GATEWAY_CHAIN=base`, `X402_ACCEPTED_NETWORKS=eip155:8453`, and `X402_FACILITATOR_URL=https://gateway-api.circle.com`.
 - `ENABLE_CIRCLE_GATEWAY_X402=true` must be set, otherwise deposit returns a disabled result and moves no funds.
 - `CIRCLE_GATEWAY_MAX_DEPOSIT_USDC` defaults to `10`; deposits above that cap are blocked before any transaction.
 - The deposit command uses the Circle Gateway SDK `deposit()` method, which approves the Gateway Wallet if needed, then deposits the requested USDC.
@@ -259,7 +265,9 @@ Safety notes:
 ENABLE_CIRCLE_GATEWAY_X402=true
 REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_AGENT_PRIVATE_KEY=0x...
-CIRCLE_X402_CHAIN_CANDIDATES=base
+CIRCLE_GATEWAY_CHAIN=base
+X402_ACCEPTED_NETWORKS=eip155:8453
+X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
 CIRCLE_X402_MAX_PAYMENT_USDC=0.005
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
@@ -273,7 +281,7 @@ npm run worker:health
 npm run worker:run-once
 ```
 
-3. Check `/admin` or `/demo` on Vercel. The Circle Agent Stack panel should show Gateway/x402 enabled, daily x402 spend, latest x402 payment or latest x402 error, Arc bond volume, and thesis unlock volume.
+3. Check `/admin` or `/demo` on Vercel. The Circle Agent Stack panel should show Gateway/x402 enabled, x402 payment network, Gateway balance, daily x402 spend, latest x402 payment or latest x402 error, Arc bond volume, and thesis unlock volume.
 
 4. Inspect a published call page. Paid evidence rows show the `x402-paid evidence` badge, provider, payment amount, payment network, and payment reference when a paid evidence call succeeded.
 

@@ -21,16 +21,21 @@ export type GatewayX402Status =
   | "success"
   | "failed";
 
-const X402_PAYMENT_CHAIN: SupportedChainName = "base";
-
-function x402PaymentChainCandidates() {
-  return [X402_PAYMENT_CHAIN];
-}
+const BASE_MAINNET_NETWORK = "eip155:8453";
+const ARC_TESTNET_NETWORK = "eip155:5042002";
+const MAINNET_FACILITATOR_URL = "https://gateway-api.circle.com";
+const TESTNET_FACILITATOR_URL = "https://gateway-api-testnet.circle.com";
 
 export type GatewayRuntimeConfig = {
   enabled: boolean;
   chain: SupportedChainName;
   chainCandidates: SupportedChainName[];
+  acceptedNetworks: string[];
+  facilitatorUrl: string;
+  paymentNetworkLabel: string;
+  productionMode: boolean;
+  configWarnings: string[];
+  configErrors: string[];
   privateKey: Hex | "";
   rpcUrl?: string | undefined;
   maxPaymentUsdc: string;
@@ -158,19 +163,114 @@ function parseAllowedHosts(value: string) {
   return value.split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
 }
 
+function uniqueValues<T extends string>(values: T[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
+}
+
 function parseChainCandidates(value: string | undefined, fallback: SupportedChainName) {
   const rawCandidates = (value || "")
     .split(",")
     .map((chain) => chain.trim())
-    .filter(Boolean) as SupportedChainName[];
+    .filter((chain): chain is SupportedChainName => isSupportedChainName(chain));
   const candidates = rawCandidates.length > 0 ? rawCandidates : [fallback];
-  const seen = new Set<string>();
-  const normalized = candidates.filter((chain) => {
-    if (seen.has(chain)) return false;
-    seen.add(chain);
-    return true;
-  });
+  const normalized = uniqueValues(candidates);
   return normalized.length > 0 ? normalized : [fallback];
+}
+
+function isSupportedChainName(value: string): value is SupportedChainName {
+  return value in CHAIN_CONFIGS;
+}
+
+function chainForNetwork(network: string): SupportedChainName | undefined {
+  const normalized = network.trim();
+  return (Object.keys(CHAIN_CONFIGS) as SupportedChainName[]).find((chain) => networkForChain(chain) === normalized);
+}
+
+export function gatewayChainLabel(chain: string | undefined) {
+  if (chain === "base") return "Base Mainnet";
+  if (chain === "arcTestnet") return "Arc Testnet";
+  if (chain === "baseSepolia") return "Base Sepolia";
+  if (!chain) return "Not configured";
+  return chain.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+export function gatewayNetworkLabel(network: string | undefined) {
+  if (!network) return "Not configured";
+  const chain = chainForNetwork(network);
+  return chain ? gatewayChainLabel(chain) : network;
+}
+
+function parseAcceptedNetworks(value: string | undefined, fallbackChain: SupportedChainName) {
+  const networks = (value || "")
+    .split(",")
+    .map((network) => network.trim())
+    .filter(Boolean);
+  return uniqueValues(networks.length > 0 ? networks : [networkForChain(fallbackChain)]);
+}
+
+function chainCandidatesFromAcceptedNetworks(acceptedNetworks: string[], fallbackChain: SupportedChainName) {
+  const candidates = acceptedNetworks
+    .map((network) => chainForNetwork(network))
+    .filter((chain): chain is SupportedChainName => Boolean(chain));
+  return uniqueValues(candidates.length > 0 ? candidates : [fallbackChain]);
+}
+
+function defaultFacilitatorUrl(chain: SupportedChainName) {
+  return chain === "base" ? MAINNET_FACILITATOR_URL : TESTNET_FACILITATOR_URL;
+}
+
+function normalizeFacilitatorUrl(value: string) {
+  return value.replace(/\/+$/, "").replace(/\/v1$/, "");
+}
+
+function hasOverride(overrides: Partial<GatewayRuntimeConfig>, key: keyof GatewayRuntimeConfig) {
+  return Object.prototype.hasOwnProperty.call(overrides, key);
+}
+
+function validateGatewayRuntimeConfig(config: Omit<GatewayRuntimeConfig, "configWarnings" | "configErrors">, overrides: Partial<GatewayRuntimeConfig>) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const expectedNetwork = networkForChain(config.chain);
+  const normalizedFacilitator = normalizeFacilitatorUrl(config.facilitatorUrl);
+  const maxPayment = normalizeUsdcAmount(config.maxPaymentUsdc);
+  const dailyBudget = normalizeUsdcAmount(config.dailyBudgetUsdc);
+
+  for (const network of config.acceptedNetworks) {
+    if (!chainForNetwork(network)) errors.push(`Unsupported x402 accepted network: ${network}.`);
+  }
+  if (!config.acceptedNetworks.includes(expectedNetwork)) {
+    errors.push(`CIRCLE_GATEWAY_CHAIN=${config.chain} requires X402_ACCEPTED_NETWORKS to include ${expectedNetwork}.`);
+  }
+  if (!maxPayment.ok) errors.push("CIRCLE_X402_MAX_PAYMENT_USDC must be a positive USDC decimal with up to 6 decimals.");
+  if (!dailyBudget.ok) errors.push("CIRCLE_X402_DAILY_BUDGET_USDC must be a positive USDC decimal with up to 6 decimals.");
+  if (maxPayment.ok && dailyBudget.ok && toNumber(maxPayment.value) > toNumber(dailyBudget.value)) {
+    errors.push("CIRCLE_X402_MAX_PAYMENT_USDC must not exceed CIRCLE_X402_DAILY_BUDGET_USDC.");
+  }
+
+  if (config.chain === "base") {
+    warnings.push("Base Mainnet x402 uses real USDC. Keep Railway spending limits tight before enabling required mode.");
+    if (!config.acceptedNetworks.includes(BASE_MAINNET_NETWORK)) errors.push(`Base mainnet x402 requires X402_ACCEPTED_NETWORKS=${BASE_MAINNET_NETWORK}.`);
+    if (normalizedFacilitator !== MAINNET_FACILITATOR_URL) errors.push(`Base mainnet x402 requires X402_FACILITATOR_URL=${MAINNET_FACILITATOR_URL}.`);
+    if (!hasOverride(overrides, "dailyBudgetUsdc") && !process.env.CIRCLE_X402_DAILY_BUDGET_USDC) errors.push("Base mainnet x402 requires CIRCLE_X402_DAILY_BUDGET_USDC to be set explicitly.");
+    if (!hasOverride(overrides, "maxPaymentUsdc") && !process.env.CIRCLE_X402_MAX_PAYMENT_USDC) errors.push("Base mainnet x402 requires CIRCLE_X402_MAX_PAYMENT_USDC to be set explicitly.");
+  }
+
+  if (config.chain === "arcTestnet") {
+    if (!config.acceptedNetworks.includes(ARC_TESTNET_NETWORK)) errors.push(`Arc Testnet x402 requires X402_ACCEPTED_NETWORKS=${ARC_TESTNET_NETWORK}.`);
+    if (normalizedFacilitator !== TESTNET_FACILITATOR_URL) errors.push(`Arc Testnet x402 requires X402_FACILITATOR_URL=${TESTNET_FACILITATOR_URL}.`);
+  }
+
+  return { errors, warnings };
+}
+
+function configuredChainCandidates(inputCandidates: SupportedChainName[] | undefined, config: GatewayRuntimeConfig) {
+  const candidates = inputCandidates && inputCandidates.length > 0 ? inputCandidates : config.chainCandidates;
+  return uniqueValues(candidates.length > 0 ? candidates : [config.chain]);
 }
 
 function hostnameForUrl(url: string) {
@@ -195,10 +295,22 @@ function rpcUrlForChain(chain: SupportedChainName, config: GatewayRuntimeConfig)
 
 export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = {}): GatewayRuntimeConfig {
   const chain = overrides.chain ?? (optionalEnv("CIRCLE_GATEWAY_CHAIN", "arcTestnet") as SupportedChainName);
-  return {
+  const legacyChainCandidateEnv = optionalEnv("CIRCLE_X402_CHAIN_CANDIDATES");
+  const acceptedNetworks = overrides.acceptedNetworks ?? (process.env.X402_ACCEPTED_NETWORKS
+    ? parseAcceptedNetworks(process.env.X402_ACCEPTED_NETWORKS, chain)
+    : legacyChainCandidateEnv
+      ? parseChainCandidates(legacyChainCandidateEnv, chain).map(networkForChain)
+      : parseAcceptedNetworks(undefined, chain));
+  const chainCandidates = overrides.chainCandidates ?? chainCandidatesFromAcceptedNetworks(acceptedNetworks, chain);
+  const facilitatorUrl = overrides.facilitatorUrl ?? optionalEnv("X402_FACILITATOR_URL", defaultFacilitatorUrl(chain));
+  const baseConfig = {
     enabled: overrides.enabled ?? boolEnv("ENABLE_CIRCLE_GATEWAY_X402", false),
     chain,
-    chainCandidates: overrides.chainCandidates ?? x402PaymentChainCandidates(),
+    chainCandidates,
+    acceptedNetworks,
+    facilitatorUrl,
+    paymentNetworkLabel: uniqueValues(acceptedNetworks.map(gatewayNetworkLabel)).join(", "),
+    productionMode: chain === "base",
     privateKey: overrides.privateKey ?? (optionalEnv("CIRCLE_AGENT_PRIVATE_KEY") as Hex | ""),
     rpcUrl: overrides.rpcUrl ?? optionalEnv("CIRCLE_GATEWAY_RPC_URL", chain === "arcTestnet" ? optionalEnv("ARC_TESTNET_RPC_URL") : undefined),
     maxPaymentUsdc: overrides.maxPaymentUsdc ?? optionalEnv("CIRCLE_X402_MAX_PAYMENT_USDC", "0.005"),
@@ -207,6 +319,8 @@ export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = 
     minGatewayBalanceUsdc: overrides.minGatewayBalanceUsdc ?? optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25"),
     maxDepositUsdc: overrides.maxDepositUsdc ?? optionalEnv("CIRCLE_GATEWAY_MAX_DEPOSIT_USDC", "10"),
   };
+  const validation = validateGatewayRuntimeConfig(baseConfig, overrides);
+  return { ...baseConfig, configWarnings: validation.warnings, configErrors: validation.errors };
 }
 
 export function gatewayX402Enabled() {
@@ -358,9 +472,10 @@ export async function depositGatewayUsdc(input: DepositGatewayUsdcInput): Promis
 
 export async function supportsX402Resource(url: string, input: { client?: GatewayClientLike; clients?: Partial<Record<SupportedChainName, GatewayClientLike>>; chainCandidates?: SupportedChainName[] | undefined; config?: Partial<GatewayRuntimeConfig> } = {}) {
   const config = gatewayRuntimeConfig(input.config);
-  const chainCandidates = x402PaymentChainCandidates();
+  const chainCandidates = configuredChainCandidates(input.chainCandidates, config);
   const supportChecks: GatewaySupportCheck[] = [];
   if (!config.enabled) return { enabled: false, supported: false, status: "disabled" as const, url, supportChecks, error: "Gateway x402 is disabled." };
+  if (config.configErrors.length > 0) return { enabled: true, supported: false, status: "blocked" as const, url, supportChecks, error: config.configErrors.join(" ") };
   if (!isAllowedX402Host(url, config.allowedHosts)) return { enabled: true, supported: false, status: "blocked" as const, url, supportChecks, error: `Host is not allowlisted: ${hostnameForUrl(url)}` };
   if (!config.privateKey && !input.client && !input.clients) return { enabled: true, supported: false, status: "failed" as const, url, supportChecks, error: "CIRCLE_AGENT_PRIVATE_KEY is required when Gateway x402 is enabled." };
 
@@ -438,7 +553,7 @@ function statusFromPaymentError(message: string): GatewayX402Status {
 }
 
 async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput, config: GatewayRuntimeConfig, dailySpend: number, base: Omit<PayX402ResourceResult<T>, "status">): Promise<PayX402ResourceResult<T>> {
-  const chainCandidates = x402PaymentChainCandidates();
+  const chainCandidates = configuredChainCandidates(input.chainCandidates, config);
   const supportChecks = base.supportChecks || [];
   const primaryChain = chainCandidates[0] || config.chain;
   let selectedChain: SupportedChainName | undefined;
@@ -591,7 +706,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
 }
 
 async function payX402ResourceWithGatewayClient<T = unknown>(input: PayX402ResourceInput, config: GatewayRuntimeConfig, dailySpend: number, base: Omit<PayX402ResourceResult<T>, "status">): Promise<PayX402ResourceResult<T>> {
-  const chainCandidates = x402PaymentChainCandidates();
+  const chainCandidates = configuredChainCandidates(input.chainCandidates, config);
   const supportChecks = base.supportChecks || [];
 
   for (const chain of chainCandidates) {
@@ -682,6 +797,7 @@ export async function payX402Resource<T = unknown>(input: PayX402ResourceInput):
   };
 
   if (!config.enabled) return { ...base, status: "disabled", error: "Gateway x402 is disabled." };
+  if (config.configErrors.length > 0) return { ...base, status: "blocked", failureReason: "invalid_x402_config", error: config.configErrors.join(" ") };
   if (!isAllowedX402Host(input.url, config.allowedHosts)) {
     const providerHost = hostnameForUrl(input.url);
     return { ...base, status: "blocked", providerHost, error: `Host is not allowlisted: ${providerHost}` };

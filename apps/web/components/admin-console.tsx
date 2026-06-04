@@ -83,6 +83,12 @@ type AdminSummary = {
     gatewayX402Enabled: boolean;
     gatewayX402Required?: boolean;
     gatewayChain: string;
+    x402PaymentNetworkLabel?: string;
+    x402AcceptedNetworks?: string[];
+    x402FacilitatorUrl?: string;
+    x402ProductionMode?: boolean;
+    x402ConfigWarnings?: string[];
+    x402ConfigErrors?: string[];
     x402ChainCandidates?: string[];
     gatewayBalanceStatus: string;
     gatewayAvailableUsdc?: string;
@@ -353,7 +359,12 @@ export function AdminConsole() {
               <h2>Circle Agent Stack status</h2>
               <p>Gateway x402 enabled <Bool value={summary.circleStack.gatewayX402Enabled} /></p>
               <p>Gateway x402 required <Bool value={Boolean(summary.circleStack.gatewayX402Required)} /></p>
-              <p className="muted">Settlement chain: Arc Testnet · Default Gateway chain: {summary.circleStack.gatewayChain}</p>
+              <p className="muted">Settlement chain: Arc · x402 payment network: {summary.circleStack.x402PaymentNetworkLabel || summary.circleStack.gatewayChain}</p>
+              <p className="muted">Gateway chain: {summary.circleStack.gatewayChain} · Accepted networks: {(summary.circleStack.x402AcceptedNetworks || []).join(", ") || "not configured"}</p>
+              <p className="muted">Facilitator: {summary.circleStack.x402FacilitatorUrl || "not configured"}</p>
+              {summary.circleStack.x402ProductionMode ? <p className="muted"><strong>Production mode:</strong> Base Mainnet x402 uses real USDC with Railway spend caps.</p> : null}
+              {summary.circleStack.x402ConfigWarnings?.length ? <p className="muted">x402 warnings: {summary.circleStack.x402ConfigWarnings.join(" ")}</p> : null}
+              {summary.circleStack.x402ConfigErrors?.length ? <p className="muted">x402 config errors: {summary.circleStack.x402ConfigErrors.join(" ")}</p> : null}
               <p className="muted">x402 candidates: {(summary.circleStack.x402ChainCandidates || [summary.circleStack.gatewayChain]).join(", ")}</p>
               <p className="muted">Gateway available: {summary.circleStack.gatewayAvailableUsdc ? usdc(summary.circleStack.gatewayAvailableUsdc) : "not available"} · Balance status: {summary.circleStack.gatewayBalanceStatus}</p>
               {summary.circleStack.gatewayBalancesByChain?.length ? <p className="muted">Balances by chain: {summary.circleStack.gatewayBalancesByChain.map((balance) => `${balance.chain}: ${balance.gatewayAvailableUsdc ? usdc(balance.gatewayAvailableUsdc) : balance.status}`).join(" · ")}</p> : null}
@@ -368,7 +379,7 @@ export function AdminConsole() {
               <p className="muted">Daily x402 spend: {usdc(summary.counts?.dailyX402Spend || 0)} / {usdc(summary.circleStack.dailyBudgetUsdc)}</p>
               <p className="muted">Max x402 request: {usdc(summary.circleStack.maxPaymentUsdc)}</p>
               <p className="muted">x402 API payments: {summary.counts?.x402ApiPayments ?? 0}</p>
-              {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status}{summary.latestX402Payment.chain ? ` · ${summary.latestX402Payment.chain}` : ""}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
+              {summary.latestX402Payment ? <p className="muted">Latest x402: {summary.latestX402Payment.provider || "x402"} · {usdc(summary.latestX402Payment.amountUsdc || summary.latestX402Payment.amount || 0)} · {summary.latestX402Payment.status} · {summary.circleStack.x402PaymentNetworkLabel || summary.latestX402Payment.chain || "network unknown"}{summary.latestX402Payment.error ? ` · ${summary.latestX402Payment.error}` : ""}</p> : <p className="muted">Latest x402: none recorded</p>}
               <p className="muted">Arc bond volume: {usdc(summary.counts?.bondVolume || 0)}</p>
               <p className="muted">Total unlocks: {summary.counts?.unlocks ?? 0} · Bonded thesis {summary.counts?.thesisUnlocks ?? 0} · Sports {summary.counts?.sportsUnlocks ?? 0}</p>
               <p className="muted">Thesis unlock volume: {usdc(summary.counts?.thesisUnlockVolume || summary.counts?.unlockVolume || 0)}</p>
@@ -383,7 +394,7 @@ export function AdminConsole() {
           <article className={`panel admin-action ${item.danger ? "danger" : ""}`} key={item.action}>
             <h3>{item.icon} {item.title}</h3>
             <p className="muted">{item.description}</p>
-            {item.action === "run-once" || item.action === "sports" ? <p className="muted"><strong>Spend note:</strong> Railway should have Gateway/x402 enabled; keep x402 not-required until a provider/chain support check succeeds.</p> : null}
+            {item.action === "run-once" || item.action === "sports" ? <p className="muted"><strong>Spend note:</strong> Railway should have Gateway/x402 enabled with explicit accepted networks and tight daily/per-request caps.</p> : null}
             <button className={item.danger ? "button" : "button secondary"} disabled={Boolean(active)} onClick={() => runAction(item.action)} type="button">
               {active === item.action ? "Running..." : item.title}
             </button>

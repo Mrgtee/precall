@@ -117,4 +117,4 @@ GitHub: https://github.com/Mrgtee/precall
 
 ### x402 Chain Negotiation
 
-Precall keeps Arc Testnet as the settlement layer for bonded calls and thesis unlocks, while Gateway/x402 paid evidence can use Arc Testnet, Base Sepolia, Base, or any other seller-supported Gateway network. The worker checks candidate chains before paying, records the selected chain in `circle_actions`, and falls back honestly when paid evidence is unavailable unless required mode is deliberately enabled.
+Precall keeps Arc Testnet as the settlement layer for bonded calls and thesis unlocks. Gateway/x402 paid evidence is now network-configurable: Base Mainnet is the recommended production payment rail when the seller supports it, while Arc Testnet remains available for hackathon/demo x402 flows. The worker validates `CIRCLE_GATEWAY_CHAIN`, `X402_ACCEPTED_NETWORKS`, facilitator URL, and spend caps before paying, records the selected chain in `circle_actions`, and falls back honestly when paid evidence is unavailable unless required mode is deliberately enabled. The payment network affects evidence settlement, not AI quality; quality depends on evidence, model behavior, and agent logic.
