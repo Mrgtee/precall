@@ -70,6 +70,15 @@ export interface MarketResolution {
   resolvedAt: string;
 }
 
+export interface SelectedOutcomeResolution {
+  marketId: string;
+  resolvedOutcomeIndex: number;
+  resolvedOutcome: string;
+  finalPriceBps: number;
+  sourceUrl: string;
+  resolvedAt: string;
+}
+
 export interface EvidenceItemInput {
   evidenceId: string;
   sourceType: EvidenceSourceType;

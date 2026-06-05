@@ -14,7 +14,7 @@ import {
 import { optionalEnv } from "@precall/shared/env";
 import { hashText } from "@precall/shared/scoring";
 import { sportsEventTime } from "@precall/shared/sports";
-import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SportsPredictionIdea } from "@precall/shared/types";
+import type { AggregatedCall, CircleActionType, EvidenceItemInput, MarketSnapshot, PolymarketMarket, SelectedOutcomeResolution, SportsPredictionIdea } from "@precall/shared/types";
 import type { SportsCallStatus } from "@precall/shared/sports";
 
 let dbClient: PrecallDb | undefined;
@@ -357,7 +357,7 @@ export async function markExpiredSportsPredictions(now = new Date()) {
     .set({
       status: "expired",
       resolutionStatus: "expired",
-      statusReason: "Expired sports live call. Event start has passed or selected-outcome settlement is not enabled yet.",
+      statusReason: "Expired sports live call. Awaiting clear selected-outcome resolution from Polymarket.",
       updatedAt: now,
     })
     .where(and(
@@ -415,7 +415,7 @@ async function backfillMissingSportsEventTimes(now: Date) {
           eventStartTime,
           status: "expired",
           resolutionStatus: "expired",
-          statusReason: "Expired sports live call. Event start has passed or selected-outcome settlement is not enabled yet.",
+          statusReason: "Expired sports live call. Awaiting clear selected-outcome resolution from Polymarket.",
           updatedAt: now,
         })
         .where(eq(sportsPredictions.id, candidate.id))
@@ -429,6 +429,45 @@ async function backfillMissingSportsEventTimes(now: Date) {
     }
   }
   return expired;
+}
+
+export async function getSportsPredictionsForResolution(limit = 100) {
+  return db()
+    .select({
+      id: sportsPredictions.id,
+      marketId: sportsPredictions.marketId,
+      marketTitle: sportsPredictions.marketTitle,
+      selectedOption: sportsPredictions.selectedOption,
+      selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex,
+      marketPriceBps: sportsPredictions.marketPriceBps,
+      agentProbabilityBps: sportsPredictions.agentProbabilityBps,
+      eventStartTime: sportsPredictions.eventStartTime,
+      expiresAt: sportsPredictions.expiresAt,
+      status: sportsPredictions.status,
+      resolutionStatus: sportsPredictions.resolutionStatus,
+    })
+    .from(sportsPredictions)
+    .where(and(
+      inArray(sportsPredictions.resolutionStatus, ["unresolved", "expired", "failed_resolution"]),
+      sql`(${sportsPredictions.status} = 'expired' or (${sportsPredictions.eventStartTime} is not null and ${sportsPredictions.eventStartTime} <= now()) or (${sportsPredictions.expiresAt} is not null and ${sportsPredictions.expiresAt} <= now()))`,
+    ))
+    .orderBy(desc(sportsPredictions.updatedAt))
+    .limit(limit);
+}
+
+export async function markSportsPredictionResolved(input: { predictionId: number; resolution: SelectedOutcomeResolution }) {
+  await db()
+    .update(sportsPredictions)
+    .set({
+      status: "resolved",
+      resolutionStatus: "resolved",
+      resolvedOutcomeIndex: input.resolution.resolvedOutcomeIndex,
+      resolvedOutcome: input.resolution.resolvedOutcome,
+      resolvedAt: new Date(input.resolution.resolvedAt),
+      statusReason: "Resolved with supported selected-outcome Polymarket result.",
+      updatedAt: new Date(),
+    })
+    .where(eq(sportsPredictions.id, input.predictionId));
 }
 
 export async function getOpenPublishedCalls() {

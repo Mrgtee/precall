@@ -251,6 +251,46 @@ export async function getResolvedLeaderboardCalls(limit = 25) {
     .limit(limit);
 }
 
+export async function getSportsLeaderboardStats() {
+  const db = createDb();
+  const [row] = await db
+    .select({
+      resolved: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved')::int`,
+      wins: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} = ${sportsPredictions.selectedOutcomeIndex})::int`,
+      losses: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} <> ${sportsPredictions.selectedOutcomeIndex})::int`,
+    })
+    .from(sportsPredictions);
+  return row || { resolved: 0, wins: 0, losses: 0 };
+}
+
+export async function getResolvedSportsLeaderboardCalls(limit = 25) {
+  const db = createDb();
+  const wonExpr = sql`${sportsPredictions.resolvedOutcomeIndex} = ${sportsPredictions.selectedOutcomeIndex}`;
+  return db
+    .select({
+      sportsPredictionId: sportsPredictions.id,
+      marketId: sportsPredictions.marketId,
+      marketTitle: sportsPredictions.marketTitle,
+      marketUrl: sportsPredictions.marketUrl,
+      category: sportsPredictions.category,
+      marketKind: sportsPredictions.marketKind,
+      status: sportsPredictions.status,
+      selectedOption: sportsPredictions.selectedOption,
+      selectedOutcomeIndex: sportsPredictions.selectedOutcomeIndex,
+      marketPriceBps: sportsPredictions.marketPriceBps,
+      agentProbabilityBps: sportsPredictions.agentProbabilityBps,
+      resolvedOutcomeIndex: sportsPredictions.resolvedOutcomeIndex,
+      resolvedOutcome: sportsPredictions.resolvedOutcome,
+      resolvedAt: sportsPredictions.resolvedAt,
+      roiBps: sql<number>`case when ${wonExpr} then round(((10000 - greatest(${sportsPredictions.marketPriceBps}, 1))::numeric / greatest(${sportsPredictions.marketPriceBps}, 1)) * 10000)::int else -10000 end`,
+      brierScoreBps: sql<number>`case when ${wonExpr} then round(power((${sportsPredictions.agentProbabilityBps} - 10000)::numeric / 10000, 2) * 10000)::int else round(power(${sportsPredictions.agentProbabilityBps}::numeric / 10000, 2) * 10000)::int end`,
+    })
+    .from(sportsPredictions)
+    .where(sql`${sportsPredictions.resolutionStatus} = 'resolved'`)
+    .orderBy(desc(sportsPredictions.resolvedAt))
+    .limit(limit);
+}
+
 export async function getAgent(id: number) {
   const db = createDb();
   const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });

@@ -11,6 +11,7 @@ import {
   fetchMarketSnapshot,
   fetchOutcomeSnapshot,
   fetchPolymarketResolution,
+  fetchPolymarketSelectedOutcomeResolution,
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
@@ -20,6 +21,7 @@ import {
   ensureCouncilAgent,
   getAgentRunById,
   getOpenPublishedCalls,
+  getSportsPredictionsForResolution,
   insertPublishedCall,
   insertResolution,
   insertSnapshot,
@@ -27,6 +29,7 @@ import {
   markCallResolving,
   markExpiredCalls,
   markExpiredSportsPredictions,
+  markSportsPredictionResolved,
   recordAgentRun,
   recordCircleAction,
   getTodayX402SpendUsdc,
@@ -755,6 +758,12 @@ function realizedPnlBps(action: string, entryPriceBps: number, outcomeYes: boole
   return Math.round(((10_000 - entry) / entry) * 10_000);
 }
 
+function realizedSelectedOutcomePnlBps(entryPriceBps: number, won: boolean) {
+  if (!won) return -10_000;
+  const entry = Math.max(1, Math.min(9_999, entryPriceBps));
+  return Math.round(((10_000 - entry) / entry) * 10_000);
+}
+
 export async function expirePublishedCalls() {
   const expired = await markExpiredCalls();
   const sportsExpired = await markExpiredSportsPredictions();
@@ -805,5 +814,29 @@ export async function resolveMatureCalls() {
     }
   }
 
-  return { expired, checked: openCalls.length, resolved, skipped, failed };
+  const sportsCandidates = await getSportsPredictionsForResolution();
+  const sportsResolved = [];
+  const sportsSkipped = [];
+
+  for (const prediction of sportsCandidates) {
+    const resolution = await fetchPolymarketSelectedOutcomeResolution(prediction.marketId).catch(() => null);
+    if (!resolution) {
+      sportsSkipped.push({ sportsPredictionId: prediction.id, marketId: prediction.marketId, reason: "not_resolved_or_ambiguous" });
+      continue;
+    }
+
+    const won = resolution.resolvedOutcomeIndex === prediction.selectedOutcomeIndex;
+    await markSportsPredictionResolved({ predictionId: prediction.id, resolution });
+    sportsResolved.push({
+      sportsPredictionId: prediction.id,
+      marketId: prediction.marketId,
+      selectedOption: prediction.selectedOption,
+      resolvedOutcome: resolution.resolvedOutcome,
+      result: won ? "win" : "loss",
+      roiBps: realizedSelectedOutcomePnlBps(prediction.marketPriceBps, won),
+      brierScoreBps: brierScoreBps(prediction.agentProbabilityBps, won),
+    });
+  }
+
+  return { expired, checked: openCalls.length, resolved, skipped, failed, sportsChecked: sportsCandidates.length, sportsResolved, sportsSkipped };
 }

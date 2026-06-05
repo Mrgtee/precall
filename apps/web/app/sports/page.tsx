@@ -46,7 +46,7 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
   const x402Status = idea.x402Status as { status?: unknown } | null;
   const paidEvidenceUsed = Boolean(idea.x402PaidEvidenceUsed || x402Status?.status === "success");
   return (
-    <article className={`panel sports-call-card sports-status-${idea.status}`}>
+    <article id={`sports-call-${idea.id}`} className={`panel sports-call-card sports-status-${idea.status}`}>
       <div className="sports-card-main">
         <div className="card-topline">
           <span className="status-chip ok">{statusLabel(idea.status)}</span>

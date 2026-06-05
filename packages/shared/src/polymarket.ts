@@ -1,5 +1,5 @@
 import { optionalEnv } from "./env";
-import type { MarketResolution, MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "./types";
+import type { MarketResolution, MarketSnapshot, OutcomeSnapshot, PolymarketMarket, SelectedOutcomeResolution } from "./types";
 
 interface GammaMarket {
   id?: string;
@@ -109,6 +109,35 @@ export async function fetchPolymarketResolution(marketId: string): Promise<Marke
     marketId: normalized.marketId,
     outcomeYes: yesResolved,
     finalYesPriceBps: Math.round(yesPrice * 10_000),
+    sourceUrl: normalized.url,
+    resolvedAt: raw.closedTime || raw.updatedAt || new Date().toISOString(),
+  };
+}
+
+export async function fetchPolymarketSelectedOutcomeResolution(marketId: string): Promise<SelectedOutcomeResolution | null> {
+  const baseUrl = optionalEnv("POLYMARKET_GAMMA_URL", "https://gamma-api.polymarket.com");
+  const url = new URL(`/markets/${marketId}`, baseUrl);
+  const raw = await fetchJson<GammaMarket>(url.toString());
+  const normalized = normalizeGammaMarket(raw);
+  if (!normalized || normalized.status !== "closed") return null;
+  if (raw.umaResolutionStatus && raw.umaResolutionStatus !== "resolved") return null;
+
+  const winnerIndexes = normalized.outcomePrices
+    .map((price, index) => ({ price, index }))
+    .filter((item) => item.price >= 0.99)
+    .map((item) => item.index);
+  if (winnerIndexes.length !== 1) return null;
+
+  const winnerIndex = winnerIndexes[0];
+  if (winnerIndex === undefined) return null;
+  const losersAreClear = normalized.outcomePrices.every((price, index) => index === winnerIndex || price <= 0.01);
+  if (!losersAreClear) return null;
+
+  return {
+    marketId: normalized.marketId,
+    resolvedOutcomeIndex: winnerIndex,
+    resolvedOutcome: normalized.outcomes[winnerIndex] || `Outcome ${winnerIndex + 1}`,
+    finalPriceBps: Math.round((normalized.outcomePrices[winnerIndex] || 0) * 10_000),
     sourceUrl: normalized.url,
     resolvedAt: raw.closedTime || raw.updatedAt || new Date().toISOString(),
   };

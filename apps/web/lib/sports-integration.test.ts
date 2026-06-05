@@ -189,20 +189,33 @@ test("public homepage no longer displays old resolved call audit cards", () => {
   assert.match(queries, /losses:/);
 });
 
-test("leaderboard displays resolved call totals and resolved history", () => {
+test("leaderboard displays bonded and sports resolved call totals and history", () => {
   const leaderboard = file("apps/web/app/leaderboard/page.tsx");
   const queries = file("apps/web/lib/queries.ts");
+  const runCycle = file("apps/worker/src/run-cycle.ts");
+  const repository = file("apps/worker/src/repository.ts");
+  const polymarket = file("packages/shared/src/polymarket.ts");
   assert.match(queries, /getResolvedLeaderboardCalls/);
+  assert.match(queries, /getResolvedSportsLeaderboardCalls/);
+  assert.match(queries, /getSportsLeaderboardStats/);
+  assert.match(queries, /sportsPredictions\.resolutionStatus/);
   assert.match(queries, /c\.agent_id = agents\.id/);
   assert.doesNotMatch(queries, /c\.agent_id = \${agents\.id}/);
   assert.match(queries, /from\(resolutions\)/);
   assert.match(queries, /innerJoin\(calls/);
-  assert.match(leaderboard, /Resolved bonded calls/);
+  assert.match(leaderboard, /Resolved calls/);
+  assert.match(leaderboard, /Resolved call history/);
+  assert.match(leaderboard, /Sports calls now follow the leaderboard flow/);
+  assert.match(leaderboard, /resolvedHistory\.map/);
+  assert.match(leaderboard, /Sports Council/);
   assert.match(leaderboard, /Total wins/);
   assert.match(leaderboard, /Total losses/);
-  assert.match(leaderboard, /resolvedCalls\.map/);
   assert.match(leaderboard, /Win/);
   assert.match(leaderboard, /Loss/);
+  assert.match(runCycle, /fetchPolymarketSelectedOutcomeResolution/);
+  assert.match(runCycle, /sportsResolved/);
+  assert.match(repository, /markSportsPredictionResolved/);
+  assert.match(polymarket, /fetchPolymarketSelectedOutcomeResolution/);
 });
 
 test("admin long-running commands start async Railway jobs and do not render nested expire objects", () => {
