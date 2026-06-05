@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { createDbConnection, type PrecallDb } from "@precall/shared/db/client";
 import {
   agents,
@@ -439,10 +439,11 @@ export async function getOpenPublishedCalls() {
 }
 
 export async function markExpiredCalls(now = new Date()) {
+  const cutoffIso = now.toISOString();
   const expired = await db()
     .update(calls)
     .set({ status: "expired", statusReason: "Expired and awaiting supported market resolution." })
-    .where(and(eq(calls.status, "published"), lt(calls.expiresAt, now)))
+    .where(and(eq(calls.status, "published"), sql`${calls.expiresAt} < ${cutoffIso}::timestamptz`))
     .returning({ id: calls.id, marketId: calls.marketId });
   return expired;
 }
