@@ -63,7 +63,7 @@ export default async function TopFiveTodayPage() {
               <p className="muted">Full reasoning and market link unlock on the Sports Live Calls board.</p>
               <Link className="button secondary" href="/sports">Open Sports Live Calls</Link>
             </article>
-          )) : <section className="empty"><h2>No active top sports calls right now</h2><p className="muted">Sports scans may still create Lean, High Risk, or Avoid calls on the Sports Live Calls page.</p></section>}
+          )) : <section className="empty"><h2>No active top sports calls right now</h2><p className="muted">Sports scans may still create Lean or High Risk calls on the Sports Live Calls page.</p></section>}
         </section>
       </section>
     </main>

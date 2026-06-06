@@ -181,14 +181,14 @@ test("sports aggregation uses selected outcome probability and edge semantics", 
 });
 
 
-test("sports live call status classifies strong, lean, high-risk, and avoid calls", () => {
+test("sports live call status classifies strong, lean, and high-risk calls", () => {
   const strongIdea = { edgeBps: 700, confidenceBps: 6200, marketPriceBps: 4400, riskLevel: "medium" as const, snapshot: { ...snapshot, spreadBps: 120 } };
   const leanIdea = { edgeBps: 250, confidenceBps: 4200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
   const highRiskIdea = { edgeBps: 100, confidenceBps: 3200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
-  const avoidIdea = { edgeBps: 0, confidenceBps: 5600, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
+  const zeroEdgeIdea = { edgeBps: 0, confidenceBps: 5600, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
   assert.equal(classifySportsCallStatus(strongIdea), "strong_call");
   assert.equal(classifySportsCallStatus(leanIdea), "lean_call");
   assert.equal(classifySportsCallStatus(highRiskIdea), "high_risk_call");
-  assert.equal(classifySportsCallStatus(avoidIdea), "avoid_call");
-  assert.match(sportsVerdictForStatus("avoid_call", { selectedOption: "Knicks", edgeBps: 0, confidenceBps: 5600, riskLevel: "high" }), /avoid/i);
+  assert.equal(classifySportsCallStatus(zeroEdgeIdea), "high_risk_call");
+  assert.match(sportsVerdictForStatus("avoid_call", { selectedOption: "Knicks", edgeBps: 0, confidenceBps: 5600, riskLevel: "high" }), /high risk/i);
 });

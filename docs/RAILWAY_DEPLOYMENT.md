@@ -237,7 +237,7 @@ Create four Railway cron services from the same GitHub repo:
 | Job | Schedule | Command | Notes |
 | --- | --- | --- | --- |
 | Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans strict YES/NO markets, optionally pays x402 evidence, and publishes only quality-passing bonded calls. |
-| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, optionally pays x402 evidence, and stores analyzed valid markets as strong, lean, high-risk, or avoid non-bonded calls. |
+| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, optionally pays x402 evidence, and stores analyzed valid markets as strong, lean, or high-risk non-bonded calls. |
 | Expire calls | `0 * * * *` | `npm run worker:expire` | Marks matured published calls as awaiting resolution. |
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 

@@ -18,7 +18,7 @@ function statusLabel(status: string) {
   if (status === "strong_call") return "Strong";
   if (status === "lean_call") return "Lean";
   if (status === "high_risk_call") return "High Risk";
-  if (status === "avoid_call") return "Avoid";
+  if (status === "avoid_call") return "High Risk";
   return status.replace(/_/g, " ");
 }
 
@@ -26,14 +26,14 @@ function statusIntro(status: string) {
   if (status === "strong_call") return "Strong Calls";
   if (status === "lean_call") return "Lean Calls";
   if (status === "high_risk_call") return "High Risk Calls";
-  return "Avoided Markets";
+  return "High Risk Calls";
 }
 
 function statusDescription(status: string) {
   if (status === "strong_call") return "Edge, confidence, market spread, and risk are all acceptable.";
   if (status === "lean_call") return "The selected side is clear, but conviction is moderate.";
   if (status === "high_risk_call") return "The model found a side, but evidence, confidence, or market conditions make it risky.";
-  return "Valid markets the AI recommends avoiding rather than following.";
+  return "The AI selected a side, but confidence, edge, evidence, or market conditions make it high risk.";
 }
 
 function previewReason(statusReason: string) {
@@ -85,9 +85,9 @@ export default async function SportsPage() {
     setupError = friendlySetupError(error);
   }
 
-  const grouped = ["strong_call", "lean_call", "high_risk_call", "avoid_call"].map((status) => ({
+  const grouped = ["strong_call", "lean_call", "high_risk_call"].map((status) => ({
     status,
-    ideas: ideas.filter((idea) => idea.status === status),
+    ideas: ideas.filter((idea) => status === "high_risk_call" ? idea.status === "high_risk_call" || idea.status === "avoid_call" : idea.status === status),
   }));
 
   return (

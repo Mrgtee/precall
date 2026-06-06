@@ -369,7 +369,7 @@ function shouldUseGatewayFallback(payment: PayX402ResourceResult) {
   return payment.status === "unsupported" ||
     payment.failureReason === "unsupported_network" ||
     payment.failureReason === "provider_unavailable" ||
-    /HTTP 5\d\d|Cloudflare|Bad Gateway|error code: 502|No network\/scheme registered|no Gateway batching|unsupported_network/i.test(payment.error || "");
+    /HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|error code: 502|No network\/scheme registered|no Gateway batching|unsupported_network/i.test(payment.error || "");
 }
 
 async function fetchStableEnrichRedditEvidence(input: {

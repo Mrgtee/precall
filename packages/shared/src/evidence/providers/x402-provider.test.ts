@@ -173,6 +173,59 @@ test("provider 502 falls back to internal Circle Gateway paid evidence", async (
   assert.match(result.evidence[0]?.excerpt || "", /Gateway evidence reached/i);
 });
 
+
+test("provider Cloudflare 403 falls back to internal Circle Gateway paid evidence", async () => {
+  const previousSeller = process.env.CIRCLE_X402_SELLER_ADDRESS;
+  process.env.CIRCLE_X402_SELLER_ADDRESS = "0x0000000000000000000000000000000000000001";
+  let calls = 0;
+  const result = await fetchAisaX402SocialEvidence({
+    market,
+    snapshot,
+    payResource: async <T>() => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          enabled: true,
+          status: "failed",
+          paid: false,
+          supported: false,
+          url: "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search",
+          maxPaymentUsdc: "0.025",
+          dailySpendUsdc: "0.000000",
+          dailyBudgetUsdc: "0.10",
+          error: "x402 provider request failed with HTTP 403. Body: <title>Just a moment...</title><meta name=\"robots\" content=\"noindex,nofollow\">",
+        };
+      }
+      return {
+        enabled: true,
+        status: "success",
+        paid: true,
+        supported: true,
+        url: "http://127.0.0.1:3100/evidence",
+        amountUsdc: "0.001000",
+        maxPaymentUsdc: "0.025",
+        dailySpendUsdc: "0.000000",
+        dailyBudgetUsdc: "0.10",
+        paymentNetwork: "eip155:8453",
+        selectedChain: "base",
+        paymentRef: "0xgateway403",
+        txHash: "0xgateway403",
+        data: { signals: [{ title: "Gateway-paid packet", excerpt: "Circle Gateway evidence handled the provider challenge.", sourceUrl: market.url }] } as T,
+      };
+    },
+  });
+
+  if (previousSeller === undefined) delete process.env.CIRCLE_X402_SELLER_ADDRESS;
+  else process.env.CIRCLE_X402_SELLER_ADDRESS = previousSeller;
+
+  assert.equal(calls, 2);
+  assert.equal(result.status, "success");
+  assert.equal(result.provider, "precall_gateway_x402_evidence");
+  assert.equal(result.paymentAmountUsdc, "0.001000");
+  assert.equal(result.evidence[0]?.paymentRef, "0xgateway403");
+  assert.match(result.evidence[0]?.excerpt || "", /provider challenge/i);
+});
+
 test("provider fallback can be disabled", async () => {
   const previous = process.env.ENABLE_X402_FALLBACK_PROVIDERS;
   process.env.ENABLE_X402_FALLBACK_PROVIDERS = "false";

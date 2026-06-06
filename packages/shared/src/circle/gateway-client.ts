@@ -673,7 +673,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
         selectedChain,
         amountUsdc: selectedAmountUsdc,
         paymentNetwork: selectedPaymentNetwork,
-        failureReason: response.status >= 500 ? "provider_unavailable" : undefined,
+        failureReason: response.status >= 500 || (response.status === 403 && /Cloudflare|Just a moment|noindex,nofollow/i.test(rawBody)) ? "provider_unavailable" : undefined,
         error: `x402 provider request failed with HTTP ${response.status}. Body: ${rawBody.slice(0, 240)}`,
       };
     }
@@ -700,7 +700,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       selectedChain,
       amountUsdc: selectedAmountUsdc,
       paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
-      failureReason: /unsupported|no Gateway batching/i.test(message) ? "unsupported_network" : /HTTP 5\d\d|Cloudflare|Bad Gateway|fetch failed|ECONNRESET|ETIMEDOUT/i.test(message) ? "provider_unavailable" : undefined,
+      failureReason: /unsupported|no Gateway batching/i.test(message) ? "unsupported_network" : /HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|fetch failed|ECONNRESET|ETIMEDOUT/i.test(message) ? "provider_unavailable" : undefined,
       error: message,
     };
   }

@@ -335,7 +335,7 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
     matchupContext: summarizeEvidence(input.evidence, ["circle_x402_social", "circle_x402_news", "free_web"]),
     marketMovement: `Polymarket selected outcome ${selectedOption} is priced at ${marketPriceBps} bps with ${input.snapshot.spreadBps} bps spread and about $${Math.round(input.snapshot.depthUsd).toLocaleString()} liquidity/depth context.`,
     risks,
-    verdict: edgeBps > 0 ? `${selectedOption} is a ${riskLevel}-risk AI sports call, not a guarantee.` : `Avoid this market: no positive selected-side edge after council review.`,
+    verdict: edgeBps > 0 ? `${selectedOption} is a ${riskLevel}-risk AI sports call, not a guarantee.` : `${selectedOption} is a high-risk AI sports call with no positive selected-side edge after council review.`,
     evidence: input.evidence,
     votes: selectedVotes,
   };
@@ -351,7 +351,7 @@ export function sportsThresholdFailures(idea: Pick<SportsPredictionIdea, "edgeBp
 }
 
 export function classifySportsCallStatus(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()): SportsCallStatus {
-  if (idea.edgeBps <= 0) return "avoid_call";
+  if (idea.edgeBps <= 0) return "high_risk_call";
   const wideSpread = idea.snapshot.spreadBps > thresholds.maxSpreadBps;
   if (!wideSpread && idea.edgeBps >= thresholds.minEdgeBps && idea.confidenceBps >= thresholds.minConfidenceBps && idea.riskLevel !== "high") return "strong_call";
   if (!wideSpread && (idea.confidenceBps >= 4_000 || idea.edgeBps >= 200)) return "lean_call";
@@ -362,14 +362,14 @@ export function sportsStatusReason(status: SportsCallStatus, failures: string[])
   if (status === "strong_call") return "Strong sports live call: edge, confidence, spread, and risk passed configured strong-call gates.";
   if (status === "lean_call") return failures.length ? `Lean sports live call: useful but below at least one strong gate (${failures.join(", ")}).` : "Lean sports live call: selected side is clear but conviction is moderate.";
   if (status === "high_risk_call") return failures.length ? `High-risk sports live call: selected side exists, but risk is elevated (${failures.join(", ")}).` : "High-risk sports live call: selected side exists, but evidence or confidence is limited.";
-  return failures.length ? `Avoid call: no playable edge or evidence quality is too weak (${failures.join(", ")}).` : "Avoid call: no side is worth taking from the supplied evidence.";
+  return failures.length ? `High-risk sports live call: selected side exists, but no playable edge or evidence quality is too weak (${failures.join(", ")}).` : "High-risk sports live call: selected side exists, but no playable edge was found from the supplied evidence.";
 }
 
 export function sportsVerdictForStatus(status: SportsCallStatus, idea: Pick<SportsPredictionIdea, "selectedOption" | "edgeBps" | "confidenceBps" | "riskLevel">) {
   if (status === "strong_call") return `AI prediction: ${idea.selectedOption}. Strong call with ${idea.edgeBps} bps edge and ${idea.confidenceBps} bps confidence. Not financial advice.`;
   if (status === "lean_call") return `AI leans: ${idea.selectedOption}. Moderate conviction; useful market intelligence, not a guaranteed outcome.`;
   if (status === "high_risk_call") return `AI leans: ${idea.selectedOption}, but this is high risk due to weaker confidence, evidence, or market conditions.`;
-  return `AI recommendation: avoid this market. The reviewed side did not show enough playable edge from supplied evidence.`;
+  return `AI leans: ${idea.selectedOption}, but this is high risk because the reviewed side did not show enough playable edge from supplied evidence.`;
 }
 
 export function passesSportsThresholds(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()) {

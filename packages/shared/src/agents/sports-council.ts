@@ -151,7 +151,7 @@ function buildSportsPrompt(input: {
   return `
 You are ${input.agent.name}: ${input.agent.role}.
 
-Analyze this sports prediction market for a selected AI side. Do not choose an option only because it has the highest market probability. Prefer the side with the best probability-adjusted case versus alternatives. If no side is worth taking, still select the least bad/most plausible candidate outcome, set low confidence, and explain that the market should be avoided. If evidence is thin, say evidence was not available and lower confidence.
+Analyze this sports prediction market for a selected AI side. Do not choose an option only because it has the highest market probability. Prefer the side with the best probability-adjusted case versus alternatives. If no side has a playable edge, still select the least bad/most plausible candidate outcome, set low confidence, and explain why it should be treated as high risk. If evidence is thin, say evidence was not available and lower confidence.
 
 Market category: ${input.category}
 Market kind: ${input.marketKind}

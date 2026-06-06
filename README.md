@@ -74,7 +74,6 @@ Sports calls use labels instead of disappearing just because they are not strong
 - `strong_call`
 - `lean_call`
 - `high_risk_call`
-- `avoid_call`
 
 Sports Live Calls are not guaranteed outcomes and are not financial advice.
 
@@ -137,7 +136,7 @@ Precall separates active predictions from historical reputation.
 3. It builds an evidence packet from Polymarket data and optional x402 evidence.
 4. An AI council analyzes the market using supplied evidence IDs only.
 5. The system calculates market probability, AI probability, edge, confidence, and risk.
-6. Valid sports markets become Sports Live Calls with strong, lean, high-risk, or avoid labels.
+6. Valid sports markets become Sports Live Calls with strong, lean, or high-risk labels.
 7. Bonded Arc Calls publish only if strict YES/NO quality gates pass.
 8. Users unlock full reasoning with Arc USDC.
 9. Expired or resolved calls move out of active views.
