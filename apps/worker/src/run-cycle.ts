@@ -826,16 +826,17 @@ export async function resolveMatureCalls() {
       continue;
     }
 
-    const won = resolution.resolvedOutcomeIndex === prediction.selectedOutcomeIndex;
+    const pushed = resolution.resolvedOutcomeIndex === null;
+    const won = !pushed && resolution.resolvedOutcomeIndex === prediction.selectedOutcomeIndex;
     await markSportsPredictionResolved({ predictionId: prediction.id, resolution });
     sportsResolved.push({
       sportsPredictionId: prediction.id,
       marketId: prediction.marketId,
       selectedOption: prediction.selectedOption,
       resolvedOutcome: resolution.resolvedOutcome,
-      result: won ? "win" : "loss",
-      roiBps: realizedSelectedOutcomePnlBps(prediction.marketPriceBps, won),
-      brierScoreBps: brierScoreBps(prediction.agentProbabilityBps, won),
+      result: pushed ? "push" : won ? "win" : "loss",
+      roiBps: pushed ? 0 : realizedSelectedOutcomePnlBps(prediction.marketPriceBps, won),
+      brierScoreBps: pushed ? 0 : brierScoreBps(prediction.agentProbabilityBps, won),
     });
   }
 

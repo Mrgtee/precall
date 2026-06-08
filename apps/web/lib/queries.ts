@@ -256,15 +256,17 @@ export async function getSportsLeaderboardStats() {
   const [row] = await db
     .select({
       resolved: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved')::int`,
-      wins: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} = ${sportsPredictions.selectedOutcomeIndex})::int`,
-      losses: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} <> ${sportsPredictions.selectedOutcomeIndex})::int`,
+      wins: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} is not null and ${sportsPredictions.resolvedOutcomeIndex} = ${sportsPredictions.selectedOutcomeIndex})::int`,
+      losses: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} is not null and ${sportsPredictions.resolvedOutcomeIndex} <> ${sportsPredictions.selectedOutcomeIndex})::int`,
+      pushes: sql<number>`count(*) filter (where ${sportsPredictions.resolutionStatus} = 'resolved' and ${sportsPredictions.resolvedOutcomeIndex} is null)::int`,
     })
     .from(sportsPredictions);
-  return row || { resolved: 0, wins: 0, losses: 0 };
+  return row || { resolved: 0, wins: 0, losses: 0, pushes: 0 };
 }
 
 export async function getResolvedSportsLeaderboardCalls(limit = 25) {
   const db = createDb();
+  const pushedExpr = sql`${sportsPredictions.resolvedOutcomeIndex} is null`;
   const wonExpr = sql`${sportsPredictions.resolvedOutcomeIndex} = ${sportsPredictions.selectedOutcomeIndex}`;
   return db
     .select({
@@ -282,8 +284,9 @@ export async function getResolvedSportsLeaderboardCalls(limit = 25) {
       resolvedOutcomeIndex: sportsPredictions.resolvedOutcomeIndex,
       resolvedOutcome: sportsPredictions.resolvedOutcome,
       resolvedAt: sportsPredictions.resolvedAt,
-      roiBps: sql<number>`case when ${wonExpr} then round(((10000 - greatest(${sportsPredictions.marketPriceBps}, 1))::numeric / greatest(${sportsPredictions.marketPriceBps}, 1)) * 10000)::int else -10000 end`,
-      brierScoreBps: sql<number>`case when ${wonExpr} then round(power((${sportsPredictions.agentProbabilityBps} - 10000)::numeric / 10000, 2) * 10000)::int else round(power(${sportsPredictions.agentProbabilityBps}::numeric / 10000, 2) * 10000)::int end`,
+      result: sql<"win" | "loss" | "push">`case when ${pushedExpr} then 'push' when ${wonExpr} then 'win' else 'loss' end`,
+      roiBps: sql<number>`case when ${pushedExpr} then 0 when ${wonExpr} then round(((10000 - greatest(${sportsPredictions.marketPriceBps}, 1))::numeric / greatest(${sportsPredictions.marketPriceBps}, 1)) * 10000)::int else -10000 end`,
+      brierScoreBps: sql<number>`case when ${pushedExpr} then 0 when ${wonExpr} then round(power((${sportsPredictions.agentProbabilityBps} - 10000)::numeric / 10000, 2) * 10000)::int else round(power(${sportsPredictions.agentProbabilityBps}::numeric / 10000, 2) * 10000)::int end`,
     })
     .from(sportsPredictions)
     .where(sql`${sportsPredictions.resolutionStatus} = 'resolved'`)

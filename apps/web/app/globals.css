@@ -314,6 +314,10 @@ textarea:focus-visible {
   background: #ffd6d6;
 }
 
+.pill.push {
+  background: #fff2b8;
+}
+
 .muted {
   color: var(--muted);
 }

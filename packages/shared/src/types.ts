@@ -72,7 +72,7 @@ export interface MarketResolution {
 
 export interface SelectedOutcomeResolution {
   marketId: string;
-  resolvedOutcomeIndex: number;
+  resolvedOutcomeIndex: number | null;
   resolvedOutcome: string;
   finalPriceBps: number;
   sourceUrl: string;

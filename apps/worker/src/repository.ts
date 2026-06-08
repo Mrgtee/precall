@@ -464,7 +464,7 @@ export async function markSportsPredictionResolved(input: { predictionId: number
       resolvedOutcomeIndex: input.resolution.resolvedOutcomeIndex,
       resolvedOutcome: input.resolution.resolvedOutcome,
       resolvedAt: new Date(input.resolution.resolvedAt),
-      statusReason: "Resolved with supported selected-outcome Polymarket result.",
+      statusReason: input.resolution.resolvedOutcomeIndex === null ? "Resolved as 50-50 push; no selected outcome won." : "Resolved with supported selected-outcome Polymarket result.",
       updatedAt: new Date(),
     })
     .where(eq(sportsPredictions.id, input.predictionId));

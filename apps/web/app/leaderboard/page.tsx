@@ -8,7 +8,7 @@ export default async function LeaderboardPage() {
   let rows: Awaited<ReturnType<typeof getLeaderboard>> = [];
   let resolvedCalls: Awaited<ReturnType<typeof getResolvedLeaderboardCalls>> = [];
   let sportsActivity: Awaited<ReturnType<typeof getSportsActivitySummary>> = { active: 0, unresolved: 0, expired: 0, unlocks: 0 };
-  let sportsStats: Awaited<ReturnType<typeof getSportsLeaderboardStats>> = { resolved: 0, wins: 0, losses: 0 };
+  let sportsStats: Awaited<ReturnType<typeof getSportsLeaderboardStats>> = { resolved: 0, wins: 0, losses: 0, pushes: 0 };
   let resolvedSportsCalls: Awaited<ReturnType<typeof getResolvedSportsLeaderboardCalls>> = [];
   let setupError = "";
 
@@ -36,6 +36,8 @@ export default async function LeaderboardPage() {
   const totalResolved = bondedResolved + Number(sportsStats.resolved || 0);
   const totalWins = bondedWins + Number(sportsStats.wins || 0);
   const totalLosses = bondedLosses + Number(sportsStats.losses || 0);
+  const totalPushes = Number(sportsStats.pushes || 0);
+  const decidedResolved = totalWins + totalLosses;
   const hasResolved = totalResolved > 0;
   const resolvedHistory = [
     ...resolvedCalls.map((call) => ({
@@ -46,7 +48,7 @@ export default async function LeaderboardPage() {
       subtitle: `Agent side: ${call.action === "BUY_NO" ? "NO" : call.action === "BUY_YES" ? "YES" : call.action}`,
       agent: call.agentId ? { href: `/agents/${call.agentId}`, label: call.agentName || `Agent ${call.agentId}` } : null,
       outcome: call.finalOutcome,
-      won: Number(call.roiBps || 0) > 0,
+      result: Number(call.roiBps || 0) > 0 ? "Win" : "Loss",
       roiBps: call.roiBps,
       brierScoreBps: call.brierScoreBps,
       resolvedAt: call.resolvedAt,
@@ -59,7 +61,7 @@ export default async function LeaderboardPage() {
       subtitle: `${call.category} · ${call.marketKind} · AI side: ${call.selectedOption}`,
       agent: { href: "/sports", label: "Sports Council" },
       outcome: call.resolvedOutcome || `Outcome ${call.resolvedOutcomeIndex ?? "?"}`,
-      won: Number(call.roiBps || 0) > 0,
+      result: call.result === "push" ? "Push" : call.result === "win" ? "Win" : "Loss",
       roiBps: call.roiBps,
       brierScoreBps: call.brierScoreBps,
       resolvedAt: call.resolvedAt,
@@ -79,7 +81,8 @@ export default async function LeaderboardPage() {
         <div className="metric"><span>Resolved calls</span><strong>{totalResolved}</strong></div>
         <div className="metric"><span>Total wins</span><strong>{totalWins}</strong></div>
         <div className="metric"><span>Total losses</span><strong>{totalLosses}</strong></div>
-        <div className="metric"><span>Win rate</span><strong>{totalResolved ? `${Math.round((totalWins / totalResolved) * 100)}%` : "0%"}</strong></div>
+        <div className="metric"><span>Total pushes</span><strong>{totalPushes}</strong></div>
+        <div className="metric"><span>Win rate</span><strong>{decidedResolved ? `${Math.round((totalWins / decidedResolved) * 100)}%` : "0%"}</strong></div>
       </section>
       {setupError ? (
         <section className="empty" style={{ marginBottom: 18 }}>
@@ -99,7 +102,7 @@ export default async function LeaderboardPage() {
           <span className="pill">Active sports calls: {sportsActivity.active}</span>
           <span className="pill">Unresolved sports rows: {sportsActivity.unresolved}</span>
           <span className="pill">Resolved sports: {sportsStats.resolved}</span>
-          <span className="pill">Sports wins/losses: {sportsStats.wins} / {sportsStats.losses}</span>
+          <span className="pill">Sports wins/losses/pushes: {sportsStats.wins} / {sportsStats.losses} / {sportsStats.pushes}</span>
           <span className="pill">Sports unlocks: {sportsActivity.unlocks}</span>
         </div>
       </section>
@@ -171,7 +174,7 @@ export default async function LeaderboardPage() {
                     <td>{call.kind}</td>
                     <td>{call.agent ? <Link href={call.agent.href}>{call.agent.label}</Link> : "Unknown"}</td>
                     <td>{call.outcome}</td>
-                    <td><span className={`pill ${call.won ? "buy" : "no"}`}>{call.won ? "Win" : "Loss"}</span></td>
+                    <td><span className={`pill ${call.result === "Win" ? "buy" : call.result === "Push" ? "push" : "no"}`}>{call.result}</span></td>
                     <td>{bpsToPercent(call.roiBps)}</td>
                     <td>{bpsToPercent(call.brierScoreBps)}</td>
                     <td>{call.resolvedAt ? new Date(call.resolvedAt).toLocaleDateString() : "resolved"}</td>

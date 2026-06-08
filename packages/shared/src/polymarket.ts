@@ -25,6 +25,13 @@ interface GammaMarket {
   umaResolutionStatus?: string;
 }
 
+interface ClobMarket {
+  closed?: boolean;
+  active?: boolean;
+  is_50_50_outcome?: boolean;
+  tokens?: { outcome?: string; price?: string | number; winner?: boolean }[];
+}
+
 function parseJsonArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => String(item));
   if (typeof value === "string" && value.trim()) {
@@ -122,6 +129,14 @@ export async function fetchPolymarketSelectedOutcomeResolution(marketId: string)
   if (!normalized || normalized.status !== "closed") return null;
   if (raw.umaResolutionStatus && raw.umaResolutionStatus !== "resolved") return null;
 
+  const priceResolution = selectedOutcomeResolutionFromPrices({ normalized, raw });
+  if (priceResolution) return priceResolution;
+
+  return fetchClobSelectedOutcomeResolution({ normalized, raw }).catch(() => null);
+}
+
+function selectedOutcomeResolutionFromPrices(input: { normalized: PolymarketMarket; raw: GammaMarket }): SelectedOutcomeResolution | null {
+  const { normalized, raw } = input;
   const winnerIndexes = normalized.outcomePrices
     .map((price, index) => ({ price, index }))
     .filter((item) => item.price >= 0.99)
@@ -141,6 +156,53 @@ export async function fetchPolymarketSelectedOutcomeResolution(marketId: string)
     sourceUrl: normalized.url,
     resolvedAt: raw.closedTime || raw.updatedAt || new Date().toISOString(),
   };
+}
+
+async function fetchClobSelectedOutcomeResolution(input: { normalized: PolymarketMarket; raw: GammaMarket }): Promise<SelectedOutcomeResolution | null> {
+  const { normalized, raw } = input;
+  if (!normalized.conditionId) return null;
+
+  const baseUrl = optionalEnv("POLYMARKET_CLOB_URL", "https://clob.polymarket.com");
+  const url = new URL(`/markets/${normalized.conditionId}`, baseUrl);
+  const clob = await fetchJson<ClobMarket>(url.toString(), 15_000);
+  if (!clob.closed) return null;
+
+  const tokens = Array.isArray(clob.tokens) ? clob.tokens : [];
+  const winnerTokens = tokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => token.winner === true);
+
+  if (winnerTokens.length === 1) {
+    const winner = winnerTokens[0];
+    if (!winner) return null;
+    const outcome = String(winner.token.outcome || "");
+    const matchedIndex = normalized.outcomes.findIndex((candidate) => candidate.toLowerCase() === outcome.toLowerCase());
+    const winnerIndex = matchedIndex >= 0 ? matchedIndex : winner.index;
+    if (winnerIndex < 0 || winnerIndex >= normalized.outcomes.length) return null;
+    return {
+      marketId: normalized.marketId,
+      resolvedOutcomeIndex: winnerIndex,
+      resolvedOutcome: normalized.outcomes[winnerIndex] || outcome || `Outcome ${winnerIndex + 1}`,
+      finalPriceBps: Math.round(toNumber(winner.token.price || 1) * 10_000),
+      sourceUrl: normalized.url,
+      resolvedAt: raw.closedTime || raw.updatedAt || new Date().toISOString(),
+    };
+  }
+
+  const prices = tokens.map((token) => toNumber(token.price));
+  const isFiftyFifty = clob.is_50_50_outcome === true || (prices.length >= 2 && prices.every((price) => Math.abs(price - 0.5) <= 0.000001));
+  if (isFiftyFifty && winnerTokens.length === 0) {
+    return {
+      marketId: normalized.marketId,
+      resolvedOutcomeIndex: null,
+      resolvedOutcome: "50-50 / Push",
+      finalPriceBps: 5_000,
+      sourceUrl: normalized.url,
+      resolvedAt: raw.closedTime || raw.updatedAt || new Date().toISOString(),
+    };
+  }
+
+  return null;
 }
 
 export function normalizeGammaMarket(raw: GammaMarket): PolymarketMarket | null {
