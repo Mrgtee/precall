@@ -60,7 +60,7 @@ export type SportsSkip = {
 const SPORTS_PATTERNS = [
   /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|mma|cs2|lol)\b/,
   /\b(champions league|premier league|la liga|serie a|bundesliga|ligue 1|world cup|soccer|football|basketball|baseball|hockey|tennis|golf|cricket|rugby|boxing|dota|counter-strike|league of legends|valorant)\b/,
-  /\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-[a-z0-9-]+/,
+  /\b(epl|ere|fifwc|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-[a-z0-9-]+/,
   /\b(afc|fc|united|city|hotspur|ajax|inter|madrid|barcelona|arsenal|chelsea|liverpool|tottenham|brighton|everton|west ham|newcastle|aston villa)\b/,
   /\b(over|under)\s+\d+(?:\.\d+)?\s+(goals?|points?|runs?)\b/,
   /\b(total goals?|team goals?|both teams to score|btts|double chance|correct score|score range)\b/,
@@ -71,7 +71,8 @@ const NON_SPORTS_FALSE_POSITIVE_PATTERNS = [
 ];
 
 function lowerMarketText(market: PolymarketMarket) {
-  return `${market.title} ${market.slug} ${market.description} ${market.outcomes.join(" ")}`.toLowerCase();
+  const urlFallback = market.slug.trim() ? "" : market.url;
+  return `${market.title} ${market.slug} ${urlFallback} ${market.description} ${market.outcomes.join(" ")}`.toLowerCase();
 }
 
 export function classifySportsMarket(market: PolymarketMarket): SportsMarketClassification {
@@ -79,7 +80,7 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   const reasons: string[] = [];
   const hasSportsSignal = SPORTS_PATTERNS.some((pattern) => pattern.test(text));
   const hasFalsePositiveSignal = NON_SPORTS_FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(text));
-  const hasExplicitCompetitionSignal = /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|fifa|world cup|premier league|champions league|la liga|serie a|bundesliga|ligue 1|roland garros)\b|\b(epl|ere|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-/.test(text);
+  const hasExplicitCompetitionSignal = /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|fifa|fifwc|world cup|premier league|champions league|la liga|serie a|bundesliga|ligue 1|roland garros)\b|\b(epl|ere|fifwc|nba|mlb|nhl|nfl|ufc|atp|wta|lol|dota2|cs2|cricipl)-/.test(text);
   const isSports = hasSportsSignal && (!hasFalsePositiveSignal || hasExplicitCompetitionSignal);
   if (!isSports) reasons.push("not_sports");
 
@@ -93,7 +94,7 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   else if (/\b(cricket|ipl|cricipl|indian premier league)\b/.test(text)) category = "cricket";
   else if (/\b(golf)\b/.test(text)) category = "golf";
   else if (/\b(rugby)\b/.test(text)) category = "rugby";
-  else if (/\b(soccer|ucl|champions league|epl|ere|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|united|city|hotspur|ajax|inter)\b/.test(text)) category = "soccer";
+  else if (/\b(soccer|ucl|champions league|epl|ere|fifwc|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|united|city|hotspur|ajax|inter)\b/.test(text)) category = "soccer";
   else if (/\b(dota|counter-strike|cs2|league of legends|lol|valorant)\b/.test(text)) category = "esports";
   else if (/\bfootball\b/.test(text)) category = "football";
   else if (isSports) category = "other_sports";
@@ -144,6 +145,34 @@ export function maxSportsAnalyzedPerRun() {
   return numberEnv("MAX_SPORTS_ANALYZED_PER_RUN", 24);
 }
 
+export function sportsStrategyMode() {
+  return optionalEnv("SPORTS_STRATEGY_MODE", "hit_rate").trim().toLowerCase();
+}
+
+export function sportsHitRateMode() {
+  return sportsStrategyMode() !== "edge";
+}
+
+export function sportsTargetHitRateBps() {
+  return numberEnv("SPORTS_TARGET_HIT_RATE_BPS", 7_000);
+}
+
+export function sportsHighProbabilityMinPriceBps() {
+  return numberEnv("SPORTS_HIGH_PROB_MIN_PRICE_BPS", 6_500);
+}
+
+export function sportsHighProbabilityMaxPriceBps() {
+  return numberEnv("SPORTS_HIGH_PROB_MAX_PRICE_BPS", 9_000);
+}
+
+export function sportsHighProbabilityMinConfidenceBps() {
+  return numberEnv("SPORTS_HIGH_PROB_MIN_CONFIDENCE_BPS", 4_000);
+}
+
+export function sportsHighProbabilityMinEdgeBps() {
+  return numberEnv("SPORTS_HIGH_PROB_MIN_EDGE_BPS", 0);
+}
+
 function validOutcomeIndexes(market: PolymarketMarket, thresholds: SportsThresholds) {
   return market.outcomePrices
     .map((price, index) => ({ priceBps: Math.round(price * 10_000), index }))
@@ -156,6 +185,36 @@ function pricedOutcomeIndexes(market: PolymarketMarket) {
     .map((price, index) => ({ priceBps: Math.round(price * 10_000), index }))
     .filter((item) => Number.isFinite(item.priceBps) && item.priceBps > 0 && item.priceBps < 10_000)
     .map((item) => item.index);
+}
+
+function outcomePriceBps(market: PolymarketMarket, outcomeIndex: number) {
+  return clampBps(Math.round((market.outcomePrices[outcomeIndex] || 0) * 10_000));
+}
+
+function highProbabilityPriceScore(priceBps: number) {
+  const min = sportsHighProbabilityMinPriceBps();
+  const max = sportsHighProbabilityMaxPriceBps();
+  if (priceBps >= min && priceBps <= max) {
+    return 30 + ((priceBps - min) / Math.max(1, max - min)) * 35;
+  }
+  if (priceBps > max && priceBps < 9_800) return 18;
+  if (priceBps >= 5_800) return 10;
+  return 0;
+}
+
+export function sportsHitRatePotentialScore(market: PolymarketMarket, outcomeIndexes = pricedOutcomeIndexes(market)) {
+  const bestPrice = outcomeIndexes.reduce((best, index) => Math.max(best, outcomePriceBps(market, index)), 0);
+  return Math.round(highProbabilityPriceScore(bestPrice) * 100) / 100;
+}
+
+export function preferredHighProbabilityOutcomeIndex(market: PolymarketMarket, outcomeIndexes = pricedOutcomeIndexes(market)) {
+  const candidates = outcomeIndexes.length ? outcomeIndexes : pricedOutcomeIndexes(market);
+  if (!candidates.length) return 0;
+  return [...candidates].sort((left, right) => {
+    const leftPrice = outcomePriceBps(market, left);
+    const rightPrice = outcomePriceBps(market, right);
+    return highProbabilityPriceScore(rightPrice) - highProbabilityPriceScore(leftPrice) || rightPrice - leftPrice || left - right;
+  })[0] ?? candidates[0] ?? 0;
 }
 
 export function sportsEventTime(market: PolymarketMarket): string | null {
@@ -212,12 +271,13 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
 
   if (reasons.length > 0) return { eligible: false, reasons };
 
-  const volume = logScore(market.volume24hUsd, 500_000, 25);
-  const liquidity = logScore(market.liquidityUsd, 1_000_000, 25);
-  const evidenceDepth = Math.min(15, (market.description.trim().length / 600) * 15);
-  const outcomeDepth = Math.min(10, outcomeIndexes.length * 4);
-  const kindBoost = classification.marketKind === "over_under" || classification.marketKind === "moneyline" || classification.marketKind === "spread" || classification.marketKind === "team_total" ? 10 : 5;
-  const candidateScore = Math.round((volume + liquidity + close.score + evidenceDepth + outcomeDepth + kindBoost) * 100) / 100;
+  const volume = logScore(market.volume24hUsd, 500_000, 20);
+  const liquidity = logScore(market.liquidityUsd, 1_000_000, 20);
+  const evidenceDepth = Math.min(12, (market.description.trim().length / 600) * 12);
+  const outcomeDepth = Math.min(8, outcomeIndexes.length * 3);
+  const kindBoost = classification.marketKind === "over_under" || classification.marketKind === "moneyline" || classification.marketKind === "double_chance" || classification.marketKind === "team_total" ? 12 : classification.marketKind === "spread" ? 6 : 4;
+  const hitRatePotential = sportsHitRateMode() ? sportsHitRatePotentialScore(market, analyzableOutcomeIndexes) : 0;
+  const candidateScore = Math.round((volume + liquidity + close.score + evidenceDepth + outcomeDepth + kindBoost + hitRatePotential) * 100) / 100;
 
   return { eligible: true, reasons: [], candidate: { market, classification, outcomeIndexes: analyzableOutcomeIndexes, candidateScore } };
 }
@@ -303,15 +363,24 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
     current.push(vote);
     grouped.set(vote.selectedOutcomeIndex, current);
   }
-  const [selectedOutcomeIndex, selectedVotes] = [...grouped.entries()].sort((left, right) => {
+  const selectableOutcomeIndexes = [...new Set([...pricedOutcomeIndexes(input.market), input.snapshot.outcomeIndex, ...input.votes.map((vote) => vote.selectedOutcomeIndex)])]
+    .filter((index) => index >= 0 && index < input.market.outcomes.length);
+  const [voteSelectedOutcomeIndex, voteSelectedVotes] = [...grouped.entries()].sort((left, right) => {
     const leftWeight = left[1].reduce((sum, vote) => sum + vote.confidenceBps, 0);
     const rightWeight = right[1].reduce((sum, vote) => sum + vote.confidenceBps, 0);
     return rightWeight - leftWeight || right[1].length - left[1].length;
   })[0] || [input.snapshot.outcomeIndex, input.votes];
+  const selectedOutcomeIndex = sportsHitRateMode()
+    ? selectHighProbabilityOutcomeIndex(input.market, selectableOutcomeIndexes, grouped, voteSelectedOutcomeIndex)
+    : voteSelectedOutcomeIndex;
+  const selectedVotes = grouped.get(selectedOutcomeIndex) || voteSelectedVotes || input.votes;
 
-  const marketPriceBps = clampBps(Math.round((input.market.outcomePrices[selectedOutcomeIndex] || 0) * 10_000));
+  const marketPriceBps = outcomePriceBps(input.market, selectedOutcomeIndex);
   const totalWeight = Math.max(1, selectedVotes.reduce((sum, vote) => sum + Math.max(1, vote.confidenceBps), 0));
-  const agentProbabilityBps = clampBps(selectedVotes.reduce((sum, vote) => sum + vote.agentProbabilityBps * Math.max(1, vote.confidenceBps), 0) / totalWeight);
+  const rawAgentProbabilityBps = clampBps(selectedVotes.reduce((sum, vote) => sum + vote.agentProbabilityBps * Math.max(1, vote.confidenceBps), 0) / totalWeight || marketPriceBps);
+  const agentProbabilityBps = sportsHitRateMode() && highProbabilityPriceScore(marketPriceBps) > 0
+    ? calibrateHighProbabilityBps(marketPriceBps, rawAgentProbabilityBps)
+    : rawAgentProbabilityBps;
   const confidenceBps = clampBps(selectedVotes.reduce((sum, vote) => sum + vote.confidenceBps, 0) / Math.max(1, selectedVotes.length));
   const edgeBps = Math.max(0, agentProbabilityBps - marketPriceBps);
   const selectedOption = selectedSportsOptionLabel(input.market, selectedOutcomeIndex);
@@ -341,45 +410,85 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
   };
 }
 
-export function sportsThresholdFailures(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot">, thresholds = sportsThresholds()) {
+export function sportsThresholdFailures(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "agentProbabilityBps" | "snapshot">, thresholds = sportsThresholds()) {
   const failures: string[] = [];
-  if (idea.edgeBps < thresholds.minEdgeBps) failures.push("low_edge");
-  if (idea.confidenceBps < thresholds.minConfidenceBps) failures.push("low_confidence");
+  const highProbability = isHighProbabilitySportsCall(idea);
+  if (!highProbability && idea.edgeBps < thresholds.minEdgeBps) failures.push("low_edge");
+  if (idea.confidenceBps < (highProbability ? sportsHighProbabilityMinConfidenceBps() : thresholds.minConfidenceBps)) failures.push("low_confidence");
   if (idea.snapshot.spreadBps > thresholds.maxSpreadBps) failures.push("wide_spread");
   if (idea.marketPriceBps < thresholds.minPriceBps || idea.marketPriceBps > thresholds.maxPriceBps) failures.push("outside_price_band");
   return failures;
 }
 
-export function classifySportsCallStatus(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()): SportsCallStatus {
-  if (idea.edgeBps <= 0) return "high_risk_call";
+export function classifySportsCallStatus(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "agentProbabilityBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()): SportsCallStatus {
   const wideSpread = idea.snapshot.spreadBps > thresholds.maxSpreadBps;
+  const highProbability = isHighProbabilitySportsCall(idea);
+  if (!wideSpread && highProbability && idea.confidenceBps >= sportsHighProbabilityMinConfidenceBps() && idea.edgeBps >= sportsHighProbabilityMinEdgeBps()) {
+    if (idea.confidenceBps >= thresholds.minConfidenceBps && idea.riskLevel !== "high") return "strong_call";
+    return "lean_call";
+  }
+  if (idea.edgeBps <= 0) return "high_risk_call";
   if (!wideSpread && idea.edgeBps >= thresholds.minEdgeBps && idea.confidenceBps >= thresholds.minConfidenceBps && idea.riskLevel !== "high") return "strong_call";
   if (!wideSpread && (idea.confidenceBps >= 4_000 || idea.edgeBps >= 200)) return "lean_call";
   return "high_risk_call";
 }
 
 export function sportsStatusReason(status: SportsCallStatus, failures: string[]) {
-  if (status === "strong_call") return "Strong sports live call: edge, confidence, spread, and risk passed configured strong-call gates.";
-  if (status === "lean_call") return failures.length ? `Lean sports live call: useful but below at least one strong gate (${failures.join(", ")}).` : "Lean sports live call: selected side is clear but conviction is moderate.";
+  if (status === "strong_call") return "Strong sports live call: high-probability outcome, confidence, spread, and risk passed configured gates; edge may be small by design.";
+  if (status === "lean_call") return failures.length ? `Lean sports live call: useful high-probability or moderate-edge call below at least one strong gate (${failures.join(", ")}).` : "Lean sports live call: selected side is clear but conviction is moderate.";
   if (status === "high_risk_call") return failures.length ? `High-risk sports live call: selected side exists, but risk is elevated (${failures.join(", ")}).` : "High-risk sports live call: selected side exists, but evidence or confidence is limited.";
   return failures.length ? `High-risk sports live call: selected side exists, but no playable edge or evidence quality is too weak (${failures.join(", ")}).` : "High-risk sports live call: selected side exists, but no playable edge was found from the supplied evidence.";
 }
 
 export function sportsVerdictForStatus(status: SportsCallStatus, idea: Pick<SportsPredictionIdea, "selectedOption" | "edgeBps" | "confidenceBps" | "riskLevel">) {
-  if (status === "strong_call") return `AI prediction: ${idea.selectedOption}. Strong call with ${idea.edgeBps} bps edge and ${idea.confidenceBps} bps confidence. Not financial advice.`;
-  if (status === "lean_call") return `AI leans: ${idea.selectedOption}. Moderate conviction; useful market intelligence, not a guaranteed outcome.`;
+  if (status === "strong_call") return `AI prediction: ${idea.selectedOption}. High-probability strong call with ${idea.edgeBps} bps edge and ${idea.confidenceBps} bps confidence. Not financial advice.`;
+  if (status === "lean_call") return `AI leans: ${idea.selectedOption}. High-potential or moderate-conviction call; useful market intelligence, not a guaranteed outcome.`;
   if (status === "high_risk_call") return `AI leans: ${idea.selectedOption}, but this is high risk due to weaker confidence, evidence, or market conditions.`;
   return `AI leans: ${idea.selectedOption}, but this is high risk because the reviewed side did not show enough playable edge from supplied evidence.`;
 }
 
-export function passesSportsThresholds(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()) {
+export function passesSportsThresholds(idea: Pick<SportsPredictionIdea, "edgeBps" | "confidenceBps" | "marketPriceBps" | "agentProbabilityBps" | "snapshot" | "riskLevel">, thresholds = sportsThresholds()) {
   return classifySportsCallStatus(idea, thresholds) === "strong_call";
 }
 
 function riskLevelFor(input: { confidenceBps: number; edgeBps: number; marketPriceBps: number; spreadBps: number }): SportsRiskLevel {
+  const highProbabilityBand = input.marketPriceBps >= sportsHighProbabilityMinPriceBps() && input.marketPriceBps <= sportsHighProbabilityMaxPriceBps();
+  if (highProbabilityBand && input.confidenceBps >= 6_200 && input.spreadBps <= 180) return "low";
+  if (highProbabilityBand && input.confidenceBps >= sportsHighProbabilityMinConfidenceBps() && input.spreadBps <= 300) return "medium";
   if (input.confidenceBps >= 6_700 && input.edgeBps >= 700 && input.spreadBps <= 150 && input.marketPriceBps >= 2_000 && input.marketPriceBps <= 7_500) return "low";
   if (input.confidenceBps >= 5_500 && input.edgeBps >= 450 && input.spreadBps <= 300) return "medium";
   return "high";
+}
+
+function selectHighProbabilityOutcomeIndex(market: PolymarketMarket, outcomeIndexes: number[], grouped: Map<number, SportsVote[]>, fallbackOutcomeIndex: number) {
+  const candidates = outcomeIndexes.length ? outcomeIndexes : [fallbackOutcomeIndex];
+  const preferred = [...candidates].sort((left, right) => highProbabilityOutcomeScore(market, right, grouped) - highProbabilityOutcomeScore(market, left, grouped) || outcomePriceBps(market, right) - outcomePriceBps(market, left) || left - right)[0] ?? fallbackOutcomeIndex;
+  return highProbabilityPriceScore(outcomePriceBps(market, preferred)) > 0 ? preferred : fallbackOutcomeIndex;
+}
+
+function highProbabilityOutcomeScore(market: PolymarketMarket, outcomeIndex: number, grouped: Map<number, SportsVote[]>) {
+  const marketPriceBps = outcomePriceBps(market, outcomeIndex);
+  const votes = grouped.get(outcomeIndex) || [];
+  const totalWeight = votes.reduce((sum, vote) => sum + Math.max(1, vote.confidenceBps), 0);
+  const averageAgentProbabilityBps = totalWeight > 0
+    ? votes.reduce((sum, vote) => sum + vote.agentProbabilityBps * Math.max(1, vote.confidenceBps), 0) / totalWeight
+    : marketPriceBps;
+  const supportBps = clampBps(totalWeight / Math.max(1, 5));
+  const priceBandBonus = highProbabilityPriceScore(marketPriceBps) * 100;
+  return marketPriceBps * 0.58 + averageAgentProbabilityBps * 0.30 + supportBps * 0.12 + priceBandBonus;
+}
+
+function calibrateHighProbabilityBps(marketPriceBps: number, agentProbabilityBps: number) {
+  const blended = marketPriceBps * 0.62 + agentProbabilityBps * 0.38;
+  const highProbabilityBand = marketPriceBps >= sportsHighProbabilityMinPriceBps() && marketPriceBps <= sportsHighProbabilityMaxPriceBps();
+  const gentleFavoriteLift = highProbabilityBand && agentProbabilityBps >= marketPriceBps ? Math.min(175, Math.max(0, agentProbabilityBps - marketPriceBps) * 0.25) : 0;
+  return clampBps(blended + gentleFavoriteLift);
+}
+
+function isHighProbabilitySportsCall(idea: Pick<SportsPredictionIdea, "marketPriceBps" | "agentProbabilityBps">) {
+  return idea.marketPriceBps >= sportsHighProbabilityMinPriceBps()
+    && idea.marketPriceBps <= sportsHighProbabilityMaxPriceBps()
+    && idea.agentProbabilityBps >= sportsTargetHitRateBps();
 }
 
 function summarizeEvidence(evidence: EvidenceItemInput[], sourceTypes: string[]) {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
 import type { OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -60,6 +60,30 @@ test("sports classifier catches club-name soccer markets without explicit soccer
   }));
   assert.equal(classification.isSports, true);
   assert.equal(classification.category, "soccer");
+});
+
+
+test("sports classifier catches FIFA matchup slugs without team-name hints", () => {
+  const classification = classifySportsMarket(market({
+    title: "Will Canada win on 2026-06-12?",
+    slug: "fifwc-can-bih-2026-06-12-can",
+    description: "International soccer match market.",
+  }));
+  assert.equal(classification.isSports, true);
+  assert.equal(classification.category, "soccer");
+  assert.equal(classification.marketKind, "moneyline");
+});
+
+test("sports classifier catches FIFA matchup slugs when Gamma only exposes them in the URL", () => {
+  const classification = classifySportsMarket(market({
+    title: "Will Bosnia and Herzegovina win on 2026-06-12?",
+    slug: "",
+    url: "https://polymarket.com/market/fifwc-can-bih-2026-06-12-bih",
+    description: "International match market.",
+  }));
+  assert.equal(classification.isSports, true);
+  assert.equal(classification.category, "soccer");
+  assert.equal(classification.marketKind, "moneyline");
 });
 
 
@@ -181,14 +205,45 @@ test("sports aggregation uses selected outcome probability and edge semantics", 
 });
 
 
+
+
+test("sports hit-rate mode prefers high-probability outcomes before small-profit edge", () => {
+  const favoriteMarket = market({
+    outcomes: ["Favorite FC", "Underdog FC"],
+    outcomePrices: [0.72, 0.28],
+    title: "Soccer: Favorite FC vs Underdog FC - Match Winner",
+    slug: "epl-fav-und-2026-05-24",
+  });
+  const favoriteSnapshot: OutcomeSnapshot = { ...snapshot, outcomeIndex: 0, outcome: "Favorite FC", priceBps: 7200, complementPriceBps: 2800 };
+  const evidence = buildSportsEvidenceContext({ market: favoriteMarket, snapshot: favoriteSnapshot });
+  const votes: SportsVote[] = [
+    { agent: "FormScout", selectedOutcomeIndex: 1, agentProbabilityBps: 6100, confidenceBps: 7000, thesis: "Underdog has a case [pm-market].", risks: ["Favorite still likely"], evidenceIds: ["pm-market"] },
+    { agent: "MarketMover", selectedOutcomeIndex: 1, agentProbabilityBps: 6000, confidenceBps: 6500, thesis: "Underdog payout is larger [pm-selected-outcome].", risks: [], evidenceIds: ["pm-selected-outcome"] },
+    { agent: "InjuryNews", selectedOutcomeIndex: 0, agentProbabilityBps: 7300, confidenceBps: 4600, thesis: "No supplied favorite injury red flag [pm-market].", risks: [], evidenceIds: ["pm-market"] },
+    { agent: "MatchupDesk", selectedOutcomeIndex: 0, agentProbabilityBps: 7200, confidenceBps: 4500, thesis: "Favorite remains the most likely winner [pm-selected-outcome].", risks: [], evidenceIds: ["pm-selected-outcome"] },
+    { agent: "Skeptic", selectedOutcomeIndex: 1, agentProbabilityBps: 5800, confidenceBps: 5200, thesis: "Underdog edge is speculative [pm-market].", risks: ["Favorite price may be efficient"], evidenceIds: ["pm-market"] },
+  ];
+
+  const idea = aggregateSportsVotes({ market: favoriteMarket, snapshot: favoriteSnapshot, category: "soccer", marketKind: "moneyline", evidence, votes });
+  assert.equal(idea.selectedOption, "Favorite FC");
+  assert.equal(idea.marketPriceBps, 7200);
+  assert.ok(idea.agentProbabilityBps >= 7000);
+  assert.ok(idea.edgeBps <= 150);
+  assert.ok(sportsHitRatePotentialScore(favoriteMarket) > 0);
+});
+
 test("sports live call status classifies strong, lean, and high-risk calls", () => {
-  const strongIdea = { edgeBps: 700, confidenceBps: 6200, marketPriceBps: 4400, riskLevel: "medium" as const, snapshot: { ...snapshot, spreadBps: 120 } };
-  const leanIdea = { edgeBps: 250, confidenceBps: 4200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
-  const highRiskIdea = { edgeBps: 100, confidenceBps: 3200, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
-  const zeroEdgeIdea = { edgeBps: 0, confidenceBps: 5600, marketPriceBps: 4400, riskLevel: "high" as const, snapshot };
+  const strongIdea = { edgeBps: 700, confidenceBps: 6200, marketPriceBps: 4400, agentProbabilityBps: 5100, riskLevel: "medium" as const, snapshot: { ...snapshot, spreadBps: 120 } };
+  const leanIdea = { edgeBps: 250, confidenceBps: 4200, marketPriceBps: 4400, agentProbabilityBps: 4650, riskLevel: "high" as const, snapshot };
+  const highRiskIdea = { edgeBps: 100, confidenceBps: 3200, marketPriceBps: 4400, agentProbabilityBps: 4500, riskLevel: "high" as const, snapshot };
+  const zeroEdgeIdea = { edgeBps: 0, confidenceBps: 5600, marketPriceBps: 4400, agentProbabilityBps: 5000, riskLevel: "high" as const, snapshot };
+  const highProbabilityStrongIdea = { edgeBps: 40, confidenceBps: 5600, marketPriceBps: 7200, agentProbabilityBps: 7240, riskLevel: "medium" as const, snapshot: { ...snapshot, priceBps: 7200, spreadBps: 120 } };
+  const highProbabilityLeanIdea = { edgeBps: 25, confidenceBps: 4300, marketPriceBps: 7200, agentProbabilityBps: 7225, riskLevel: "medium" as const, snapshot: { ...snapshot, priceBps: 7200, spreadBps: 120 } };
   assert.equal(classifySportsCallStatus(strongIdea), "strong_call");
   assert.equal(classifySportsCallStatus(leanIdea), "lean_call");
   assert.equal(classifySportsCallStatus(highRiskIdea), "high_risk_call");
   assert.equal(classifySportsCallStatus(zeroEdgeIdea), "high_risk_call");
+  assert.equal(classifySportsCallStatus(highProbabilityStrongIdea), "strong_call");
+  assert.equal(classifySportsCallStatus(highProbabilityLeanIdea), "lean_call");
   assert.match(sportsVerdictForStatus("avoid_call", { selectedOption: "Knicks", edgeBps: 0, confidenceBps: 5600, riskLevel: "high" }), /high risk/i);
 });

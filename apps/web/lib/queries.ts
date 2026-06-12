@@ -123,7 +123,7 @@ export async function getSportsPredictions(limit = 12, statuses: readonly string
     .select()
     .from(sportsPredictions)
     .where(activeSportsPredicate(statuses))
-    .orderBy(sportsStatusRank, desc(sportsPredictions.edgeBps), desc(sportsPredictions.confidenceBps), desc(sportsPredictions.updatedAt))
+    .orderBy(sportsStatusRank, desc(sportsPredictions.agentProbabilityBps), desc(sportsPredictions.marketPriceBps), desc(sportsPredictions.confidenceBps), desc(sportsPredictions.edgeBps), desc(sportsPredictions.updatedAt))
     .limit(limit);
 }
 

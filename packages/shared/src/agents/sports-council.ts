@@ -151,7 +151,7 @@ function buildSportsPrompt(input: {
   return `
 You are ${input.agent.name}: ${input.agent.role}.
 
-Analyze this sports prediction market for a selected AI side. Do not choose an option only because it has the highest market probability. Prefer the side with the best probability-adjusted case versus alternatives. If no side has a playable edge, still select the least bad/most plausible candidate outcome, set low confidence, and explain why it should be treated as high risk. If evidence is thin, say evidence was not available and lower confidence.
+Analyze this sports prediction market for a selected AI side. Precall is currently optimizing for high-potential wins before profit size. Use market-implied probability as a strong baseline, prefer the outcome most likely to win even when profit/edge is small, and do not chase underdogs only because the payout is larger. If the highest-probability side has clear supplied-evidence red flags, explain that and choose the better-supported alternative. If no side has a playable edge, still select the least bad/most plausible candidate outcome, set low confidence, and explain why it should be treated as high risk. If evidence is thin, say evidence was not available and lower confidence.
 
 Market category: ${input.category}
 Market kind: ${input.marketKind}
