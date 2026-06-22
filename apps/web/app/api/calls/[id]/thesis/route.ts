@@ -115,6 +115,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       suggestedSizeBps: call.suggestedSizeBps,
       thesis: call.thesis,
       counterarguments: call.counterarguments,
+      agentOwnerWallet: (call as any).agentOwnerWallet || "",
     },
     evidence,
     votes: Array.isArray(votes) ? votes : [],

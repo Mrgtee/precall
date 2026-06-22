@@ -72,7 +72,7 @@ export async function getCalls(limit = 30) {
 export async function getCall(id: number) {
   const db = createDb();
   const [row] = await db
-    .select({ ...callSelect, thesis: calls.thesis, counterarguments: calls.counterarguments })
+    .select({ ...callSelect, thesis: calls.thesis, counterarguments: calls.counterarguments, agentOwnerWallet: agents.ownerWallet })
     .from(calls)
     .leftJoin(markets, eq(calls.marketId, markets.marketId))
     .leftJoin(agents, eq(calls.agentId, agents.id))

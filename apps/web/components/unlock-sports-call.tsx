@@ -8,6 +8,7 @@ import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
 import { erc20Abi } from "@precall/shared/contracts/abi";
 import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
 import { bpsToPercent, usdc } from "../lib/format";
+import { TipJar } from "./unlock-thesis";
 
 type SportsAnalysisPayload = {
   call: {
@@ -32,6 +33,7 @@ type SportsAnalysisPayload = {
     sourceUrls: string[];
     x402PaidEvidenceUsed: boolean;
     resolutionStatus: string;
+    agentOwnerWallet?: string;
   };
   evidence: Array<{
     evidenceId?: string;
@@ -230,6 +232,17 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice }: { sportsPr
               ))}
             </div>
           </section>
+        ) : null}
+        {receiver && isConnected && address && usdcAddress ? (
+          <TipJar
+            sportsPredictionId={sportsPredictionId}
+            receiverAddress={receiver}
+            usdcAddress={usdcAddress}
+            userAddress={address}
+            writeContractAsync={writeContractAsync}
+            config={config}
+            switchChainAsync={switchChainAsync}
+          />
         ) : null}
         <p className="muted nfa-note">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
       </section>

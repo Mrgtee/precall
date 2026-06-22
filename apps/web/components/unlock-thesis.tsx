@@ -24,6 +24,7 @@ type UnlockedPayload = {
     suggestedSizeBps: number;
     thesis: string;
     counterarguments?: string[] | null;
+    agentOwnerWallet?: string;
   };
   evidence: Array<{
     id: number;
@@ -238,6 +239,17 @@ export function UnlockThesis({
             </div>
           </section>
         ) : null}
+        {details.call.agentOwnerWallet && isConnected && address && usdcAddress ? (
+          <TipJar
+            callId={callId}
+            receiverAddress={details.call.agentOwnerWallet}
+            usdcAddress={usdcAddress}
+            userAddress={address}
+            writeContractAsync={writeContractAsync}
+            config={config}
+            switchChainAsync={switchChainAsync}
+          />
+        ) : null}
         <FeedbackCapture callId={callId} context="post-unlock" />
       </section>
     );
@@ -257,5 +269,103 @@ export function UnlockThesis({
       {status ? <p className="muted">{status}</p> : null}
       {txHash ? <p className="muted">Transaction: <a href={arcTxUrl(txHash)} rel="noreferrer" target="_blank">view on ArcScan</a></p> : null}
     </section>
+  );
+}
+
+interface TipJarProps {
+  callId?: number;
+  sportsPredictionId?: number;
+  receiverAddress: string;
+  usdcAddress: string;
+  userAddress: string;
+  writeContractAsync: any;
+  config: any;
+  switchChainAsync: any;
+}
+
+export function TipJar({
+  callId,
+  sportsPredictionId,
+  receiverAddress,
+  usdcAddress,
+  userAddress,
+  writeContractAsync,
+  config,
+  switchChainAsync,
+}: TipJarProps) {
+  const [tipStatus, setTipStatus] = useState<string>("");
+  const [tipSuccess, setTipSuccess] = useState<boolean>(false);
+
+  async function sendTip(amount: string) {
+    if (!receiverAddress || !usdcAddress || !userAddress) return;
+    setTipStatus(`Preparing to tip $${amount}...`);
+    setTipSuccess(false);
+
+    try {
+      const walletClient = await getWalletClient(config, { account: userAddress as `0x${string}`, assertChainId: false });
+      const activeChainId = await walletClient!.getChainId();
+      if (activeChainId !== arcTestnet.id) {
+        setTipStatus("Switching network to Arc Testnet...");
+        await switchChainAsync({ chainId: arcTestnet.id });
+      }
+
+      setTipStatus(`Confirm tip of $${amount} USDC in your wallet...`);
+      const parsedAmount = parseUnits(amount, 6);
+      const tipHash = await writeContractAsync({
+        address: usdcAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [receiverAddress as `0x${string}`, parsedAmount],
+        chainId: arcTestnet.id,
+      });
+
+      setTipStatus("Tip submitted. Confirming on Arc...");
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
+      await publicClient.waitForTransactionReceipt({ hash: tipHash });
+
+      setTipStatus("Recording tip...");
+      const response = await fetch("/api/unlocks/tip", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          callId,
+          sportsPredictionId,
+          wallet: userAddress,
+          txHash: tipHash,
+        }),
+      });
+
+      if (!response.ok) {
+        setTipStatus("Tip succeeded on chain, but failed to log in DB.");
+        return;
+      }
+
+      setTipStatus(`Thank you! Successfully tipped $${amount} USDC.`);
+      setTipSuccess(true);
+    } catch (err) {
+      setTipStatus(`Tip failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return (
+    <div className="panel tip-jar-widget" style={{ marginTop: "1.5rem", border: "1px dashed var(--border-color, #ccc)", padding: "1.2rem", borderRadius: "8px" }}>
+      <h4>☕ Support the Creator Agent</h4>
+      <p className="muted" style={{ fontSize: "0.9rem", marginBottom: "1rem" }}>
+        Tip the publisher of this agent to reward accurate analysis. Tips go directly to the agent's owner wallet: <code style={{ fontSize: "0.8rem" }}>{receiverAddress}</code>.
+      </p>
+      <div className="pill-row" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+        {["0.01", "0.05", "0.10", "0.25"].map((amount) => (
+          <button
+            key={amount}
+            className="pill"
+            onClick={() => sendTip(amount)}
+            style={{ cursor: "pointer", background: "none", border: "1px solid var(--border-color, #ccc)", color: "inherit", padding: "0.25rem 0.5rem" }}
+          >
+            Tip ${amount}
+          </button>
+        ))}
+      </div>
+      {tipStatus ? <p className="muted" style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>{tipStatus}</p> : null}
+    </div>
   );
 }
