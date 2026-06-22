@@ -259,6 +259,11 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   const classification = classifySportsMarket(market);
   const reasons = [...classification.reasons];
   if (market.status !== "active") reasons.push("inactive");
+
+  const forceCategory = optionalEnv("SPORTS_ONLY_CATEGORY");
+  if (forceCategory && classification.category !== forceCategory) {
+    reasons.push("wrong_sports_category");
+  }
   const close = closeTimeScore(market, now, thresholds.lookaheadHours, thresholds.minStartLeadMinutes);
   if (!close.ok) reasons.push(close.reason);
   if (market.outcomes.length < 2 || market.outcomePrices.length < 2) reasons.push("missing_outcomes_or_prices");

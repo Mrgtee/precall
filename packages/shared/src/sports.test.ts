@@ -247,3 +247,29 @@ test("sports live call status classifies strong, lean, and high-risk calls", () 
   assert.equal(classifySportsCallStatus(highProbabilityLeanIdea), "lean_call");
   assert.match(sportsVerdictForStatus("avoid_call", { selectedOption: "Knicks", edgeBps: 0, confidenceBps: 5600, riskLevel: "high" }), /high risk/i);
 });
+
+test("sports candidate eligibility respects SPORTS_ONLY_CATEGORY env variable", () => {
+  const nbaMarket = market(); // NBA Category by default
+  const soccerMarket = market({
+    title: "Arsenal vs Chelsea",
+    slug: "epl-ars-che-2026-05-24",
+    description: "Soccer match.",
+    outcomes: ["Arsenal", "Chelsea"],
+    outcomePrices: [0.52, 0.48],
+  });
+
+  // Set SPORTS_ONLY_CATEGORY = soccer
+  process.env.SPORTS_ONLY_CATEGORY = "soccer";
+
+  try {
+    const nbaResult = evaluateSportsCandidate(nbaMarket, undefined, now);
+    assert.equal(nbaResult.eligible, false);
+    assert.ok(nbaResult.reasons.includes("wrong_sports_category"));
+
+    const soccerResult = evaluateSportsCandidate(soccerMarket, undefined, now);
+    assert.equal(soccerResult.eligible, true);
+    assert.deepEqual(soccerResult.reasons, []);
+  } finally {
+    delete process.env.SPORTS_ONLY_CATEGORY;
+  }
+});
