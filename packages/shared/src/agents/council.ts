@@ -73,11 +73,13 @@ async function runSingleAgent(input: {
   const retries = numberEnv("MODEL_RETRY_COUNT", 2);
   let lastError: unknown;
 
+  const filteredEvidence = filterEvidenceForAgent(input.agent.name, input.evidence);
+
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const startedAt = Date.now();
     try {
-      const content = await requestAgentVote(input, apiKey, attempt);
-      return validateVote(JSON.parse(content) as unknown, input.agent.name, input.evidence, Date.now() - startedAt, attempt);
+      const content = await requestAgentVote({ ...input, evidence: filteredEvidence }, apiKey, attempt);
+      return validateVote(JSON.parse(content) as unknown, input.agent.name, filteredEvidence, Date.now() - startedAt, attempt);
     } catch (error) {
       lastError = error;
       if (attempt < retries) await delay(Math.min(2_000 * 2 ** attempt, 8_000));
@@ -213,4 +215,34 @@ function validateVote(payload: unknown, agent: AgentName, evidence: EvidenceItem
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function filterEvidenceForAgent(agentName: AgentName, evidence: EvidenceItemInput[]): EvidenceItemInput[] {
+  if (agentName === "Skeptic") {
+    return evidence;
+  }
+
+  return evidence.filter((item) => {
+    if (item.evidenceId === "pm-market" || item.sourceType === "polymarket_market") {
+      return true;
+    }
+
+    if (agentName === "MacroScout") {
+      return item.sourceType === "admin_note";
+    }
+
+    if (agentName === "NewsHawk") {
+      return item.sourceType === "circle_x402_news" || item.sourceType === "free_web";
+    }
+
+    if (agentName === "CrowdPulse") {
+      return item.sourceType === "circle_x402_social";
+    }
+
+    if (agentName === "BookWatcher") {
+      return item.evidenceId === "pm-orderbook" || item.sourceType === "polymarket_orderbook";
+    }
+
+    return false;
+  });
 }
