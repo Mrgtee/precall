@@ -64,11 +64,13 @@ async function runSingleSportsAgent(input: {
   const retries = numberEnv("MODEL_RETRY_COUNT", 2);
   let lastError: unknown;
 
+  const filteredEvidence = filterSportsEvidenceForAgent(input.agent.name, input.evidence);
+
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const startedAt = Date.now();
     try {
-      const content = await requestSportsVote(input, apiKey, attempt);
-      return validateSportsVote(JSON.parse(content) as unknown, input.agent.name, input.evidence, input.candidateOutcomeIndexes, Date.now() - startedAt, attempt);
+      const content = await requestSportsVote({ ...input, evidence: filteredEvidence }, apiKey, attempt);
+      return validateSportsVote(JSON.parse(content) as unknown, input.agent.name, filteredEvidence, input.candidateOutcomeIndexes, Date.now() - startedAt, attempt);
     } catch (error) {
       lastError = error;
       if (attempt < retries) await delay(Math.min(2_000 * 2 ** attempt, 8_000));
@@ -206,4 +208,40 @@ export function validateSportsVote(payload: unknown, agent: SportsAgentName, evi
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function filterSportsEvidenceForAgent(agentName: SportsAgentName, evidence: EvidenceItemInput[]): EvidenceItemInput[] {
+  if (agentName === "Skeptic") {
+    return evidence;
+  }
+
+  return evidence.filter((item) => {
+    if (item.evidenceId === "pm-market" || item.sourceType === "polymarket_market") {
+      return true;
+    }
+
+    if (agentName === "MarketMover" && (item.evidenceId === "pm-selected-outcome" || item.sourceType === "polymarket_orderbook")) {
+      return true;
+    }
+
+    const text = `${item.title} ${item.excerpt}`.toLowerCase();
+
+    if (agentName === "FormScout") {
+      return /\b(form|rank|win|lose|stats|h2h|record)\b/i.test(text);
+    }
+
+    if (agentName === "InjuryNews") {
+      return /\b(injury|out|lineup|roster|bench|active)\b/i.test(text);
+    }
+
+    if (agentName === "MarketMover") {
+      return /\b(odds|price|book|spread|volume)\b/i.test(text);
+    }
+
+    if (agentName === "MatchupDesk") {
+      return /\b(matchup|style|tactics|court|surface|weather)\b/i.test(text);
+    }
+
+    return false;
+  });
 }
