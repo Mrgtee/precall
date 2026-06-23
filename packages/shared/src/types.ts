@@ -25,6 +25,39 @@ export type CircleActionType =
   | "unlock_thesis"
   | "x402_evidence_payment";
 
+export type HostedAgentStrategyMode = "hit_rate" | "balanced" | "contrarian";
+export type HostedAgentRiskProfile = "conservative" | "balanced" | "aggressive";
+export type HostedAgentReviewStatus = "pending_review" | "active" | "paused";
+export type HostedAgentVisibility = "public" | "hidden";
+export type RevenueEventSourceType = "bonded_unlock" | "sports_unlock";
+export type RevenueEventStatus = "accrued" | "paid_out";
+export type AgentPayoutStatus = "pending" | "paid" | "failed";
+
+export interface HostedAgentConfigInput {
+  agentId: number;
+  slug: string;
+  tagline: string;
+  description: string;
+  categoryScope: string[];
+  strategyMode: HostedAgentStrategyMode;
+  riskProfile: HostedAgentRiskProfile;
+  unlockPriceUsdc: string;
+  dailyX402BudgetUsdc: string;
+  maxX402PaymentUsdc: string;
+  maxCallsPerRun: number;
+  requireX402: boolean;
+  reviewStatus: HostedAgentReviewStatus;
+  visibility: HostedAgentVisibility;
+  agentShareBps: number;
+  platformShareBps: number;
+}
+
+export interface AgentRevenueSplit {
+  grossAmountUsdc: string;
+  agentShareUsdc: string;
+  platformShareUsdc: string;
+}
+
 export interface PolymarketMarket {
   source: "polymarket";
   marketId: string;

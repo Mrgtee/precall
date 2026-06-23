@@ -19,6 +19,7 @@ import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallSta
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
+  ensureSportsCouncilAgent,
   getAgentRunById,
   getOpenPublishedCalls,
   getSportsPredictionsForResolution,
@@ -48,7 +49,7 @@ export async function health() {
   const base = {
     worker: {
       commitSha: optionalEnv("RAILWAY_GIT_COMMIT_SHA", optionalEnv("GIT_COMMIT_SHA", "unknown")),
-      schemaRepair: "0010_sports_unlocks",
+      schemaRepair: "0012_hosted_agent_marketplace",
     },
     databaseUrl: Boolean(process.env.DATABASE_URL),
     modelApiKey: Boolean(process.env.OPENAI_API_KEY),
@@ -607,6 +608,9 @@ export async function runSportsEdge() {
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
   const requireX402 = boolEnv("REQUIRE_SPORTS_X402", true);
+  const sportsCouncil = await ensureSportsCouncilAgent({
+    ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000"),
+  });
   const expiryUpdate = await expirePublishedCalls();
   const markets = await discoverPolymarketMarkets(discoveryLimit);
   const skipped: SportsSkip[] = [];
@@ -682,7 +686,7 @@ export async function runSportsEdge() {
       });
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
 
-      const row = await upsertSportsPrediction({ idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
+      const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
       await recordAgentRun({
         status: "sports_live_call_stored",
         model: councilResult.model,

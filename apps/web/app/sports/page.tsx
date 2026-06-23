@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { ShieldCheck, Trophy } from "lucide-react";
 import { UnlockSportsCall } from "../../components/unlock-sports-call";
 import { bpsToPercent, friendlySetupError, usdc } from "../../lib/format";
-import { getActiveSportsCallCount, getSportsPredictions } from "../../lib/queries";
+import { getActiveSportsCallCount } from "../../lib/queries";
+import { getMarketplaceSportsPredictions } from "../../lib/marketplace";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -18,30 +20,26 @@ function freshness(date: Date | string | null) {
 function statusLabel(status: string) {
   if (status === "strong_call") return "Strong";
   if (status === "lean_call") return "Lean";
-  if (status === "high_risk_call") return "High Risk";
-  if (status === "avoid_call") return "High Risk";
-  return status.replace(/_/g, " ");
+  return "High Risk";
 }
 
 function statusIntro(status: string) {
   if (status === "strong_call") return "Strong Calls";
   if (status === "lean_call") return "Lean Calls";
-  if (status === "high_risk_call") return "High Risk Calls";
   return "High Risk Calls";
 }
 
 function statusDescription(status: string) {
   if (status === "strong_call") return "Edge, confidence, market spread, and risk are all acceptable.";
   if (status === "lean_call") return "The selected side is clear, but conviction is moderate.";
-  if (status === "high_risk_call") return "The model found a side, but evidence, confidence, or market conditions make it risky.";
-  return "The AI selected a side, but confidence, edge, evidence, or market conditions make it high risk.";
+  return "The model found a side, but evidence, confidence, or market conditions make it risky.";
 }
 
 function previewReason(statusReason: string) {
   return statusReason || "AI selected a side from the supplied market, price, and evidence context. Unlock for the complete reasoning trail.";
 }
 
-type SportsIdea = Awaited<ReturnType<typeof getSportsPredictions>>[number];
+type SportsIdea = Awaited<ReturnType<typeof getMarketplaceSportsPredictions>>[number];
 
 function SportsCard({ idea }: { idea: SportsIdea }) {
   const x402Status = idea.x402Status as { status?: unknown } | null;
@@ -54,6 +52,7 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
           <span className="muted">{idea.category} · {idea.marketKind} · {freshness(idea.updatedAt)}</span>
         </div>
         <h2 className="call-title">{idea.marketTitle}</h2>
+        <p className="muted">By <Link href={`/agents/${idea.agentId}`}><strong>{idea.agentName}</strong></Link>{idea.agentTagline ? ` · ${idea.agentTagline}` : ""}</p>
         <div className="sports-prediction-banner">
           <span>AI Prediction</span>
           <strong>{idea.selectedOption}</strong>
@@ -68,8 +67,11 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
         </div>
         <p className="muted"><strong>Short reasoning preview:</strong> {previewReason(idea.statusReason)}</p>
         <p className="muted">Full reasoning, evidence, market link, probability breakdown, and risk notes unlock with Arc USDC.</p>
-        <p className="muted nfa-note">NFA: Sports Live Calls are AI-generated market intelligence, not financial advice. They are not guaranteed outcomes. Always do your own research.</p>
-        {paidEvidenceUsed ? <span className="status-chip ok">x402 paid evidence used</span> : null}
+        <p className="muted nfa-note">NFA: Live calls are AI-generated market intelligence, and not financial advice.</p>
+        <div className="pill-row">
+          <span className="pill">{idea.agentReviewStatus || "pending_review"}</span>
+          {paidEvidenceUsed ? <span className="status-chip ok">x402 paid evidence used</span> : null}
+        </div>
       </div>
       <UnlockSportsCall sportsPredictionId={idea.id} unlockPrice={String(idea.unlockPrice)} />
     </article>
@@ -78,18 +80,18 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
 
 export default async function SportsPage() {
   redirect("/");
-  let ideas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
+  let ideas: Awaited<ReturnType<typeof getMarketplaceSportsPredictions>> = [];
   let activeCount = 0;
   let setupError = "";
   try {
-    [ideas, activeCount] = await Promise.all([getSportsPredictions(40), getActiveSportsCallCount()]);
+    [ideas, activeCount] = await Promise.all([getMarketplaceSportsPredictions(40), getActiveSportsCallCount()]);
   } catch (error) {
     setupError = friendlySetupError(error);
   }
 
   const grouped = ["strong_call", "lean_call", "high_risk_call"].map((status) => ({
     status,
-    ideas: ideas.filter((idea) => status === "high_risk_call" ? idea.status === "high_risk_call" || idea.status === "avoid_call" : idea.status === status),
+    ideas: ideas.filter((idea) => idea.status === status),
   }));
 
   return (
@@ -102,7 +104,7 @@ export default async function SportsPage() {
         <div className="hero-card">
           <div className="pill-row">
             <span className="pill"><Trophy size={14} /> {activeCount} Active Sports Live Call{activeCount === 1 ? "" : "s"}</span>
-            <span className="pill"><ShieldCheck size={14} /> Non-bonded sports intelligence</span>
+            <span className="pill"><ShieldCheck size={14} /> Hosted agent marketplace</span>
           </div>
         </div>
       </section>

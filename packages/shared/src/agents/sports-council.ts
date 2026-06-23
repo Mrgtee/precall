@@ -11,6 +11,15 @@ const SPORTS_AGENTS: { name: SportsAgentName; role: string; required?: boolean }
   { name: "Skeptic", role: "adversarial review; why the sports idea may be wrong", required: true },
 ];
 
+type HostedSportsAgentPromptContext = {
+  name: string;
+  slug?: string;
+  description?: string;
+  strategyMode?: string;
+  riskProfile?: string;
+  categoryScope?: string[];
+};
+
 export async function runSportsCouncilDetailed(input: {
   market: PolymarketMarket;
   snapshot: OutcomeSnapshot;
@@ -18,6 +27,7 @@ export async function runSportsCouncilDetailed(input: {
   candidateOutcomeIndexes: number[];
   category: string;
   marketKind: string;
+  hostedAgent?: HostedSportsAgentPromptContext | undefined;
 }): Promise<SportsCouncilResult> {
   const model = optionalEnv("OPENAI_MODEL", "gpt-4.1-mini");
   const baseUrl = optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
@@ -56,6 +66,7 @@ async function runSingleSportsAgent(input: {
   candidateOutcomeIndexes: number[];
   category: string;
   marketKind: string;
+  hostedAgent?: HostedSportsAgentPromptContext | undefined;
   agent: { name: SportsAgentName; role: string };
   model: string;
   baseUrl: string;
@@ -87,6 +98,7 @@ async function requestSportsVote(input: {
   candidateOutcomeIndexes: number[];
   category: string;
   marketKind: string;
+  hostedAgent?: HostedSportsAgentPromptContext | undefined;
   agent: { name: SportsAgentName; role: string };
   model: string;
   baseUrl: string;
@@ -141,6 +153,7 @@ function buildSportsPrompt(input: {
   candidateOutcomeIndexes: number[];
   category: string;
   marketKind: string;
+  hostedAgent?: HostedSportsAgentPromptContext | undefined;
   agent: { name: SportsAgentName; role: string };
 }) {
   const outcomes = input.market.outcomes
@@ -149,9 +162,29 @@ function buildSportsPrompt(input: {
   const evidence = input.evidence
     .map((item) => `- ${item.evidenceId} [${item.sourceType}, provider ${item.provider}, paid ${item.paid ? "yes" : "no"}, score ${item.credibilityScore}, ${item.fetchedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
     .join("\n");
+  const strategyMode = (input.hostedAgent?.strategyMode || "hit_rate").trim().toLowerCase();
+  const riskProfile = (input.hostedAgent?.riskProfile || "balanced").trim().toLowerCase();
+  const categoryScope = (input.hostedAgent?.categoryScope || []).filter(Boolean).join(", ") || "all sports categories";
+  const hostedAgentHeader = input.hostedAgent
+    ? `Hosted agent profile:\n- Name: ${input.hostedAgent.name}\n- Slug: ${input.hostedAgent.slug || "n/a"}\n- Strategy mode: ${strategyMode}\n- Risk profile: ${riskProfile}\n- Category scope: ${categoryScope}\n- Public description: ${input.hostedAgent.description || "No additional description supplied."}`
+    : "Hosted agent profile:\n- Name: Precall Sports Council\n- Strategy mode: hit_rate\n- Risk profile: balanced\n- Category scope: all sports categories";
+  const strategyInstruction = strategyMode === "contrarian"
+    ? "This hosted agent is contrarian: stay evidence-based and probability-aware, but you may fade the crowd when the supplied evidence clearly justifies it."
+    : strategyMode === "balanced"
+      ? "This hosted agent is balanced: weigh win likelihood and mispricing together instead of optimizing only for the biggest favorite."
+      : "This hosted agent is hit-rate focused: optimize for the side most likely to win, even when the edge and payout are modest.";
+  const riskInstruction = riskProfile === "aggressive"
+    ? "Aggressive risk profile: you may tolerate thinner market consensus if the supplied evidence is coherent, but you must say so and reduce confidence when evidence is weak."
+    : riskProfile === "conservative"
+      ? "Conservative risk profile: stay close to market-implied probability unless the supplied evidence clearly supports a change, and strongly penalize uncertain calls."
+      : "Balanced risk profile: use the market as a baseline while allowing moderate evidence-backed deviations.";
 
   return `
 You are ${input.agent.name}: ${input.agent.role}.
+
+${hostedAgentHeader}
+${strategyInstruction}
+${riskInstruction}
 
 Analyze this sports prediction market for a selected AI side. Precall is currently optimizing for high-potential wins before profit size. Use market-implied probability as a strong baseline, prefer the outcome most likely to win even when profit/edge is small, and do not chase underdogs only because the payout is larger. If the highest-probability side has clear supplied-evidence red flags, explain that and choose the better-supported alternative. If no side has a playable edge, still select the least bad/most plausible candidate outcome, set low confidence, and explain why it should be treated as high risk. If evidence is thin, say evidence was not available and lower confidence.
 

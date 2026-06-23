@@ -30,6 +30,36 @@ export const agents = pgTable("agents", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const agentConfigs = pgTable(
+  "agent_configs",
+  {
+    id: serial("id").primaryKey(),
+    agentId: integer("agent_id").notNull().unique(),
+    slug: text("slug").notNull().unique(),
+    tagline: text("tagline").notNull().default(""),
+    description: text("description").notNull().default(""),
+    categoryScope: jsonb("category_scope").$type<string[]>().notNull().default([]),
+    strategyMode: text("strategy_mode").notNull().default("hit_rate"),
+    riskProfile: text("risk_profile").notNull().default("balanced"),
+    unlockPriceUsdc: numeric("unlock_price_usdc", { precision: 18, scale: 6 }).notNull().default("0.05"),
+    dailyX402BudgetUsdc: numeric("daily_x402_budget_usdc", { precision: 18, scale: 6 }).notNull().default("0.10"),
+    maxX402PaymentUsdc: numeric("max_x402_payment_usdc", { precision: 18, scale: 6 }).notNull().default("0.005"),
+    maxCallsPerRun: integer("max_calls_per_run").notNull().default(3),
+    requireX402: boolean("require_x402").notNull().default(true),
+    reviewStatus: text("review_status").notNull().default("pending_review"),
+    visibility: text("visibility").notNull().default("public"),
+    agentShareBps: integer("agent_share_bps").notNull().default(7000),
+    platformShareBps: integer("platform_share_bps").notNull().default(3000),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("agent_configs_slug_idx").on(table.slug),
+    reviewStatusIdx: index("agent_configs_review_status_idx").on(table.reviewStatus),
+    visibilityIdx: index("agent_configs_visibility_idx").on(table.visibility),
+  }),
+);
+
 export const markets = pgTable(
   "markets",
   {
@@ -174,10 +204,53 @@ export const agentRuns = pgTable("agent_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const agentRevenueEvents = pgTable(
+  "agent_revenue_events",
+  {
+    id: serial("id").primaryKey(),
+    agentId: integer("agent_id").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: integer("source_id").notNull(),
+    unlockerWallet: text("unlocker_wallet").notNull(),
+    grossAmountUsdc: numeric("gross_amount_usdc", { precision: 18, scale: 6 }).notNull(),
+    agentShareUsdc: numeric("agent_share_usdc", { precision: 18, scale: 6 }).notNull(),
+    platformShareUsdc: numeric("platform_share_usdc", { precision: 18, scale: 6 }).notNull(),
+    txHash: text("tx_hash"),
+    status: text("status").notNull().default("accrued"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueSourceUnlockerIdx: uniqueIndex("agent_revenue_events_source_unlocker_idx").on(table.sourceType, table.sourceId, table.unlockerWallet),
+    agentIdx: index("agent_revenue_events_agent_idx").on(table.agentId),
+    statusIdx: index("agent_revenue_events_status_idx").on(table.status),
+    createdAtIdx: index("agent_revenue_events_created_at_idx").on(table.createdAt),
+  }),
+);
+
+export const agentPayouts = pgTable(
+  "agent_payouts",
+  {
+    id: serial("id").primaryKey(),
+    agentId: integer("agent_id").notNull(),
+    destinationWallet: text("destination_wallet").notNull(),
+    amountUsdc: numeric("amount_usdc", { precision: 18, scale: 6 }).notNull(),
+    status: text("status").notNull().default("pending"),
+    txHash: text("tx_hash"),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    agentIdx: index("agent_payouts_agent_idx").on(table.agentId),
+    statusIdx: index("agent_payouts_status_idx").on(table.status),
+    createdAtIdx: index("agent_payouts_created_at_idx").on(table.createdAt),
+  }),
+);
+
 export const sportsPredictions = pgTable(
   "sports_predictions",
   {
     id: serial("id").primaryKey(),
+    agentId: integer("agent_id").notNull(),
     marketId: text("market_id").notNull(),
     marketTitle: text("market_title").notNull(),
     marketUrl: text("market_url").notNull(),
@@ -216,7 +289,8 @@ export const sportsPredictions = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    marketOutcomeIdx: uniqueIndex("sports_predictions_market_outcome_idx").on(table.marketId, table.selectedOutcomeIndex),
+    marketOutcomeIdx: uniqueIndex("sports_predictions_agent_market_outcome_idx").on(table.agentId, table.marketId, table.selectedOutcomeIndex),
+    agentIdx: index("sports_predictions_agent_idx").on(table.agentId),
     statusIdx: index("sports_predictions_status_idx").on(table.status),
     createdAtIdx: index("sports_predictions_created_at_idx").on(table.createdAt),
     eventStartTimeIdx: index("sports_predictions_event_start_time_idx").on(table.eventStartTime),
@@ -306,6 +380,7 @@ export const circleActions = pgTable(
     paymentRef: text("payment_ref"),
     relatedMarketId: text("related_market_id"),
     relatedCallId: integer("related_call_id"),
+    relatedAgentId: integer("related_agent_id"),
     agentRunId: integer("agent_run_id"),
     relatedAgentRunId: integer("related_agent_run_id"),
     status: text("status").notNull().default("success"),
@@ -316,6 +391,7 @@ export const circleActions = pgTable(
   (table) => ({
     actionTypeIdx: index("circle_actions_action_type_idx").on(table.actionType),
     callIdx: index("circle_actions_call_idx").on(table.relatedCallId),
+    agentIdx: index("circle_actions_agent_idx").on(table.relatedAgentId),
     marketIdx: index("circle_actions_market_idx").on(table.relatedMarketId),
   }),
 );

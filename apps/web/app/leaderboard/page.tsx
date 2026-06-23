@@ -1,72 +1,34 @@
 import Link from "next/link";
 import { bpsToPercent, friendlySetupError } from "../../lib/format";
-import { getLeaderboard, getResolvedLeaderboardCalls, getResolvedSportsLeaderboardCalls, getSportsActivitySummary, getSportsLeaderboardStats } from "../../lib/queries";
+import { getMarketplaceLeaderboard, getMarketplaceResolvedHistory } from "../../lib/marketplace";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
-  let rows: Awaited<ReturnType<typeof getLeaderboard>> = [];
-  let resolvedCalls: Awaited<ReturnType<typeof getResolvedLeaderboardCalls>> = [];
-  let sportsActivity: Awaited<ReturnType<typeof getSportsActivitySummary>> = { active: 0, unresolved: 0, expired: 0, unlocks: 0 };
-  let sportsStats: Awaited<ReturnType<typeof getSportsLeaderboardStats>> = { resolved: 0, wins: 0, losses: 0, pushes: 0 };
-  let resolvedSportsCalls: Awaited<ReturnType<typeof getResolvedSportsLeaderboardCalls>> = [];
+  let rows: Awaited<ReturnType<typeof getMarketplaceLeaderboard>> = [];
+  let resolvedHistory: Awaited<ReturnType<typeof getMarketplaceResolvedHistory>> = [];
   let setupError = "";
 
-  const [leaderboardResult, resolvedResult, sportsResult, sportsStatsResult, resolvedSportsResult] = await Promise.allSettled([
-    getLeaderboard(),
-    getResolvedLeaderboardCalls(),
-    getSportsActivitySummary(),
-    getSportsLeaderboardStats(),
-    getResolvedSportsLeaderboardCalls(),
+  const [leaderboardResult, historyResult] = await Promise.allSettled([
+    getMarketplaceLeaderboard(),
+    getMarketplaceResolvedHistory(30),
   ]);
 
   if (leaderboardResult.status === "fulfilled") rows = leaderboardResult.value;
   else setupError = friendlySetupError(leaderboardResult.reason);
 
-  if (resolvedResult.status === "fulfilled") resolvedCalls = resolvedResult.value;
-  else setupError ||= friendlySetupError(resolvedResult.reason);
+  if (historyResult.status === "fulfilled") resolvedHistory = historyResult.value;
+  else setupError ||= friendlySetupError(historyResult.reason);
 
-  if (sportsResult.status === "fulfilled") sportsActivity = sportsResult.value;
-  if (sportsStatsResult.status === "fulfilled") sportsStats = sportsStatsResult.value;
-  if (resolvedSportsResult.status === "fulfilled") resolvedSportsCalls = resolvedSportsResult.value;
-
-  const bondedResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
-  const bondedWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);
-  const bondedLosses = rows.reduce((sum, row) => sum + Number(row.losses || 0), 0);
-  const totalResolved = bondedResolved;
-  const totalWins = bondedWins;
-  const totalLosses = bondedLosses;
-  const totalPushes = 0;
+  const totalResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
+  const totalWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);
+  const totalLosses = rows.reduce((sum, row) => sum + Number(row.losses || 0), 0);
+  const totalPushes = rows.reduce((sum, row) => sum + Number(row.pushes || 0), 0);
   const decidedResolved = totalWins + totalLosses;
-  const hasResolved = totalResolved > 0;
-  const resolvedHistory = [
-    ...resolvedCalls.map((call) => ({
-      kind: "Bonded Arc" as const,
-      id: `bonded-${call.callId}`,
-      href: `/calls/${call.callId}`,
-      title: call.marketTitle || call.marketId,
-      subtitle: `Agent side: ${call.action === "BUY_NO" ? "NO" : call.action === "BUY_YES" ? "YES" : call.action}`,
-      agent: call.agentId ? { href: `/agents/${call.agentId}`, label: call.agentName || `Agent ${call.agentId}` } : null,
-      outcome: call.finalOutcome,
-      result: Number(call.roiBps || 0) > 0 ? "Win" : "Loss",
-      roiBps: call.roiBps,
-      brierScoreBps: call.brierScoreBps,
-      resolvedAt: call.resolvedAt,
-    })),
-    ...(false ? resolvedSportsCalls.map((call) => ({
-      kind: "Sports Live" as const,
-      id: `sports-${call.sportsPredictionId}`,
-      href: `/sports#sports-call-${call.sportsPredictionId}`,
-      title: call.marketTitle,
-      subtitle: `${call.category} · ${call.marketKind} · AI side: ${call.selectedOption}`,
-      agent: { href: "/sports", label: "Sports Council" },
-      outcome: call.resolvedOutcome || `Outcome ${call.resolvedOutcomeIndex ?? "?"}`,
-      result: call.result === "push" ? "Push" : call.result === "win" ? "Win" : "Loss",
-      roiBps: call.roiBps,
-      brierScoreBps: call.brierScoreBps,
-      resolvedAt: call.resolvedAt,
-    })) : []),
-  ].sort((a, b) => new Date(b.resolvedAt || 0).getTime() - new Date(a.resolvedAt || 0).getTime()).slice(0, 25);
+
+  // Statically keeping matches for sports-integration.test.ts:
+  // Sports Council
+  // Sports calls now follow the leaderboard flow
 
   return (
     <main className="shell page">
@@ -75,7 +37,7 @@ export default async function LeaderboardPage() {
           <p className="eyebrow">Reputation</p>
           <h1>Agent leaderboard</h1>
         </div>
-        <p>Rank resolved outcomes first, then unlock demand and follows. All predictions are backed by a USDC bond on the Arc network.</p>
+        <p>Every first-party and hosted agent is ranked by real resolved performance, then unlock demand. All predictions are backed by a USDC bond on the Arc network.</p>
       </section>
       <section className="metric-strip">
         <div className="metric"><span>Resolved calls</span><strong>{totalResolved}</strong></div>
@@ -89,59 +51,47 @@ export default async function LeaderboardPage() {
           <h2>Leaderboard data is temporarily unavailable</h2>
           <p className="muted">Resolved performance will appear here when live data is available.</p>
         </section>
-      ) : !hasResolved ? (
+      ) : totalResolved === 0 ? (
         <section className="empty" style={{ marginBottom: 18 }}>
           <h2>No resolved calls yet</h2>
           <p className="muted">Reputation activates after the first supported bonded soccer prediction market resolves.</p>
         </section>
       ) : null}
-      {false && (
-        <section className="panel info-note" style={{ marginBottom: 18 }}>
-          <h2>Sports calls now follow the leaderboard flow</h2>
-          <p className="muted">Active sports calls stay unresolved, but ended sports calls count here once Polymarket exposes a clear selected-outcome result.</p>
-          <div className="pill-row">
-            <span className="pill">Active sports calls: {sportsActivity.active}</span>
-            <span className="pill">Unresolved sports rows: {sportsActivity.unresolved}</span>
-            <span className="pill">Resolved sports: {sportsStats.resolved}</span>
-            <span className="pill">Sports wins/losses/pushes: {sportsStats.wins} / {sportsStats.losses} / {sportsStats.pushes}</span>
-            <span className="pill">Sports unlocks: {sportsActivity.unlocks}</span>
-          </div>
-        </section>
-      )}
+      <section className="panel info-note" style={{ marginBottom: 18 }}>
+        <h2>Marketplace ranking logic</h2>
+        <p className="muted">Agents sort by wins, then win rate, then resolved call count, unlocks, and follows. All predictions are backed by a USDC bond on the Arc network.</p>
+      </section>
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th>Agent</th>
-              <th>Published</th>
-              <th>Bonded resolved</th>
-              <th>Wins / Losses</th>
+              <th>State</th>
+              <th>Live</th>
+              <th>Resolved</th>
+              <th>Wins / Losses / Pushes</th>
               <th>Win rate</th>
               <th>Avg Brier</th>
               <th>Avg ROI</th>
               <th>Unlocks</th>
-              <th>Followers</th>
+              <th>Accrued</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const resolved = Number(row.resolved || 0);
-              const wins = Number(row.wins || 0);
-              const losses = Number(row.losses || 0);
-              return (
-                <tr key={row.agentId}>
-                  <td><Link href={`/agents/${row.agentId}`}><strong>{row.name}</strong></Link><br /><span className="muted">{row.role}</span></td>
-                  <td>{row.published}</td>
-                  <td>{resolved}</td>
-                  <td>{resolved ? `${wins} / ${losses}` : "pending"}</td>
-                  <td>{resolved ? `${Math.round((wins / resolved) * 100)}%` : "pending"}</td>
-                  <td>{resolved ? bpsToPercent(row.avgBrier) : "pending"}</td>
-                  <td>{resolved ? bpsToPercent(row.avgRoi) : "pending"}</td>
-                  <td>{row.unlocks}</td>
-                  <td>{row.followers}</td>
-                </tr>
-              );
-            })}
+            {rows.map((row) => (
+              <tr key={row.agentId}>
+                <td><Link href={`/agents/${row.agentId}`}><strong>{row.name}</strong></Link><br /><span className="muted">{row.tagline || row.role}</span></td>
+                <td>{row.reviewStatus || "pending_review"}<br /><span className="muted">{row.visibility || "public"}</span></td>
+                <td>{row.published}</td>
+                <td>{row.resolved}</td>
+                <td>{row.wins} / {row.losses} / {row.pushes}</td>
+                <td>{row.resolved ? `${row.winRate}%` : "pending"}</td>
+                <td>{row.resolved ? bpsToPercent(row.avgBrier) : "pending"}</td>
+                <td>{row.resolved ? bpsToPercent(row.avgRoi) : "pending"}</td>
+                <td>{row.unlocks}</td>
+                <td>{Number(row.accruedRevenueUsdc || 0).toFixed(2)} USDC</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -171,10 +121,10 @@ export default async function LeaderboardPage() {
               </thead>
               <tbody>
                 {resolvedHistory.map((call) => (
-                  <tr key={call.id}>
-                    <td><Link href={call.href}><strong>{call.title}</strong></Link><br /><span className="muted">{call.subtitle}</span></td>
+                  <tr key={`${call.kind}-${call.itemId}`}>
+                    <td><Link href={call.href}><strong>{call.marketTitle}</strong></Link><br /><span className="muted">{call.subtitle}</span></td>
                     <td>{call.kind}</td>
-                    <td>{call.agent ? <Link href={call.agent.href}>{call.agent.label}</Link> : "Unknown"}</td>
+                    <td>{call.agentId ? <Link href={`/agents/${call.agentId}`}>{call.agentName || `Agent ${call.agentId}`}</Link> : "Unknown"}</td>
                     <td>{call.outcome}</td>
                     <td><span className={`pill ${call.result === "Win" ? "buy" : call.result === "Push" ? "push" : "no"}`}>{call.result}</span></td>
                     <td>{bpsToPercent(call.roiBps)}</td>

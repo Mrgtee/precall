@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Trophy, Users } from "lucide-react";
+import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
 import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
 import { HomeMotion } from "../components/home-motion";
 import { friendlySetupError, isExpiredDate } from "../lib/format";
-import { type CallRow, getActiveBondedCallCount, getActiveSportsCallCount, getCalls, getLeaderboard, getSportsPredictions, getTotalUnlockCount } from "../lib/queries";
+import { type CallRow, getActiveBondedCallCount, getCalls, getLeaderboard, getTotalUnlockCount } from "../lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -12,17 +12,13 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   let calls: CallRow[] = [];
   let leaderboard: Awaited<ReturnType<typeof getLeaderboard>> = [];
-  let sportsIdeas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
-  let activeSportsCalls = 0;
   let activeBondedCalls = 0;
   let totalUnlocks = 0;
   let setupError = "";
 
-  const [callsResult, leaderboardResult, sportsIdeasResult, activeSportsResult, activeBondedResult, totalUnlocksResult] = await Promise.allSettled([
+  const [callsResult, leaderboardResult, activeBondedResult, totalUnlocksResult] = await Promise.allSettled([
     getCalls(30),
     getLeaderboard(),
-    getSportsPredictions(3),
-    getActiveSportsCallCount(),
     getActiveBondedCallCount(),
     getTotalUnlockCount(),
   ]);
@@ -31,14 +27,11 @@ export default async function HomePage() {
   else setupError = friendlySetupError(callsResult.reason);
 
   if (leaderboardResult.status === "fulfilled") leaderboard = leaderboardResult.value;
-  if (sportsIdeasResult.status === "fulfilled") sportsIdeas = sportsIdeasResult.value;
-  if (activeSportsResult.status === "fulfilled") activeSportsCalls = activeSportsResult.value;
   if (activeBondedResult.status === "fulfilled") activeBondedCalls = activeBondedResult.value;
   if (totalUnlocksResult.status === "fulfilled") totalUnlocks = totalUnlocksResult.value;
 
   const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
   if (callsResult.status === "fulfilled" && activeBondedResult.status !== "fulfilled") activeBondedCalls = live.length;
-  if (sportsIdeasResult.status === "fulfilled" && activeSportsResult.status !== "fulfilled") activeSportsCalls = sportsIdeas.length;
   const agents = leaderboard.length;
 
   return (

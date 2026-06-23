@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { createDbConnection, type PrecallDb } from "@precall/shared/db/client";
 import {
+  agentConfigs,
   agents,
   agentRuns,
   calls,
@@ -146,23 +147,114 @@ export async function insertSnapshot(snapshot: MarketSnapshot) {
   });
 }
 
-export async function ensureCouncilAgent(input: { onchainAgentId: number | undefined; ownerWallet: string }) {
-  const existing = await db().query.agents.findFirst({ where: eq(agents.name, "Precall Council") });
+async function ensurePlatformAgent(input: { name: string; role: string; ownerWallet: string; metadataUri: string; onchainAgentId?: number | undefined }) {
+  const existing = await db().query.agents.findFirst({ where: eq(agents.name, input.name) });
   if (existing) return existing;
 
   const [created] = await db()
     .insert(agents)
     .values({
-      name: "Precall Council",
-      role: "Five-role reasoning council: MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic run as separate model calls.",
+      name: input.name,
+      role: input.role,
       ownerWallet: input.ownerWallet,
       onchainAgentId: input.onchainAgentId,
-      metadataUri: "https://precall.arena/agents/precall-council",
+      metadataUri: input.metadataUri,
       active: true,
     })
     .returning();
-  if (!created) throw new Error("Failed to create Precall Council agent row.");
+  if (!created) throw new Error(`Failed to create ${input.name} agent row.`);
   return created;
+}
+
+export async function ensureCouncilAgent(input: { onchainAgentId: number | undefined; ownerWallet: string }) {
+  return ensurePlatformAgent({
+    name: "Precall Council",
+    role: "Five-role reasoning council: MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic run as separate model calls.",
+    ownerWallet: input.ownerWallet,
+    onchainAgentId: input.onchainAgentId,
+    metadataUri: "https://precall.arena/agents/precall-council",
+  });
+}
+
+export async function ensureSportsCouncilAgent(input: { ownerWallet: string }) {
+  return ensurePlatformAgent({
+    name: "Precall Sports Council",
+    role: "First-party hosted sports council that publishes Sports Live Calls across approved sports markets.",
+    ownerWallet: input.ownerWallet,
+    metadataUri: "https://precall.arena/agents/precall-sports-council",
+  });
+}
+
+export type HostedSportsAgentRuntime = {
+  agentId: number;
+  name: string;
+  role: string;
+  ownerWallet: string;
+  active: boolean;
+  slug: string;
+  tagline: string;
+  description: string;
+  categoryScope: string[];
+  strategyMode: string;
+  riskProfile: string;
+  unlockPriceUsdc: string;
+  dailyX402BudgetUsdc: string;
+  maxX402PaymentUsdc: string;
+  maxCallsPerRun: number;
+  requireX402: boolean;
+  reviewStatus: string;
+  visibility: string;
+  agentShareBps: number;
+  platformShareBps: number;
+};
+
+export async function getActiveHostedSportsAgents(): Promise<HostedSportsAgentRuntime[]> {
+  const rows = await db()
+    .select({
+      agentId: agents.id,
+      name: agents.name,
+      role: agents.role,
+      ownerWallet: agents.ownerWallet,
+      active: agents.active,
+      slug: agentConfigs.slug,
+      tagline: agentConfigs.tagline,
+      description: agentConfigs.description,
+      categoryScope: agentConfigs.categoryScope,
+      strategyMode: agentConfigs.strategyMode,
+      riskProfile: agentConfigs.riskProfile,
+      unlockPriceUsdc: agentConfigs.unlockPriceUsdc,
+      dailyX402BudgetUsdc: agentConfigs.dailyX402BudgetUsdc,
+      maxX402PaymentUsdc: agentConfigs.maxX402PaymentUsdc,
+      maxCallsPerRun: agentConfigs.maxCallsPerRun,
+      requireX402: agentConfigs.requireX402,
+      reviewStatus: agentConfigs.reviewStatus,
+      visibility: agentConfigs.visibility,
+      agentShareBps: agentConfigs.agentShareBps,
+      platformShareBps: agentConfigs.platformShareBps,
+    })
+    .from(agents)
+    .innerJoin(agentConfigs, eq(agentConfigs.agentId, agents.id))
+    .where(and(eq(agents.active, true), eq(agentConfigs.reviewStatus, "active")))
+    .orderBy(desc(agentConfigs.updatedAt), agents.id);
+
+  return rows.map((row) => ({
+    ...row,
+    slug: row.slug || `agent-${row.agentId}`,
+    tagline: row.tagline || "",
+    description: row.description || "",
+    categoryScope: Array.isArray(row.categoryScope) ? row.categoryScope.map(String) : [],
+    strategyMode: row.strategyMode || "hit_rate",
+    riskProfile: row.riskProfile || "balanced",
+    unlockPriceUsdc: String(row.unlockPriceUsdc || "0.05"),
+    dailyX402BudgetUsdc: String(row.dailyX402BudgetUsdc || "0.10"),
+    maxX402PaymentUsdc: String(row.maxX402PaymentUsdc || "0.005"),
+    maxCallsPerRun: Number(row.maxCallsPerRun || 1),
+    requireX402: Boolean(row.requireX402),
+    reviewStatus: row.reviewStatus || "active",
+    visibility: row.visibility || "public",
+    agentShareBps: Number(row.agentShareBps || 7000),
+    platformShareBps: Number(row.platformShareBps || 3000),
+  }));
 }
 
 export async function recordAgentRun(input: {
@@ -276,13 +368,14 @@ function sportsExpiryTime(eventStartTime?: string | null, marketCloseTime?: stri
   return marketCloseTime ? new Date(marketCloseTime) : null;
 }
 
-export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status: SportsCallStatus; statusReason?: string | undefined; eventStartTime?: string | null | undefined }) {
+export async function upsertSportsPrediction(input: { agentId: number; idea: SportsPredictionIdea; sourceRunId?: number | undefined; x402Status?: unknown; status: SportsCallStatus; statusReason?: string | undefined; eventStartTime?: string | null | undefined; unlockPriceUsdc?: string | undefined }) {
   const status = input.status;
   const evidenceIds = input.idea.evidence.map((item) => item.evidenceId);
   const sourceUrls = [...new Set(input.idea.evidence.map((item) => item.sourceUrl).filter(Boolean))];
   const x402PaidEvidenceUsed = input.idea.evidence.some((item) => item.paid);
 
   const values = {
+    agentId: input.agentId,
     marketId: input.idea.market.marketId,
     marketTitle: input.idea.market.title,
     marketUrl: input.idea.market.url,
@@ -307,7 +400,7 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     x402PaidEvidenceUsed,
     votes: input.idea.votes,
     x402Status: input.x402Status,
-    unlockPrice: optionalEnv("SPORTS_UNLOCK_PRICE_USDC", optionalEnv("UNLOCK_PRICE_USDC", "0.05")),
+    unlockPrice: input.unlockPriceUsdc || optionalEnv("SPORTS_UNLOCK_PRICE_USDC", optionalEnv("UNLOCK_PRICE_USDC", "0.05")),
     resolutionStatus: "unresolved",
     resolvedOutcomeIndex: null,
     resolvedOutcome: null,
@@ -323,7 +416,7 @@ export async function upsertSportsPrediction(input: { idea: SportsPredictionIdea
     .insert(sportsPredictions)
     .values(values)
     .onConflictDoUpdate({
-      target: [sportsPredictions.marketId, sportsPredictions.selectedOutcomeIndex],
+      target: [sportsPredictions.agentId, sportsPredictions.marketId, sportsPredictions.selectedOutcomeIndex],
       set: values,
     })
     .returning();
@@ -520,6 +613,7 @@ export type CircleActionInput = {
   paymentRef?: string | undefined;
   relatedMarketId?: string | undefined;
   relatedCallId?: number | undefined;
+  relatedAgentId?: number | undefined;
   agentRunId?: number | undefined;
   relatedAgentRunId?: number | undefined;
   status?: string | undefined;
@@ -544,6 +638,7 @@ export function normalizeCircleActionInput(input: CircleActionInput) {
     paymentRef,
     relatedMarketId: input.relatedMarketId,
     relatedCallId: input.relatedCallId,
+    relatedAgentId: input.relatedAgentId,
     agentRunId: relatedAgentRunId,
     relatedAgentRunId,
     status: input.status || "success",
@@ -579,6 +674,36 @@ export async function getTodayX402SpendUsdc(now = new Date()) {
       ), 0)::text as "total"
       from "circle_actions"
       where "action_type" = 'x402_api_payment'
+        and "status" = 'success'
+        and "created_at" >= ${start}
+    `);
+    const rows = rowsFromSqlResult<{ total: string | null }>(result);
+    return rows[0]?.total || "0";
+  } catch {
+    return "0";
+  }
+}
+
+export async function getTodayX402SpendUsdcByAgent(agentId: number, now = new Date()) {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  const health = await checkCircleActionsSchemaHealth();
+  if (!health.tableExists || !health.columns.action_type || !health.columns.status || !health.columns.created_at) return "0";
+  if (!health.columns.amount_usdc && !health.legacyAmountColumnExists) return "0";
+
+  const amountColumn = health.columns.amount_usdc ? sql.raw('"amount_usdc"') : sql.raw('"amount"');
+  try {
+    const result = await db().execute(sql<{ total: string | null }>`
+      select coalesce(sum(
+        case
+          when ${amountColumn} is null then 0::numeric
+          when btrim(${amountColumn}::text) ~ '^-?\d+(\.\d+)?$' then btrim(${amountColumn}::text)::numeric
+          else 0::numeric
+        end
+      ), 0)::text as "total"
+      from "circle_actions"
+      where "action_type" in ('x402_api_payment', 'x402_evidence_payment')
+        and "related_agent_id" = ${agentId}
         and "status" = 'success'
         and "created_at" >= ${start}
     `);

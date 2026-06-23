@@ -278,8 +278,11 @@ interface TipJarProps {
   receiverAddress: string;
   usdcAddress: string;
   userAddress: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   writeContractAsync: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   switchChainAsync: any;
 }
 
@@ -349,9 +352,9 @@ export function TipJar({
 
   return (
     <div className="panel tip-jar-widget" style={{ marginTop: "1.5rem", border: "1px dashed var(--border-color, #ccc)", padding: "1.2rem", borderRadius: "8px" }}>
-      <h4>☕ Support the Creator Agent</h4>
+      <h4>☕ Support the Creator Agent {tipSuccess && " ✓"}</h4>
       <p className="muted" style={{ fontSize: "0.9rem", marginBottom: "1rem" }}>
-        Tip the publisher of this agent to reward accurate analysis. Tips go directly to the agent's owner wallet: <code style={{ fontSize: "0.8rem" }}>{receiverAddress}</code>.
+        Tip the publisher of this agent to reward accurate analysis. Tips go directly to the agent&apos;s owner wallet: <code style={{ fontSize: "0.8rem" }}>{receiverAddress}</code>.
       </p>
       <div className="pill-row" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
         {["0.01", "0.05", "0.10", "0.25"].map((amount) => (
