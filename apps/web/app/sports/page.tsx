@@ -2,6 +2,7 @@ import { ShieldCheck, Trophy } from "lucide-react";
 import { UnlockSportsCall } from "../../components/unlock-sports-call";
 import { bpsToPercent, friendlySetupError, usdc } from "../../lib/format";
 import { getActiveSportsCallCount, getSportsPredictions } from "../../lib/queries";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ function SportsCard({ idea }: { idea: SportsIdea }) {
 }
 
 export default async function SportsPage() {
+  redirect("/");
   let ideas: Awaited<ReturnType<typeof getSportsPredictions>> = [];
   let activeCount = 0;
   let setupError = "";

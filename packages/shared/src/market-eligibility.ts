@@ -1,5 +1,6 @@
 import type { MarketSnapshot, PolymarketMarket } from "./types";
 import type { PublishThresholds } from "./scoring";
+import { classifySportsMarket } from "./sports";
 
 export type MarketSkipReason =
   | "inactive"
@@ -11,7 +12,8 @@ export type MarketSkipReason =
   | "not_yes_no"
   | "low_liquidity"
   | "wide_spread"
-  | "extreme_price";
+  | "extreme_price"
+  | "not_soccer";
 
 export type MarketEligibility = {
   eligible: boolean;
@@ -37,7 +39,7 @@ export function isEligibleBinaryMarket(market: PolymarketMarket): boolean {
 export function evaluateMarketEligibility(
   market: PolymarketMarket,
   options: { snapshot?: MarketSnapshot; thresholds?: Pick<PublishThresholds, "minLiquidityUsd" | "maxSpreadBps">; now?: Date } = {},
-): MarketEligibility {
+ ): MarketEligibility {
   const reasons: MarketSkipReason[] = [];
   const now = options.now || new Date();
 
@@ -50,6 +52,11 @@ export function evaluateMarketEligibility(
   if (market.outcomes.length === 2 && !isYesNo(market.outcomes)) reasons.push("not_yes_no");
   if (options.thresholds && market.liquidityUsd < options.thresholds.minLiquidityUsd) reasons.push("low_liquidity");
   if (options.thresholds && options.snapshot && options.snapshot.spreadBps > options.thresholds.maxSpreadBps) reasons.push("wide_spread");
+
+  const classification = classifySportsMarket(market);
+  if (!classification.isSports || classification.category !== "soccer") {
+    reasons.push("not_soccer");
+  }
 
   return { eligible: reasons.length === 0, reasons };
 }

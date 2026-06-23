@@ -43,29 +43,31 @@ export default async function TopFiveTodayPage() {
         {calls.length ? calls.map((call) => <CallCard key={call.id} call={call} />) : <p className="muted">No live bonded calls currently pass the hardened V1 gates. Precall would rather show no call than a weak call.</p>}
       </section>
 
-      <section style={{ marginTop: 34 }}>
-        <section className="section-heading">
-          <div><p className="eyebrow">Sports Live Calls</p><h2>Top Sports Calls</h2></div>
-          <p>Top active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
+      {false && (
+        <section style={{ marginTop: 34 }}>
+          <section className="section-heading">
+            <div><p className="eyebrow">Sports Live Calls</p><h2>Top Sports Calls</h2></div>
+            <p>Top active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
+          </section>
+          <section className="grid preview-grid">
+            {sportsCalls.length ? sportsCalls.map((idea) => (
+              <article className="panel sports-preview-card" key={idea.id}>
+                <p className="eyebrow">{idea.category} · {idea.marketKind} · active/unresolved</p>
+                <h3>{idea.marketTitle}</h3>
+                <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong></p>
+                <div className="analysis-metric-grid sports-metrics">
+                  <div><span>Market</span><strong>{bpsToPercent(idea.marketPriceBps)}</strong></div>
+                  <div><span>AI</span><strong>{bpsToPercent(idea.agentProbabilityBps)}</strong></div>
+                  <div><span>Edge</span><strong>{bpsToPercent(idea.edgeBps)}</strong></div>
+                  <div><span>Risk</span><strong>{idea.riskLevel}</strong></div>
+                </div>
+                <p className="muted">Full reasoning and market link unlock on the Sports Live Calls board.</p>
+                <Link className="button secondary" href="/sports">Open Sports Live Calls</Link>
+              </article>
+            )) : <section className="empty"><h2>No active top sports calls right now</h2><p className="muted">Sports scans may still create Lean or High Risk calls on the Sports Live Calls page.</p></section>}
+          </section>
         </section>
-        <section className="grid preview-grid">
-          {sportsCalls.length ? sportsCalls.map((idea) => (
-            <article className="panel sports-preview-card" key={idea.id}>
-              <p className="eyebrow">{idea.category} · {idea.marketKind} · active/unresolved</p>
-              <h3>{idea.marketTitle}</h3>
-              <p className="muted">AI Prediction: <strong>{idea.selectedOption}</strong></p>
-              <div className="analysis-metric-grid sports-metrics">
-                <div><span>Market</span><strong>{bpsToPercent(idea.marketPriceBps)}</strong></div>
-                <div><span>AI</span><strong>{bpsToPercent(idea.agentProbabilityBps)}</strong></div>
-                <div><span>Edge</span><strong>{bpsToPercent(idea.edgeBps)}</strong></div>
-                <div><span>Risk</span><strong>{idea.riskLevel}</strong></div>
-              </div>
-              <p className="muted">Full reasoning and market link unlock on the Sports Live Calls board.</p>
-              <Link className="button secondary" href="/sports">Open Sports Live Calls</Link>
-            </article>
-          )) : <section className="empty"><h2>No active top sports calls right now</h2><p className="muted">Sports scans may still create Lean or High Risk calls on the Sports Live Calls page.</p></section>}
-        </section>
-      </section>
+      )}
     </main>
   );
 }

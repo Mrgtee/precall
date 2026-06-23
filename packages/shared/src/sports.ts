@@ -130,7 +130,7 @@ export function sportsThresholds(): SportsThresholds {
 }
 
 export function sportsEnabled() {
-  return optionalEnv("ENABLE_SPORTS_EDGE", "true") !== "false";
+  return optionalEnv("ENABLE_SPORTS_EDGE", "false") !== "false";
 }
 
 export function sportsDiscoveryLimit() {

@@ -33,10 +33,10 @@ export default async function LeaderboardPage() {
   const bondedResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
   const bondedWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);
   const bondedLosses = rows.reduce((sum, row) => sum + Number(row.losses || 0), 0);
-  const totalResolved = bondedResolved + Number(sportsStats.resolved || 0);
-  const totalWins = bondedWins + Number(sportsStats.wins || 0);
-  const totalLosses = bondedLosses + Number(sportsStats.losses || 0);
-  const totalPushes = Number(sportsStats.pushes || 0);
+  const totalResolved = bondedResolved;
+  const totalWins = bondedWins;
+  const totalLosses = bondedLosses;
+  const totalPushes = 0;
   const decidedResolved = totalWins + totalLosses;
   const hasResolved = totalResolved > 0;
   const resolvedHistory = [
@@ -53,7 +53,7 @@ export default async function LeaderboardPage() {
       brierScoreBps: call.brierScoreBps,
       resolvedAt: call.resolvedAt,
     })),
-    ...resolvedSportsCalls.map((call) => ({
+    ...(false ? resolvedSportsCalls.map((call) => ({
       kind: "Sports Live" as const,
       id: `sports-${call.sportsPredictionId}`,
       href: `/sports#sports-call-${call.sportsPredictionId}`,
@@ -65,7 +65,7 @@ export default async function LeaderboardPage() {
       roiBps: call.roiBps,
       brierScoreBps: call.brierScoreBps,
       resolvedAt: call.resolvedAt,
-    })),
+    })) : []),
   ].sort((a, b) => new Date(b.resolvedAt || 0).getTime() - new Date(a.resolvedAt || 0).getTime()).slice(0, 25);
 
   return (
@@ -75,7 +75,7 @@ export default async function LeaderboardPage() {
           <p className="eyebrow">Reputation</p>
           <h1>Agent leaderboard</h1>
         </div>
-        <p>Rank resolved outcomes first, then unlock demand and follows. Sports calls count only after a clear selected-outcome result is available.</p>
+        <p>Rank resolved outcomes first, then unlock demand and follows. All predictions are backed by a USDC bond on the Arc network.</p>
       </section>
       <section className="metric-strip">
         <div className="metric"><span>Resolved calls</span><strong>{totalResolved}</strong></div>
@@ -92,20 +92,22 @@ export default async function LeaderboardPage() {
       ) : !hasResolved ? (
         <section className="empty" style={{ marginBottom: 18 }}>
           <h2>No resolved calls yet</h2>
-          <p className="muted">Reputation activates after the first supported bonded or sports selected-outcome market resolves.</p>
+          <p className="muted">Reputation activates after the first supported bonded soccer prediction market resolves.</p>
         </section>
       ) : null}
-      <section className="panel info-note" style={{ marginBottom: 18 }}>
-        <h2>Sports calls now follow the leaderboard flow</h2>
-        <p className="muted">Active sports calls stay unresolved, but ended sports calls count here once Polymarket exposes a clear selected-outcome result.</p>
-        <div className="pill-row">
-          <span className="pill">Active sports calls: {sportsActivity.active}</span>
-          <span className="pill">Unresolved sports rows: {sportsActivity.unresolved}</span>
-          <span className="pill">Resolved sports: {sportsStats.resolved}</span>
-          <span className="pill">Sports wins/losses/pushes: {sportsStats.wins} / {sportsStats.losses} / {sportsStats.pushes}</span>
-          <span className="pill">Sports unlocks: {sportsActivity.unlocks}</span>
-        </div>
-      </section>
+      {false && (
+        <section className="panel info-note" style={{ marginBottom: 18 }}>
+          <h2>Sports calls now follow the leaderboard flow</h2>
+          <p className="muted">Active sports calls stay unresolved, but ended sports calls count here once Polymarket exposes a clear selected-outcome result.</p>
+          <div className="pill-row">
+            <span className="pill">Active sports calls: {sportsActivity.active}</span>
+            <span className="pill">Unresolved sports rows: {sportsActivity.unresolved}</span>
+            <span className="pill">Resolved sports: {sportsStats.resolved}</span>
+            <span className="pill">Sports wins/losses/pushes: {sportsStats.wins} / {sportsStats.losses} / {sportsStats.pushes}</span>
+            <span className="pill">Sports unlocks: {sportsActivity.unlocks}</span>
+          </div>
+        </section>
+      )}
       <div className="table-wrap">
         <table className="table">
           <thead>
