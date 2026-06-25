@@ -110,6 +110,7 @@ export function aggregateVotes(
     evidence: uniqueEvidence,
     votes,
     marketType: "strict_yes_no",
+    selectedOutcomeIndex: action === "BUY_NO" ? 1 : 0,
   };
 }
 

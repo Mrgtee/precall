@@ -103,6 +103,7 @@ export const calls = pgTable(
   {
     id: serial("id").primaryKey(),
     onchainCallId: integer("onchain_call_id"),
+    selectedOutcomeIndex: integer("selected_outcome_index"),
     agentId: integer("agent_id").notNull(),
     marketId: text("market_id").notNull(),
     action: text("action").notNull(),

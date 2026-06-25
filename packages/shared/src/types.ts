@@ -223,4 +223,5 @@ export interface AggregatedCall {
   evidence: EvidenceItemInput[];
   votes: AgentVote[];
   marketType: "strict_yes_no";
+  selectedOutcomeIndex: number;
 }

@@ -313,6 +313,7 @@ export async function insertPublishedCall(input: {
     .values({
       agentId: input.agentId,
       onchainCallId: input.onchainCallId,
+      selectedOutcomeIndex: input.call.selectedOutcomeIndex,
       marketId: input.call.market.marketId,
       action: input.call.action,
       marketPriceBps: input.call.marketPriceBps,

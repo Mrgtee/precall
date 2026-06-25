@@ -58,7 +58,7 @@ export const precallRegistryAbi = [
     inputs: [
       { name: "agentId", type: "uint256" },
       { name: "marketId", type: "string" },
-      { name: "direction", type: "uint8" },
+      { name: "selectedOutcomeIndex", type: "uint8" },
       { name: "marketPriceBps", type: "uint16" },
       { name: "agentProbabilityBps", type: "uint16" },
       { name: "confidenceBps", type: "uint16" },
@@ -107,7 +107,8 @@ export const precallRegistryAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "callId", type: "uint256" },
-      { name: "outcomeYes", type: "bool" },
+      { name: "resolvedOutcomeIndex", type: "uint8" },
+      { name: "isPush", type: "bool" },
       { name: "realizedPnlBps", type: "int256" },
       { name: "brierScoreBps", type: "uint16" },
     ],
@@ -131,7 +132,7 @@ export const precallRegistryAbi = [
       { name: "agentId", type: "uint256", indexed: true },
       { name: "publisher", type: "address", indexed: true },
       { name: "marketId", type: "string", indexed: false },
-      { name: "direction", type: "uint8", indexed: false },
+      { name: "selectedOutcomeIndex", type: "uint8", indexed: false },
       { name: "bondAmount", type: "uint256", indexed: false },
       { name: "unlockPrice", type: "uint256", indexed: false },
     ],
@@ -150,7 +151,8 @@ export const precallRegistryAbi = [
     name: "CallResolved",
     inputs: [
       { name: "callId", type: "uint256", indexed: true },
-      { name: "outcomeYes", type: "bool", indexed: false },
+      { name: "resolvedOutcomeIndex", type: "uint8", indexed: false },
+      { name: "isPush", type: "bool", indexed: false },
       { name: "realizedPnlBps", type: "int256", indexed: false },
       { name: "brierScoreBps", type: "uint16", indexed: false },
       { name: "bondReturned", type: "bool", indexed: false },

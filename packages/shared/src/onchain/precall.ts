@@ -74,7 +74,7 @@ export async function publishAggregatedCallOnchain(input: {
     await publicClient.waitForTransactionReceipt({ hash: approveHash });
   }
 
-  const direction = input.call.action === "BUY_NO" ? 2 : 1;
+  const selectedOutcomeIndex = input.call.selectedOutcomeIndex;
   const evidenceHash = hashText(JSON.stringify(input.call.evidence));
   const txHash = await wallet.writeContract({
     address: registryAddress,
@@ -83,7 +83,7 @@ export async function publishAggregatedCallOnchain(input: {
     args: [
       input.onchainAgentId,
       input.call.market.marketId,
-      direction,
+      selectedOutcomeIndex,
       input.call.marketPriceBps,
       input.call.yesProbabilityBps,
       input.call.confidenceBps,
@@ -137,7 +137,8 @@ export async function registerAgentOnchain(input: {
 
 export async function resolveCallOnchain(input: {
   onchainCallId: bigint;
-  outcomeYes: boolean;
+  resolvedOutcomeIndex: number;
+  isPush: boolean;
   realizedPnlBps: number;
   brierScoreBps: number;
   registryAddress?: Address;
@@ -152,7 +153,8 @@ export async function resolveCallOnchain(input: {
     functionName: "resolveCall",
     args: [
       input.onchainCallId,
-      input.outcomeYes,
+      input.resolvedOutcomeIndex,
+      input.isPush,
       BigInt(input.realizedPnlBps),
       input.brierScoreBps,
     ],

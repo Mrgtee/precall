@@ -16,11 +16,11 @@ contract MockUSDC {
 contract Actor {
     function approve(MockUSDC usdc, address spender, uint256 amount) external { usdc.approve(spender, amount); }
     function register(PrecallRegistry registry) external returns (uint256) { return registry.registerAgent("MacroScout", "ipfs://agent"); }
-    function publish(PrecallRegistry registry, uint256 agentId, uint8 direction) external returns (uint256) {
-        return registry.publishCall(agentId, "market-1", direction, 4000, 6500, 6500, uint64(block.timestamp + 1 days), bytes32("thesis"), bytes32("evidence"), 1_000_000, 50_000);
+    function publish(PrecallRegistry registry, uint256 agentId, uint8 selectedOutcomeIndex) external returns (uint256) {
+        return registry.publishCall(agentId, "market-1", selectedOutcomeIndex, 4000, 6500, 6500, uint64(block.timestamp + 1 days), bytes32("thesis"), bytes32("evidence"), 1_000_000, 50_000);
     }
     function unlock(PrecallRegistry registry, uint256 callId) external { registry.unlockThesis(callId); }
-    function resolve(PrecallRegistry registry, uint256 callId, bool outcomeYes) external { registry.resolveCall(callId, outcomeYes, 2500, 1225); }
+    function resolve(PrecallRegistry registry, uint256 callId, uint8 resolvedOutcomeIndex, bool isPush) external { registry.resolveCall(callId, resolvedOutcomeIndex, isPush, 2500, 1225); }
 }
 
 contract PrecallRegistryTest {
@@ -48,7 +48,7 @@ contract PrecallRegistryTest {
         buyer.approve(usdc, address(registry), 50_000);
         buyer.unlock(registry, callId);
         require(usdc.balanceOf(address(publisher)) == 9_050_000, "unlock paid publisher");
-        registry.resolveCall(callId, true, 2500, 1225);
+        registry.resolveCall(callId, 1, false, 2500, 1225);
         require(usdc.balanceOf(address(publisher)) == 10_050_000, "correct bond returned");
         require(usdc.balanceOf(treasury) == 0, "treasury unchanged");
     }
@@ -58,8 +58,18 @@ contract PrecallRegistryTest {
         uint256 agentId = publisher.register(registry);
         publisher.approve(usdc, address(registry), 1_000_000);
         uint256 callId = publisher.publish(registry, agentId, 1);
-        registry.resolveCall(callId, false, -10000, 6500);
+        registry.resolveCall(callId, 2, false, -10000, 6500);
         require(usdc.balanceOf(treasury) == 1_000_000, "wrong bond slashed");
+    }
+
+    function testPushReturnsBond() public {
+        PrecallRegistry registry = new PrecallRegistry(address(usdc), treasury);
+        uint256 agentId = publisher.register(registry);
+        publisher.approve(usdc, address(registry), 1_000_000);
+        uint256 callId = publisher.publish(registry, agentId, 1);
+        registry.resolveCall(callId, 2, true, 0, 0); // push/voided
+        require(usdc.balanceOf(address(publisher)) == 10_000_000, "bond returned on push");
+        require(usdc.balanceOf(treasury) == 0, "treasury unchanged on push");
     }
 
     function testDuplicateUnlockReverts() public {
@@ -78,10 +88,10 @@ contract PrecallRegistryTest {
         uint256 agentId = publisher.register(registry);
         publisher.approve(usdc, address(registry), 1_000_000);
         uint256 callId = publisher.publish(registry, agentId, 1);
-        (bool nonResolverOk,) = address(resolver).call(abi.encodeWithSelector(Actor.resolve.selector, registry, callId, true));
+        (bool nonResolverOk,) = address(resolver).call(abi.encodeWithSelector(Actor.resolve.selector, registry, callId, uint8(1), false));
         require(!nonResolverOk, "non resolver must fail");
-        registry.resolveCall(callId, true, 2500, 1225);
-        (bool secondOk,) = address(registry).call(abi.encodeWithSelector(PrecallRegistry.resolveCall.selector, callId, true, int256(2500), uint16(1225)));
+        registry.resolveCall(callId, 1, false, 2500, 1225);
+        (bool secondOk,) = address(registry).call(abi.encodeWithSelector(PrecallRegistry.resolveCall.selector, callId, uint8(1), false, int256(2500), uint16(1225)));
         require(!secondOk, "second resolve must fail");
     }
 

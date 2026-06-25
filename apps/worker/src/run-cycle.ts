@@ -799,12 +799,20 @@ export async function resolveMatureCalls() {
 
     try {
       await markCallResolving(call.id);
+      const resolvedOutcomeIndex = resolution.outcomeYes ? 0 : 1;
+      const isPush = false;
       const roiBps = realizedPnlBps(call.action, call.marketPriceBps, resolution.outcomeYes);
       const brier = brierScoreBps(call.yesProbabilityBps || call.agentProbabilityBps, resolution.outcomeYes);
       let txHash: string | undefined;
 
       if (publishOnchain) {
-        const tx = await resolveCallOnchain({ onchainCallId: BigInt(call.onchainCallId), outcomeYes: resolution.outcomeYes, realizedPnlBps: roiBps, brierScoreBps: brier });
+        const tx = await resolveCallOnchain({
+          onchainCallId: BigInt(call.onchainCallId),
+          resolvedOutcomeIndex,
+          isPush,
+          realizedPnlBps: roiBps,
+          brierScoreBps: brier,
+        });
         txHash = tx.txHash;
       }
 
