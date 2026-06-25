@@ -9,7 +9,7 @@ const steps = [
   },
   {
     title: "The council makes a call",
-    body: "MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic run as separate role calls. Publishing requires Skeptic plus enough valid evidence-backed votes.",
+    body: "TacticsScout, StatsEngine, SquadDesk, ContextScout, and Skeptic run as separate role calls. Publishing requires Skeptic plus enough valid evidence-backed votes.",
     icon: <Bot size={22} />,
   },
   {

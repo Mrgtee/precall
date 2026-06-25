@@ -2,10 +2,10 @@ import { keccak256, stringToBytes } from "viem";
 import type { AgentVote, AggregatedCall, CallAction, EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "./types";
 
 const AGENT_WEIGHTS: Record<string, number> = {
-  MacroScout: 1.05,
-  NewsHawk: 1,
-  CrowdPulse: 0.9,
-  BookWatcher: 1.15,
+  TacticsScout: 1.15,
+  StatsEngine: 1.10,
+  SquadDesk: 1.00,
+  ContextScout: 0.95,
   Skeptic: 0.85,
 };
 

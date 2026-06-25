@@ -169,7 +169,7 @@ async function ensurePlatformAgent(input: { name: string; role: string; ownerWal
 export async function ensureCouncilAgent(input: { onchainAgentId: number | undefined; ownerWallet: string }) {
   return ensurePlatformAgent({
     name: "Precall Council",
-    role: "Five-role reasoning council: MacroScout, NewsHawk, CrowdPulse, BookWatcher, and Skeptic run as separate model calls.",
+    role: "Five-role reasoning council: TacticsScout, StatsEngine, SquadDesk, ContextScout, and Skeptic run as separate model calls.",
     ownerWallet: input.ownerWallet,
     onchainAgentId: input.onchainAgentId,
     metadataUri: "https://precall.arena/agents/precall-council",

@@ -1,6 +1,6 @@
 export type CallAction = "BUY_YES" | "BUY_NO" | "WATCH";
 
-export type AgentName = "MacroScout" | "NewsHawk" | "CrowdPulse" | "BookWatcher" | "Skeptic";
+export type AgentName = "TacticsScout" | "StatsEngine" | "SquadDesk" | "ContextScout" | "Skeptic";
 
 export type SportsAgentName = "FormScout" | "InjuryNews" | "MarketMover" | "MatchupDesk" | "Skeptic";
 
