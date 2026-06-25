@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Bot, Wallet } from "lucide-react";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { deployAgentMessage, sanitizeSlug } from "../lib/agent-marketplace-auth";
@@ -44,7 +44,7 @@ export function AgentLaunchForm() {
   const [status, setStatus] = useState("");
   const [createdId, setCreatedId] = useState<number | null>(null);
 
-  const scopeText = useMemo(() => payload.categoryScope.join(", "), [payload.categoryScope]);
+
 
   function update<K extends keyof LaunchPayload>(key: K, value: LaunchPayload[K]) {
     setPayload((current) => ({ ...current, [key]: value }));
