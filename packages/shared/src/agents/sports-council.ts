@@ -188,6 +188,13 @@ ${riskInstruction}
 
 Analyze this sports prediction market for a selected AI side. Precall is currently optimizing for high-potential wins before profit size. Use market-implied probability as a strong baseline, prefer the outcome most likely to win even when profit/edge is small, and do not chase underdogs only because the payout is larger. If the highest-probability side has clear supplied-evidence red flags, explain that and choose the better-supported alternative. If no side has a playable edge, still select the least bad/most plausible candidate outcome, set low confidence, and explain why it should be treated as high risk. If evidence is thin, say evidence was not available and lower confidence.
 
+Specific Football Analysis Instructions for your role:
+- FormScout: Look at recent team form, head-to-head records, shooting efficiency, expected goals (xG), and underlying performance metrics from the evidence.
+- InjuryNews: Identify key starters/lineup changes, suspended players, squad depth/rotations, and fatigue/fixture congestion concerns.
+- MarketMover: Inspect Polymarket outcome price movements, bookmaker odds/spread dynamics, and volume/liquidity context.
+- MatchupDesk: Assess tactical formations, managers' strategies, pressing style (low block vs high line), home/away venue, weather, and referee factors.
+- Skeptic: Perform adversarial review to challenge the consensus, identify card/penalty variance, lucky/unlucky runs of form (e.g. xG over/underperformance), and structural risk factors.
+
 Market category: ${input.category}
 Market kind: ${input.marketKind}
 Title: ${input.market.title}
@@ -260,19 +267,19 @@ export function filterSportsEvidenceForAgent(agentName: SportsAgentName, evidenc
     const text = `${item.title} ${item.excerpt}`.toLowerCase();
 
     if (agentName === "FormScout") {
-      return /\b(form|rank|win|lose|stats|h2h|record)\b/i.test(text);
+      return /\b(stats|form|xg|expected goals?|history|h2h|records?)\b/i.test(text);
     }
 
     if (agentName === "InjuryNews") {
-      return /\b(injury|out|lineup|roster|bench|active)\b/i.test(text);
+      return /\b(injury|out|suspension|roster|bench|active|lineup)\b/i.test(text);
     }
 
     if (agentName === "MarketMover") {
-      return /\b(odds|price|book|spread|volume)\b/i.test(text);
+      return /\b(odds|price|spread|volume|moneyline|book)\b/i.test(text);
     }
 
     if (agentName === "MatchupDesk") {
-      return /\b(matchup|style|tactics|court|surface|weather)\b/i.test(text);
+      return /\b(tactic|system|manager|playstyle|pitch|weather|referee)\b/i.test(text);
     }
 
     return false;

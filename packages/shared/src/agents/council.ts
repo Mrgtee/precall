@@ -4,10 +4,10 @@ import type { AgentCouncilResult, AgentFailure, AgentName, AgentVote, EvidenceIt
 import { clampBps } from "../scoring";
 
 const AGENTS: { name: AgentName; role: string; required?: boolean }[] = [
-  { name: "MacroScout", role: "macro, policy, rates, elections, and public-event priors" },
-  { name: "NewsHawk", role: "fresh news and event-catalyst interpretation" },
-  { name: "CrowdPulse", role: "social narrative and attention-cycle analysis" },
-  { name: "BookWatcher", role: "market microstructure, liquidity, spread, and price action" },
+  { name: "TacticsScout", role: "matchup systems, playstyles, pressing (PPDA), and transition tactics" },
+  { name: "StatsEngine", role: "expected goals (xG), shooting efficiency, H2H statistics, and historical performance underlyings" },
+  { name: "SquadDesk", role: "injury news, lineups, suspensions, team rotation, and schedule fatigue" },
+  { name: "ContextScout", role: "standings, group math/motivation, venue altitude, travel distance, and market price positioning" },
   { name: "Skeptic", role: "adversarial review and reasons the trade is wrong", required: true },
 ];
 
@@ -157,13 +157,20 @@ function buildPrompt(input: {
   return `
 You are ${input.agent.name}: ${input.agent.role}.
 
-Analyze this STRICT YES/NO prediction market. If it is not a clean YES/NO market, return WATCH.
+Analyze this STRICT YES/NO football (soccer) prediction market. If it is not a clean YES/NO market, return WATCH.
 
 Canonical probability rule:
 - yesProbabilityBps must always mean probability that YES / first outcome happens.
 - BUY_YES means YES is underpriced.
 - BUY_NO means NO is underpriced, but yesProbabilityBps must still be the YES probability.
 - Never return selected-side probability as yesProbabilityBps for BUY_NO.
+
+Specific Football Analysis Instructions for your role:
+- TacticsScout: Look for playstyle matchup advantages, managers' tactical history, defensive blocks (low block vs high line), pressing intensity, and tactical counters.
+- StatsEngine: Analyze expected goals (xG), historical H2H trends, scoring margins, possession metrics, conversion rates, and shot counts from the evidence.
+- SquadDesk: Analyze injury updates, expected starting lineups, key player availability, suspension status, squad rotation patterns, and fatigue from fixture congestion.
+- ContextScout: Analyze motivation (e.g., tournament standings, group stage math where a draw suffices, already-qualified status), home vs. away venue conditions (altitude, weather), and Polymarket orderbook liquidity/spread.
+- Skeptic: Challenge the consensus. Identify referee traits, high-card variance, lucky/unlucky runs of form (e.g. xG under/overperformance), and why the predicted outcome could fail.
 
 Market:
 Title: ${input.market.title}
@@ -227,20 +234,25 @@ export function filterEvidenceForAgent(agentName: AgentName, evidence: EvidenceI
       return true;
     }
 
-    if (agentName === "MacroScout") {
-      return item.sourceType === "admin_note";
+    const text = `${item.title} ${item.excerpt}`.toLowerCase();
+
+    if (agentName === "TacticsScout") {
+      return /\b(tactic|style|formation|manager|press|line|block|play)\b/i.test(text);
     }
 
-    if (agentName === "NewsHawk") {
-      return item.sourceType === "circle_x402_news" || item.sourceType === "free_web";
+    if (agentName === "StatsEngine") {
+      return /\b(xg|expected goals?|shots|possession|stats|history|h2h|records?)\b/i.test(text);
     }
 
-    if (agentName === "CrowdPulse") {
-      return item.sourceType === "circle_x402_social";
+    if (agentName === "SquadDesk") {
+      return /\b(injury|lineup|suspension|fatigue|roster|squad|out|bench|active)\b/i.test(text);
     }
 
-    if (agentName === "BookWatcher") {
-      return item.evidenceId === "pm-orderbook" || item.sourceType === "polymarket_orderbook";
+    if (agentName === "ContextScout") {
+      if (item.evidenceId === "pm-orderbook" || item.sourceType === "polymarket_orderbook") {
+        return true;
+      }
+      return /\b(standings|group|motivation|weather|altitude|referee|table)\b/i.test(text);
     }
 
     return false;
