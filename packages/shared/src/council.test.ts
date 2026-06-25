@@ -29,37 +29,49 @@ const mockEvidence: EvidenceItemInput[] = [
     paid: false,
   },
   {
-    evidenceId: "news-1",
+    evidenceId: "tactic-evidence",
     sourceType: "circle_x402_news",
     provider: "news-provider",
     sourceUrl: "https://example.com/news",
-    title: "News Story",
-    excerpt: "Excerpt",
+    title: "Tactical formation",
+    excerpt: "The manager is playing a high-press system.",
     credibilityScore: 80,
     fetchedAt: "2026-06-22T00:00:00Z",
     capturedAt: "2026-06-22T00:00:00Z",
     paid: true,
   },
   {
-    evidenceId: "social-1",
+    evidenceId: "stats-evidence",
     sourceType: "circle_x402_social",
     provider: "social-provider",
     sourceUrl: "https://example.com/social",
-    title: "Social Post",
-    excerpt: "Excerpt",
+    title: "Expected goals",
+    excerpt: "Underlying xG stats suggest a close H2H game.",
     credibilityScore: 75,
     fetchedAt: "2026-06-22T00:00:00Z",
     capturedAt: "2026-06-22T00:00:00Z",
     paid: true,
   },
   {
-    evidenceId: "note-1",
+    evidenceId: "squad-evidence",
     sourceType: "admin_note",
     provider: "admin",
     sourceUrl: "https://example.com/note",
-    title: "Admin Note",
-    excerpt: "Excerpt",
+    title: "Lineup injury roster",
+    excerpt: "A key player is out on suspension.",
     credibilityScore: 95,
+    fetchedAt: "2026-06-22T00:00:00Z",
+    capturedAt: "2026-06-22T00:00:00Z",
+    paid: false,
+  },
+  {
+    evidenceId: "context-evidence",
+    sourceType: "free_web",
+    provider: "free",
+    sourceUrl: "https://example.com/context",
+    title: "Standings motivation",
+    excerpt: "Group standings require a win to qualify.",
+    credibilityScore: 70,
     fetchedAt: "2026-06-22T00:00:00Z",
     capturedAt: "2026-06-22T00:00:00Z",
     paid: false,
@@ -67,31 +79,32 @@ const mockEvidence: EvidenceItemInput[] = [
 ];
 
 test("filterEvidenceForAgent filters evidence by agent type correctly", () => {
-  // MacroScout -> pm-market + admin_note
-  const macro = filterEvidenceForAgent("MacroScout", mockEvidence);
-  assert.equal(macro.length, 2);
-  assert.ok(macro.some(e => e.evidenceId === "pm-market"));
-  assert.ok(macro.some(e => e.evidenceId === "note-1"));
+  // TacticsScout -> pm-market + tactic-evidence
+  const tactics = filterEvidenceForAgent("TacticsScout", mockEvidence);
+  assert.equal(tactics.length, 2);
+  assert.ok(tactics.some(e => e.evidenceId === "pm-market"));
+  assert.ok(tactics.some(e => e.evidenceId === "tactic-evidence"));
 
-  // NewsHawk -> pm-market + circle_x402_news
-  const news = filterEvidenceForAgent("NewsHawk", mockEvidence);
-  assert.equal(news.length, 2);
-  assert.ok(news.some(e => e.evidenceId === "pm-market"));
-  assert.ok(news.some(e => e.evidenceId === "news-1"));
+  // StatsEngine -> pm-market + stats-evidence
+  const stats = filterEvidenceForAgent("StatsEngine", mockEvidence);
+  assert.equal(stats.length, 2);
+  assert.ok(stats.some(e => e.evidenceId === "pm-market"));
+  assert.ok(stats.some(e => e.evidenceId === "stats-evidence"));
 
-  // CrowdPulse -> pm-market + circle_x402_social
-  const crowd = filterEvidenceForAgent("CrowdPulse", mockEvidence);
-  assert.equal(crowd.length, 2);
-  assert.ok(crowd.some(e => e.evidenceId === "pm-market"));
-  assert.ok(crowd.some(e => e.evidenceId === "social-1"));
+  // SquadDesk -> pm-market + squad-evidence
+  const squad = filterEvidenceForAgent("SquadDesk", mockEvidence);
+  assert.equal(squad.length, 2);
+  assert.ok(squad.some(e => e.evidenceId === "pm-market"));
+  assert.ok(squad.some(e => e.evidenceId === "squad-evidence"));
 
-  // BookWatcher -> pm-market + pm-orderbook
-  const book = filterEvidenceForAgent("BookWatcher", mockEvidence);
-  assert.equal(book.length, 2);
-  assert.ok(book.some(e => e.evidenceId === "pm-market"));
-  assert.ok(book.some(e => e.evidenceId === "pm-orderbook"));
+  // ContextScout -> pm-market + pm-orderbook + context-evidence
+  const context = filterEvidenceForAgent("ContextScout", mockEvidence);
+  assert.equal(context.length, 3);
+  assert.ok(context.some(e => e.evidenceId === "pm-market"));
+  assert.ok(context.some(e => e.evidenceId === "pm-orderbook"));
+  assert.ok(context.some(e => e.evidenceId === "context-evidence"));
 
   // Skeptic -> sees all
   const skeptic = filterEvidenceForAgent("Skeptic", mockEvidence);
-  assert.equal(skeptic.length, 5);
+  assert.equal(skeptic.length, 6);
 });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { aggregateVotes, calculateEdgeBps, passesPublishThresholds, publishThresholdFailures, selectedSideProbabilityBps } from "./scoring";
 import type { AgentName, AgentVote, EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "./types";
 
-const agents: AgentName[] = ["MacroScout", "NewsHawk", "CrowdPulse", "BookWatcher", "Skeptic"];
+const agents: AgentName[] = ["TacticsScout", "StatsEngine", "SquadDesk", "ContextScout", "Skeptic"];
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
   return {
