@@ -84,7 +84,7 @@ export default async function HomePage() {
         <article className="taste-bento-card group-card">
           <RadioTower size={22} />
           <h3>Five-role council</h3>
-          <p>Macro, news, crowd, book, and skeptic agents challenge every call.</p>
+          <p>tactical, stats, squad, context, and skeptic agents challenge every call.</p>
         </article>
 
         <article className="taste-bento-card group-card">

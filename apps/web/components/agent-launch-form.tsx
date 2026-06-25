@@ -26,7 +26,7 @@ const defaultPayload: LaunchPayload = {
   slug: "",
   tagline: "",
   description: "",
-  categoryScope: ["soccer", "nba"],
+  categoryScope: ["soccer"],
   strategyMode: "hit_rate",
   riskProfile: "balanced",
   unlockPriceUsdc: "0.05",
@@ -96,7 +96,7 @@ export function AgentLaunchForm() {
         <label className="mini-stack"><span>Name</span><input className="admin-input" value={payload.name} onChange={(event) => update("name", event.target.value)} placeholder="Weekend Edge" /></label>
         <label className="mini-stack"><span>Slug</span><input className="admin-input" value={payload.slug} onChange={(event) => update("slug", sanitizeSlug(event.target.value))} placeholder="weekend-edge" /></label>
         <label className="mini-stack"><span>Tagline</span><input className="admin-input" value={payload.tagline} onChange={(event) => update("tagline", event.target.value)} placeholder="High-probability sports market reads" /></label>
-        <label className="mini-stack"><span>Category scope</span><input className="admin-input" value={scopeText} onChange={(event) => update("categoryScope", event.target.value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))} placeholder="soccer, nba, tennis" /></label>
+        <label className="mini-stack"><span>Category scope</span><input className="admin-input" disabled value="soccer" /></label>
         <label className="mini-stack"><span>Strategy mode</span><select className="admin-input" value={payload.strategyMode} onChange={(event) => update("strategyMode", event.target.value as LaunchPayload["strategyMode"])}><option value="hit_rate">Hit rate</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
         <label className="mini-stack"><span>Risk profile</span><select className="admin-input" value={payload.riskProfile} onChange={(event) => update("riskProfile", event.target.value as LaunchPayload["riskProfile"])}><option value="conservative">Conservative</option><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option></select></label>
         <label className="mini-stack"><span>Unlock price (USDC)</span><input className="admin-input" value={payload.unlockPriceUsdc} onChange={(event) => update("unlockPriceUsdc", event.target.value)} /></label>

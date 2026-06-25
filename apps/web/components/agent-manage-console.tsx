@@ -59,7 +59,7 @@ export function AgentManageConsole() {
     name: "",
     tagline: "",
     description: "",
-    categoryScope: "soccer, nba",
+    categoryScope: "soccer",
     strategyMode: "hit_rate" as const,
     riskProfile: "balanced" as const,
     unlockPriceUsdc: "0.05",
@@ -130,7 +130,7 @@ export function AgentManageConsole() {
       name: form.name,
       tagline: form.tagline,
       description: form.description,
-      categoryScope: form.categoryScope.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
+      categoryScope: ["soccer"],
       strategyMode: form.strategyMode,
       riskProfile: form.riskProfile,
       unlockPriceUsdc: form.unlockPriceUsdc,
@@ -201,7 +201,7 @@ export function AgentManageConsole() {
           <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
             <label className="mini-stack"><span>Name</span><input className="admin-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
             <label className="mini-stack"><span>Tagline</span><input className="admin-input" value={form.tagline} onChange={(event) => setForm((current) => ({ ...current, tagline: event.target.value }))} /></label>
-            <label className="mini-stack"><span>Category scope</span><input className="admin-input" value={form.categoryScope} onChange={(event) => setForm((current) => ({ ...current, categoryScope: event.target.value }))} /></label>
+            <label className="mini-stack"><span>Category scope</span><input className="admin-input" disabled value="soccer" /></label>
             <label className="mini-stack"><span>Visibility</span><select className="admin-input" value={form.visibility} onChange={(event) => setForm((current) => ({ ...current, visibility: event.target.value as typeof form.visibility }))}><option value="public">Public</option><option value="hidden">Hidden</option></select></label>
             <label className="mini-stack"><span>Strategy mode</span><select className="admin-input" value={form.strategyMode} onChange={(event) => setForm((current) => ({ ...current, strategyMode: event.target.value as typeof form.strategyMode }))}><option value="hit_rate">Hit rate</option><option value="balanced">Balanced</option><option value="contrarian">Contrarian</option></select></label>
             <label className="mini-stack"><span>Risk profile</span><select className="admin-input" value={form.riskProfile} onChange={(event) => setForm((current) => ({ ...current, riskProfile: event.target.value as typeof form.riskProfile }))}><option value="conservative">Conservative</option><option value="balanced">Balanced</option><option value="aggressive">Aggressive</option></select></label>

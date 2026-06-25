@@ -30,7 +30,7 @@ function validMoney(value: string | undefined, fallback: string) {
 }
 
 function cleanScope(scope: string[] | undefined) {
-  const allowed = new Set(["soccer", "nba", "mlb", "nhl", "ufc", "football", "esports", "tennis", "cricket", "golf", "rugby", "other_sports"]);
+  const allowed = new Set(["soccer"]);
   return [...new Set((scope || []).map((item) => item.trim().toLowerCase()).filter((item) => allowed.has(item)))];
 }
 
