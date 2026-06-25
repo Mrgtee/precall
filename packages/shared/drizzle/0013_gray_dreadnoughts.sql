@@ -1,0 +1,1 @@
+ALTER TABLE "calls" ADD COLUMN "selected_outcome_index" integer;
