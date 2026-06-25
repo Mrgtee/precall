@@ -32,6 +32,7 @@ import {
   markExpiredSportsPredictions,
   markSportsPredictionResolved,
   recordAgentRun,
+  updateAgentRun,
   recordCircleAction,
   getTodayX402SpendUsdc,
   checkCircleActionsSchemaHealth,
@@ -550,16 +551,21 @@ export async function runOnce() {
         });
       }
 
-      await recordAgentRun({
-        status: "published",
-        model: councilResult.model,
-        inputs: { market, snapshot, candidateScore: candidate.candidateScore, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
-        outputs: { call, thesisHash: hashText(call.thesis), evidenceHash: hashText(JSON.stringify(call.evidence)), x402: x402Summary(x402Result) },
-        evidenceContext,
-        publishedCallId: row.id,
-        retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
-        latencyMs: councilResult.totalLatencyMs,
-      });
+      if (candidateRun) {
+        await updateAgentRun(candidateRun.id, {
+          status: "published",
+          publishedCallId: row.id,
+          outputs: {
+            call,
+            votes: councilResult.votes,
+            failures: councilResult.failures,
+            thresholdFailures,
+            x402: x402Summary(x402Result),
+            thesisHash: hashText(call.thesis),
+            evidenceHash: hashText(JSON.stringify(call.evidence)),
+          },
+        });
+      }
       published.push({ id: row.id, onchainCallId, market: market.title, txHash, edgeBps: call.edgeBps, confidenceBps: call.confidenceBps });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -687,14 +693,6 @@ export async function runSportsEdge() {
       if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
 
       const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
-      await recordAgentRun({
-        status: "sports_live_call_stored",
-        model: councilResult.model,
-        inputs: { sourceAgentRunId: candidateRun?.id, marketId: market.marketId },
-        outputs: { sportsPredictionId: row.id, idea, sportsStatus, thresholdFailures, x402: x402Summary(x402Result) },
-        evidenceContext,
-        latencyMs: councilResult.totalLatencyMs,
-      });
       const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
       callsByStatus[reportedStatus] += 1;
       sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });

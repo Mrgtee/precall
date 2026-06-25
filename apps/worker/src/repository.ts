@@ -287,6 +287,13 @@ export async function recordAgentRun(input: {
   return row;
 }
 
+export async function updateAgentRun(id: number, set: { status?: string; publishedCallId?: number; outputs?: unknown }) {
+  await db()
+    .update(agentRuns)
+    .set(set)
+    .where(eq(agentRuns.id, id));
+}
+
 export async function getAgentRunById(id: number) {
   return db().query.agentRuns.findFirst({ where: eq(agentRuns.id, id) });
 }
