@@ -11,17 +11,17 @@ Precall is an Arc-native, Circle-powered prediction market intelligence platform
 - **Live app:** https://precall-arena.vercel.app
 - **Demo video:** https://youtu.be/6SQVBe1wa3A
 - **GitHub repo:** https://github.com/Mrgtee/precall
-- **Arc registry contract:** `0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76`
-- **Arc registry explorer:** https://testnet.arcscan.app/address/0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
-- **Registry deploy tx:** https://testnet.arcscan.app/tx/0x212dd0eff10e18728267cfea556b2db51dcac2f32adfe6395e75a9158924fe92
+- **Arc registry contract (V2):** `0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970`
+- **Arc registry explorer:** https://testnet.arcscan.app/address/0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970
+- **Registry deploy tx:** https://testnet.arcscan.app/tx/0x402276eaadf9df170b842a52fcd6f8213d641e57c21c97d505773a25d9873849
 - **Railway worker:** deployed as a protected worker service; the public URL is not required for app users and should stay protected by `WORKER_TRIGGER_SECRET`.
 
 # 3. Overview
 
 Precall is an AI-powered prediction market intelligence platform built on Arc with Circle Agent Stack primitives. It scans Polymarket markets, filters weak or unsafe candidates, runs specialized AI agents, and produces two clearly separated product surfaces:
 
-- **Bonded Arc Calls:** strict YES/NO calls that pass quality gates and are published with USDC accountability on Arc.
-- **Sports Live Calls:** non-bonded selected-outcome sports market intelligence for match winners, spreads, totals, over/under goals, and similar sports markets.
+- **Bonded Arc Calls:** soccer predictions (YES/NO or multi-outcome Home/Draw/Away markets) that pass strict quality gates and are published with USDC accountability on the Arc PrecallRegistry V2 contract.
+- **Sports Live Calls:** non-bonded selected-outcome soccer market intelligence for match outcomes, spreads, and goal lines.
 
 Users see a locked preview first. Full reasoning, evidence, market links, risks, probability breakdowns, and agent votes unlock with Arc USDC. Precall is not financial advice and does not place trades for users.
 
@@ -58,16 +58,13 @@ Bonded Arc Calls are the strictest Precall output.
 
 ## B. Sports Live Calls
 
-Sports Live Calls are AI-generated market intelligence for sports markets.
+Sports Live Calls are AI-generated soccer market intelligence, locked strictly to the "soccer" category across frontend forms, worker cycles, and API endpoints.
 
-Supported categories and formats include:
+Supported formats include:
 
-- Match winners and team win markets.
-- Spreads.
-- Over/under totals.
-- Soccer goal lines such as over/under 0.5, 1.5, 2.5, and 3.5 goals.
-- Goal ranges and selected-outcome markets when pricing is clear.
-- NBA, MLB, NHL, UFC, soccer, football, tennis, cricket, esports, and other daily sports markets when available on Polymarket.
+- Match winners (1X2 Home/Draw/Away selected outcomes).
+- Goal lines (e.g., over/under 0.5, 1.5, 2.5, and 3.5 goals).
+- Goal ranges and spreads when pricing is clear.
 
 Sports calls use labels instead of disappearing just because they are not strong:
 
@@ -217,19 +214,17 @@ Existing Arc/Circle repos are excellent commerce and payment references. Precall
 
 # 12. Smart Contracts
 
-- **Contract:** `PrecallRegistry`
+- **Contract:** `PrecallRegistry` (V2 Upgrade)
 - **Network:** Arc Testnet
-- **Registry address:** `0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76`
-- **Explorer:** https://testnet.arcscan.app/address/0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+- **Registry address:** `0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970`
+- **Explorer:** https://testnet.arcscan.app/address/0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970
 
-`PrecallRegistry` handles:
+`PrecallRegistry` V2 features:
 
-- Agent registration.
-- Bonded call publication.
-- USDC bond custody.
-- Unlock event tracking.
-- Resolver-controlled outcome updates.
-- Bond return/slash behavior based on resolution.
+- **Multi-Outcome Prediction Bonding**: Uses a `uint8 selectedOutcomeIndex` representation, enabling arbitrary non-binary predictions (Home/Draw/Away, exact scores, over/under goal lines) to be bonded onchain.
+- **Push/Void Match Support**: Added a `bool isPush` flag inside `resolveCall` that returns USDC bonds safely to publishers if a match is voided, cancelled, or postponed.
+- **Agent Registration**: Register agents using `registerAgent(string name, string metadataURI)` to post bonds.
+- **Bond Return/Slash Logic**: If `isPush` is true, or if `selectedOutcomeIndex == resolvedOutcomeIndex`, the bond is returned to the publisher; otherwise, the bond is slashed and sent to the protocol treasury.
 
 Current defaults are configurable through env:
 
@@ -270,7 +265,7 @@ These values are safe or required for the public web/server app. `WORKER_TRIGGER
 
 ```bash
 NEXT_PUBLIC_ARC_CHAIN_ID=5042002
-NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS=0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS=0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970
 NEXT_PUBLIC_ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
 NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS=0xYourTreasuryOrReceiver
 NEXT_PUBLIC_ADMIN_WALLETS=0xAdminWallet1,0xAdminWallet2
@@ -295,7 +290,7 @@ MODEL_TIMEOUT_MS=45000
 MODEL_RETRY_COUNT=2
 
 ARC_TESTNET_RPC_URL=https://...
-PRECALL_REGISTRY_ADDRESS=0x86Ad5f40b39a41607dda7d7816b2CfC2a817dF76
+PRECALL_REGISTRY_ADDRESS=0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970
 ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
 DEFAULT_ONCHAIN_AGENT_ID=1
 AGENT_OWNER_PRIVATE_KEY=...
