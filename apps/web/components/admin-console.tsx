@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Play, ShieldAlert, ShieldCheck, Stethoscope, UserMinus, UserPlus, Wallet } from "lucide-react";
+import { Activity, Play, ShieldAlert, ShieldCheck, Stethoscope, UserMinus, UserPlus, Wallet, Clock, Coins, ExternalLink } from "lucide-react";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { shortAddress, usdc } from "../lib/format";
 
@@ -103,6 +103,74 @@ type AdminSummary = {
     maxPaymentUsdc: string;
   };
   latestX402Payment?: { provider?: string; amountUsdc?: string; amount?: string; status?: string; error?: string; chain?: string } | null;
+  latestRuns?: Array<{
+    id: number;
+    status: string;
+    model: string;
+    inputs: unknown;
+    outputs: unknown;
+    costs: unknown;
+    failure: string | null;
+    publishedCallId: number | null;
+    evidenceContext: unknown;
+    retryCount: number;
+    latencyMs: number;
+    createdAt: string;
+  }>;
+  awaitingResolution?: Array<{
+    id: number;
+    onchainCallId: number | null;
+    action: string;
+    marketPriceBps: number;
+    agentProbabilityBps: number;
+    yesProbabilityBps: number;
+    edgeBps: number;
+    confidenceBps: number;
+    suggestedSizeBps: number;
+    bondAmount: string;
+    unlockPrice: string;
+    status: string;
+    statusReason: string;
+    marketType: string;
+    registryAddress: string;
+    legacy: boolean;
+    txHash: string | null;
+    copyUrl: string;
+    publishedAt: string;
+    expiresAt: string | null;
+    marketTitle: string;
+    marketUrl: string;
+    outcomes: string[];
+    liquidityUsd: string;
+    agentId: number;
+    agentName: string;
+    finalOutcome: string | null;
+    roiBps: number | null;
+    brierScoreBps: number | null;
+    resolverTx: string | null;
+  }>;
+  latestCircleActions?: Array<{
+    id: number;
+    actionType: string;
+    provider: string;
+    url: string | null;
+    walletAddress: string;
+    amount: string;
+    amountUsdc: string;
+    chain: string;
+    txHash: string | null;
+    paymentReference: string | null;
+    paymentRef: string | null;
+    relatedMarketId: string | null;
+    relatedCallId: number | null;
+    relatedAgentId: number | null;
+    agentRunId: number | null;
+    relatedAgentRunId: number | null;
+    status: string;
+    error: string | null;
+    metadata: unknown;
+    createdAt: string;
+  }>;
 };
 
 const actions: Array<{
@@ -339,12 +407,17 @@ export function AdminConsole() {
 
   return (
     <section className="admin-console">
-      <div className="panel admin-gate success">
-        <ShieldCheck size={28} />
-        <div>
-          <h2>Admin access active</h2>
-          <p className="muted">Connected as {shortAddress(address)}. Each action requires a fresh wallet signature.</p>
+      <div className="panel admin-gate success" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+          <ShieldCheck size={28} />
+          <div>
+            <h2>Admin access active</h2>
+            <p className="muted">Connected as {shortAddress(address)}. Each action requires a fresh wallet signature.</p>
+          </div>
         </div>
+        <button className="button secondary" onClick={() => refreshAdminData()} type="button">
+          Refresh console
+        </button>
       </div>
 
       {summary ? (
@@ -403,6 +476,167 @@ export function AdminConsole() {
           </article>
         ))}
       </div>
+
+      {summary?.awaitingResolution && summary.awaitingResolution.length > 0 ? (
+        <section className="panel admin-output">
+          <h3><Clock size={18} /> Predictions awaiting resolution ({summary.awaitingResolution.length})</h3>
+          <p className="muted">These calls are expired or failed resolution. You can trigger resolution by running the Resolve command.</p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Market</th>
+                  <th>Outcome</th>
+                  <th>Price</th>
+                  <th>Bond</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.awaitingResolution.map((call) => (
+                  <tr key={call.id}>
+                    <td><code>{call.onchainCallId ?? call.id}</code></td>
+                    <td>
+                      <a href={call.marketUrl} target="_blank" rel="noopener noreferrer" className="link-hover">
+                        {call.marketTitle}
+                      </a>
+                    </td>
+                    <td><span className="status-chip">{call.action}</span></td>
+                    <td>{call.marketPriceBps / 100}%</td>
+                    <td>{call.bondAmount} USDC</td>
+                    <td>
+                      <span className={`status-chip ${call.status === "failed_resolution" ? "warn" : "muted"}`}>
+                        {call.status}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="button secondary"
+                        style={{ padding: "6px 12px", fontSize: "12px", width: "auto" }}
+                        disabled={Boolean(active)}
+                        onClick={() => runAction("resolve")}
+                        type="button"
+                      >
+                        Resolve
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        summary && (
+          <section className="panel admin-output">
+            <h3><Clock size={18} /> Predictions awaiting resolution</h3>
+            <p className="muted">All published bonded calls are currently active or resolved. No predictions are awaiting resolution.</p>
+          </section>
+        )
+      )}
+
+      {summary?.latestRuns && summary.latestRuns.length > 0 ? (
+        <section className="panel admin-output">
+          <h3><Activity size={18} /> Latest agent runs</h3>
+          <p className="muted">Recent worker cycles and their consensus results.</p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Model</th>
+                  <th>Latency</th>
+                  <th>Errors / Failure Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.latestRuns.map((run) => (
+                  <tr key={run.id}>
+                    <td><code>#{run.id}</code></td>
+                    <td>{new Date(run.createdAt).toLocaleTimeString()}</td>
+                    <td>
+                      <span className={`status-chip ${
+                        run.status === "published" || run.status === "published-stored" ? "ok" :
+                        run.status === "filtered" || run.status === "sports_analyzed" ? "muted" : "warn"
+                      }`}>
+                        {run.status}
+                      </span>
+                    </td>
+                    <td><code>{run.model}</code></td>
+                    <td>{run.latencyMs ? `${(run.latencyMs / 1000).toFixed(1)}s` : "n/a"}</td>
+                    <td>
+                      {run.failure ? (
+                        <span className="error-text text-sm" style={{ color: "var(--red)", fontSize: "13px" }}>{run.failure}</span>
+                      ) : run.publishedCallId ? (
+                        <span className="success-text text-sm" style={{ color: "var(--green)", fontSize: "13px" }}>Published call ID: <code>{run.publishedCallId}</code></span>
+                      ) : (
+                        <span className="muted-text text-sm" style={{ color: "var(--muted)", fontSize: "13px" }}>No action required</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {summary?.latestCircleActions && summary.latestCircleActions.length > 0 ? (
+        <section className="panel admin-output">
+          <h3><Coins size={18} /> Latest onchain activity</h3>
+          <p className="muted">Recent USDC transactions, bonds, unlocks, and Gateway x402 payments.</p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Network</th>
+                  <th>Status</th>
+                  <th>Transaction</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.latestCircleActions.map((action) => (
+                  <tr key={action.id}>
+                    <td>
+                      <span className="status-chip">{action.actionType.replace(/_/g, " ")}</span>
+                    </td>
+                    <td><strong>{usdc(action.amountUsdc || action.amount || 0)}</strong></td>
+                    <td>{action.chain}</td>
+                    <td>
+                      <span className={`status-chip ${action.status === "success" ? "ok" : "warn"}`}>
+                        {action.status}
+                      </span>
+                    </td>
+                    <td>
+                      {action.txHash ? (
+                        <a
+                          href={`https://testnet.arcscan.app/tx/${action.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="link-hover"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        >
+                          {shortAddress(action.txHash)} <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <span className="muted">n/a</span>
+                      )}
+                    </td>
+                    <td>{new Date(action.createdAt).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel admin-output">
         <h3>Admin wallet allowlist</h3>
