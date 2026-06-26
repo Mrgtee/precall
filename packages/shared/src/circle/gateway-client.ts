@@ -304,7 +304,7 @@ export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = 
   const chainCandidates = overrides.chainCandidates ?? chainCandidatesFromAcceptedNetworks(acceptedNetworks, chain);
   const facilitatorUrl = overrides.facilitatorUrl ?? optionalEnv("X402_FACILITATOR_URL", defaultFacilitatorUrl(chain));
   const baseConfig = {
-    enabled: overrides.enabled ?? boolEnv("ENABLE_CIRCLE_GATEWAY_X402", false),
+    enabled: overrides.enabled ?? (boolEnv("ENABLE_CIRCLE_GATEWAY_X402", false) || boolEnv("ENABLE_CIRCLE_ENRICHMENT", false)),
     chain,
     chainCandidates,
     acceptedNetworks,
