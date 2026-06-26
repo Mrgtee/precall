@@ -363,7 +363,15 @@ export async function getDemoData() {
     counts,
     latestRuns,
     latestLiveCall: latestCalls.find((call) => call.status === "published" && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now())),
-    awaitingResolution: latestCalls.filter((call) => call.status === "expired" || call.status === "failed_resolution"),
+    awaitingResolution: await db
+      .select(callSelect)
+      .from(calls)
+      .leftJoin(markets, eq(calls.marketId, markets.marketId))
+      .leftJoin(agents, eq(calls.agentId, agents.id))
+      .leftJoin(resolutions, eq(resolutions.callId, calls.id))
+      .where(inArray(calls.status, ["expired", "failed_resolution"]))
+      .orderBy(desc(calls.publishedAt))
+      .limit(100),
     resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],
     latestSportsIdeas,
