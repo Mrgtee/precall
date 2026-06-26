@@ -195,7 +195,7 @@ Return JSON with this exact shape:
   "action": "BUY_YES" | "BUY_NO" | "WATCH",
   "thesis": "specific concise thesis tied to evidence IDs",
   "risks": ["specific risk"],
-  "evidenceIds": ["pm-market", "pm-orderbook"]
+  "evidenceIds": ${JSON.stringify(input.evidence.slice(0, 2).map((e) => e.evidenceId))}
 }
 `;
 }
@@ -203,7 +203,10 @@ Return JSON with this exact shape:
 function validateVote(payload: unknown, agent: AgentName, evidence: EvidenceItemInput[], latencyMs: number, retryCount: number): AgentVote {
   const raw = payload as Partial<AgentVote> & { probabilityBps?: number };
   if (raw.agent !== agent) throw new Error(`Agent response must be from ${agent}.`);
-  const evidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).slice(0, 8) : [];
+  const validIds = new Set(evidence.map((item) => item.evidenceId));
+  const templatePlaceholders = ["pm-selected-outcome", "pm-orderbook"];
+  const rawEvidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).slice(0, 8) : [];
+  const evidenceIds = rawEvidenceIds.filter((id) => validIds.has(id) || !templatePlaceholders.includes(id));
   if (evidenceIds.length === 0) throw new Error(`${agent} did not reference any supplied evidence IDs.`);
   if (!validateEvidenceIds(evidenceIds, evidence)) throw new Error(`${agent} referenced unknown evidence IDs: ${evidenceIds.join(", ")}`);
 

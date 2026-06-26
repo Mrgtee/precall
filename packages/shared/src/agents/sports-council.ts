@@ -219,7 +219,7 @@ Return JSON with this exact shape:
   "confidenceBps": 0-10000,
   "thesis": "specific concise sports reasoning tied to evidence IDs",
   "risks": ["specific risk"],
-  "evidenceIds": ["pm-market", "pm-selected-outcome"]
+  "evidenceIds": ${JSON.stringify(input.evidence.slice(0, 2).map((e) => e.evidenceId))}
 }
 `;
 }
@@ -229,7 +229,10 @@ export function validateSportsVote(payload: unknown, agent: SportsAgentName, evi
   if (raw.agent !== agent) throw new Error(`Sports agent response must be from ${agent}.`);
   const selectedOutcomeIndex = Number(raw.selectedOutcomeIndex ?? raw.outcomeIndex);
   if (!candidateOutcomeIndexes.includes(selectedOutcomeIndex)) throw new Error(`${agent} selected invalid outcome index ${selectedOutcomeIndex}.`);
-  const evidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).slice(0, 8) : [];
+  const validIds = new Set(evidence.map((item) => item.evidenceId));
+  const templatePlaceholders = ["pm-selected-outcome", "pm-orderbook"];
+  const rawEvidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).slice(0, 8) : [];
+  const evidenceIds = rawEvidenceIds.filter((id) => validIds.has(id) || !templatePlaceholders.includes(id));
   if (evidenceIds.length === 0) throw new Error(`${agent} did not reference any supplied sports evidence IDs.`);
   if (!validateEvidenceIds(evidenceIds, evidence)) throw new Error(`${agent} referenced unknown evidence IDs: ${evidenceIds.join(", ")}`);
 
