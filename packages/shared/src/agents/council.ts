@@ -1,4 +1,4 @@
-import { numberEnv, optionalEnv, requireEnv } from "../env";
+import { numberEnv, optionalEnv, requireEnv, llmConfig } from "../env";
 import { validateEvidenceIds } from "../evidence";
 import type { AgentCouncilResult, AgentFailure, AgentName, AgentVote, EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../types";
 import { clampBps } from "../scoring";
@@ -24,8 +24,10 @@ export async function runAgentCouncilDetailed(input: {
   snapshot: MarketSnapshot;
   evidence: EvidenceItemInput[];
 }): Promise<AgentCouncilResult> {
-  const model = optionalEnv("OPENAI_MODEL", "gpt-4.1-mini");
-  const baseUrl = optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
+  const config = llmConfig();
+  const model = config.model;
+  const baseUrl = config.baseUrl;
+  const apiKey = config.apiKey;
   const startedAt = Date.now();
   const votes: AgentVote[] = [];
   const failures: AgentFailure[] = [];
@@ -33,7 +35,7 @@ export async function runAgentCouncilDetailed(input: {
   for (const agent of AGENTS) {
     const agentStartedAt = Date.now();
     try {
-      const vote = await runSingleAgent({ ...input, agent, model, baseUrl });
+      const vote = await runSingleAgent({ ...input, agent, model, baseUrl, apiKey });
       votes.push(vote);
     } catch (error) {
       failures.push({
@@ -68,8 +70,9 @@ async function runSingleAgent(input: {
   agent: { name: AgentName; role: string };
   model: string;
   baseUrl: string;
+  apiKey: string;
 }) {
-  const apiKey = requireEnv("OPENAI_API_KEY");
+  const apiKey = input.apiKey;
   const retries = numberEnv("MODEL_RETRY_COUNT", 2);
   let lastError: unknown;
 
@@ -78,6 +81,7 @@ async function runSingleAgent(input: {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const startedAt = Date.now();
     try {
+
       const content = await requestAgentVote({ ...input, evidence: filteredEvidence }, apiKey, attempt);
       return validateVote(JSON.parse(content) as unknown, input.agent.name, filteredEvidence, Date.now() - startedAt, attempt);
     } catch (error) {

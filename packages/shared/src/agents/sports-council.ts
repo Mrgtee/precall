@@ -1,24 +1,27 @@
-import { numberEnv, optionalEnv, requireEnv } from "../env";
-import { validateEvidenceIds } from "../evidence";
+import { numberEnv, llmConfig } from "../env";
+import { validateSportsVote } from "../evidence";
+import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsAgentFailure, SportsAgentName, SportsCouncilResult, SportsVote, HostedSportsAgentPromptContext } from "../types";
 import { clampBps } from "../scoring";
-import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsAgentFailure, SportsAgentName, SportsCouncilResult, SportsVote } from "../types";
 
-const SPORTS_AGENTS: { name: SportsAgentName; role: string; required?: boolean }[] = [
-  { name: "FormScout", role: "recent form, schedule spot, and team/player context" },
-  { name: "InjuryNews", role: "injury, lineup, roster, and availability risk from supplied evidence only" },
-  { name: "MarketMover", role: "Polymarket price movement, crowd positioning, and relative value" },
-  { name: "MatchupDesk", role: "matchup style, totals, spread, moneyline, and sport-specific context" },
-  { name: "Skeptic", role: "adversarial review; why the sports idea may be wrong", required: true },
+const SPORTS_AGENTS: { name: SportsAgentName; role: string }[] = [
+  { name: "FormScout", role: "recent team form, head-to-head records, shooting efficiency, expected goals (xG), and underlying performance metrics" },
+  { name: "InjuryNews", role: "key starters/lineup changes, suspended players, squad depth/rotations, and fatigue/fixture congestion concerns" },
+  { name: "MarketMover", role: "Polymarket outcome price movements, bookmaker odds/spread dynamics, and volume/liquidity context" },
+  { name: "MatchupDesk", role: "tactical formations, managers' strategies, pressing style (low block vs high line), home/away venue, weather, and referee factors" },
+  { name: "Skeptic", role: "adversarial review to challenge the consensus, identify card/penalty variance, lucky/unlucky runs of form (e.g. xG over/underperformance), and structural risk factors" },
 ];
 
-type HostedSportsAgentPromptContext = {
-  name: string;
-  slug?: string;
-  description?: string;
-  strategyMode?: string;
-  riskProfile?: string;
-  categoryScope?: string[];
-};
+export async function runSportsCouncil(input: {
+  market: PolymarketMarket;
+  snapshot: OutcomeSnapshot;
+  evidence: EvidenceItemInput[];
+  candidateOutcomeIndexes: number[];
+  category: string;
+  marketKind: string;
+  hostedAgent?: HostedSportsAgentPromptContext | undefined;
+}): Promise<SportsVote[]> {
+  return (await runSportsCouncilDetailed(input)).votes;
+}
 
 export async function runSportsCouncilDetailed(input: {
   market: PolymarketMarket;
@@ -29,8 +32,10 @@ export async function runSportsCouncilDetailed(input: {
   marketKind: string;
   hostedAgent?: HostedSportsAgentPromptContext | undefined;
 }): Promise<SportsCouncilResult> {
-  const model = optionalEnv("OPENAI_MODEL", "gpt-4.1-mini");
-  const baseUrl = optionalEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
+  const config = llmConfig();
+  const model = config.model;
+  const baseUrl = config.baseUrl;
+  const apiKey = config.apiKey;
   const startedAt = Date.now();
   const votes: SportsVote[] = [];
   const failures: SportsAgentFailure[] = [];
@@ -38,7 +43,7 @@ export async function runSportsCouncilDetailed(input: {
   for (const agent of SPORTS_AGENTS) {
     const agentStartedAt = Date.now();
     try {
-      votes.push(await runSingleSportsAgent({ ...input, agent, model, baseUrl }));
+      votes.push(await runSingleSportsAgent({ ...input, agent, model, baseUrl, apiKey }));
     } catch (error) {
       failures.push({
         agent: agent.name,
@@ -70,8 +75,9 @@ async function runSingleSportsAgent(input: {
   agent: { name: SportsAgentName; role: string };
   model: string;
   baseUrl: string;
+  apiKey: string;
 }) {
-  const apiKey = requireEnv("OPENAI_API_KEY");
+  const apiKey = input.apiKey;
   const retries = numberEnv("MODEL_RETRY_COUNT", 2);
   let lastError: unknown;
 

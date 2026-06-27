@@ -20,3 +20,24 @@ export function numberEnv(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
 }
+
+export function llmConfig() {
+  const geminiKey = process.env.GEMINI_API_KEY || (process.env.OPENAI_API_KEY?.startsWith("AIzaSy") ? process.env.OPENAI_API_KEY : undefined);
+  if (geminiKey) {
+    const rawModel = process.env.OPENAI_MODEL || "gemini-1.5-flash";
+    const model = rawModel.startsWith("gemini-") ? rawModel : "gemini-1.5-flash";
+    return {
+      apiKey: geminiKey,
+      baseUrl: process.env.OPENAI_BASE_URL && !process.env.OPENAI_BASE_URL.includes("api.openai.com") && !process.env.OPENAI_BASE_URL.includes("freemodel.dev")
+        ? process.env.OPENAI_BASE_URL
+        : "https://generativelanguage.googleapis.com/v1beta/openai/",
+      model,
+    };
+  }
+  return {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+  };
+}
+
