@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { ShieldCheck, Trophy } from "lucide-react";
 import { friendlySetupError } from "../../lib/format";
 import { getActiveSportsCallCount } from "../../lib/queries";
 import { getMarketplaceSportsPredictions } from "../../lib/marketplace";
-import { SportsCard, type SportsIdea } from "../../components/sports-card";
+import { SportsCard } from "../../components/sports-card";
 
 export const dynamic = "force-dynamic";
 

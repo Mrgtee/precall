@@ -21,28 +21,9 @@ function previewReason(statusReason: string) {
   return statusReason || "AI selected a side from the supplied market, price, and evidence context. Unlock for the complete reasoning trail.";
 }
 
-export type SportsIdea = {
-  id: number;
-  agentId: number;
-  agentName: string;
-  agentTagline?: string;
-  category: string;
-  marketKind: string;
-  marketTitle: string;
-  selectedOption: string;
-  marketPriceBps: number;
-  agentProbabilityBps: number;
-  edgeBps: number;
-  confidenceBps: number;
-  riskLevel: string;
-  unlockPrice: string | number;
-  status: string;
-  statusReason: string;
-  x402PaidEvidenceUsed: boolean;
-  x402Status?: any;
-  agentReviewStatus?: string;
-  updatedAt: Date | string | null;
-};
+import { getMarketplaceSportsPredictions } from "../lib/marketplace";
+
+export type SportsIdea = Awaited<ReturnType<typeof getMarketplaceSportsPredictions>>[number];
 
 export function SportsCard({ idea }: { idea: SportsIdea }) {
   const x402Status = idea.x402Status as { status?: unknown } | null;
