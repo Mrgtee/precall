@@ -428,7 +428,7 @@ export async function runOnce() {
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
   const discoveryLimit = discoveryMarketLimit();
   const maxAnalyzedMarkets = maxAnalyzedMarketsPerRun();
-  const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "1");
+  const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "0");
   const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
   const thresholds = publishThresholds();
   const registryAddress = optionalEnv("PRECALL_REGISTRY_ADDRESS", "");
@@ -742,7 +742,7 @@ export async function publishStoredRun(runId: number) {
   const onchainAgentId = Number(optionalEnv("DEFAULT_ONCHAIN_AGENT_ID", "0"));
   if (!Number.isFinite(onchainAgentId) || onchainAgentId <= 0) throw new Error("DEFAULT_ONCHAIN_AGENT_ID is required. Run `npm run worker -- register-agent` first.");
 
-  const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "1");
+  const bondAmount = optionalEnv("BOND_AMOUNT_USDC", "0");
   const unlockPrice = optionalEnv("UNLOCK_PRICE_USDC", "0.05");
   const registryAddress = optionalEnv("PRECALL_REGISTRY_ADDRESS", "");
   const council = await ensureCouncilAgent({ onchainAgentId, ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000") });
