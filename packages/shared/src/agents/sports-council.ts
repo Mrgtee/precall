@@ -1,6 +1,15 @@
 import { numberEnv, llmConfig } from "../env";
-import { validateSportsVote } from "../evidence";
-import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsAgentFailure, SportsAgentName, SportsCouncilResult, SportsVote, HostedSportsAgentPromptContext } from "../types";
+import { validateEvidenceIds } from "../evidence";
+import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsAgentFailure, SportsAgentName, SportsCouncilResult, SportsVote } from "../types";
+
+export interface HostedSportsAgentPromptContext {
+  name: string;
+  slug?: string;
+  description?: string;
+  strategyMode?: string;
+  riskProfile?: string;
+  categoryScope?: string[];
+}
 import { clampBps } from "../scoring";
 
 const SPORTS_AGENTS: { name: SportsAgentName; role: string }[] = [
