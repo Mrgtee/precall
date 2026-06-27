@@ -101,9 +101,8 @@ export const activeSportsCallStatuses = ["strong_call", "lean_call", "high_risk_
 function activeSportsPredicate(statuses: readonly string[] = activeSportsCallStatuses) {
   return and(
     inArray(sportsPredictions.status, [...statuses]),
-    sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`,
-    sql`${sportsPredictions.eventStartTime} is not null`,
-    sql`${sportsPredictions.eventStartTime} > now()`,
+    eq(sportsPredictions.resolutionStatus, "unresolved"),
+    sql`(${sportsPredictions.expiresAt} is null or ${sportsPredictions.expiresAt} > now())`
   );
 }
 
