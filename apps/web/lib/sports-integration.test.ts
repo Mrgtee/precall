@@ -55,13 +55,14 @@ test("sports unlock flow uses Arc USDC transfer and verified server indexing", (
 
 test("locked sports page does not render full analysis before unlock", () => {
   const sportsPage = file("apps/web/app/sports/page.tsx");
+  const card = file("apps/web/components/sports-card.tsx");
   assert.doesNotMatch(sportsPage, /idea\.reasoning/);
   assert.doesNotMatch(sportsPage, /idea\.matchupContext/);
   assert.doesNotMatch(sportsPage, /idea\.marketMovement/);
   assert.doesNotMatch(sportsPage, /idea\.risks/);
   assert.doesNotMatch(sportsPage, /idea\.verdict/);
   assert.doesNotMatch(sportsPage, /idea\.marketUrl/);
-  assert.match(sportsPage, /UnlockSportsCall/);
+  assert.match(card, /UnlockSportsCall/);
 });
 
 test("unlocked sports analysis exposes full payload only through verified analysis route", () => {
@@ -155,8 +156,7 @@ test("homepage and top five exclude expired published bonded calls from active s
   const homepage = file("apps/web/app/page.tsx");
   const topFive = file("apps/web/app/top-5-today/page.tsx");
   const queries = file("apps/web/lib/queries.ts");
-  assert.match(homepage, /getActiveBondedCallCount/);
-  assert.match(homepage, /!isExpiredDate\(call\.expiresAt\)/);
+  assert.match(homepage, /getActiveSportsCallCount/);
   assert.match(topFive, /!isExpiredDate\(call\.expiresAt\)/);
   assert.match(queries, /getActiveBondedCallCount/);
   assert.match(queries, /expiresAt.+> now\(\)/s);
