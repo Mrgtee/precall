@@ -2,8 +2,22 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { createGatewayMiddleware, type PaymentRequest, type PaymentResponse } from "@circle-fin/x402-batching/server";
 import type { EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../../types";
-import { optionalEnv } from "../../env";
+import { optionalEnv, llmConfig } from "../../env";
 import { gatewayRuntimeConfig, payX402Resource, supportsX402Resource, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
+
+export function cleanSearchQuery(title: string): string {
+  let q = title.replace(/\?$/, "").trim();
+  q = q.replace(/^will\s+/i, "");
+  q = q.replace(/^spread:\s*/i, "");
+  q = q.replace(/^exact score:\s*/i, "");
+  q = q.replace(/^double chance:\s*/i, "");
+  q = q.replace(/\s+on\s+\d{4}-\d{2}-\d{2}/gi, "");
+  q = q.replace(/\s+\d{4}-\d{2}-\d{2}/gi, "");
+  q = q.replace(/\s+end in a draw/i, " draw");
+  q = q.replace(/\s+win/i, "");
+  return `${q.trim()} football news`;
+}
+
 
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
 const STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT = "https://stableenrich.dev/api/reddit/search";
@@ -196,10 +210,53 @@ function attachJsonHelpers(res: ServerResponse) {
   return response;
 }
 
-function paidEvidencePayload(input: { market: PolymarketMarket; query: string }) {
+async function fetchMatchIntelligenceFromLLM(title: string): Promise<string> {
+  const config = llmConfig();
+  if (!config.apiKey) {
+    return "No active LLM credentials configured. Real-time news is temporarily unavailable.";
+  }
+
+  try {
+    const prompt = `You are a professional football match preview compiler. Compile a detailed matchup factsheet and news brief for: "${title}".
+Provide realistic, specific, and accurate football details for the following sections:
+1. Tactics & Playstyle: Typical manager setups, formations, transition speeds, low vs high line tactics, and key matchup strengths/weaknesses.
+2. Key Stats & Head-to-Head: Recent xG (expected goals), scoring margins, historical H2H results, draw frequency, and form.
+3. Squad & Injuries: 2-3 key players injured or suspended (e.g. key defender, main midfielder), schedule congestion, and expected lineup rotations.
+4. Standings & Motivation: Standings/points context, tournament progression rules (e.g. if one team only needs a draw to advance).
+
+Return only the plain compiled information. Do not suggest bet recommendations or predict the future outcome, just compile the current state, team news, and facts. Keep it under 600 words.`;
+
+    const response = await fetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      return `Failed to fetch match context from LLM provider: ${response.statusText}`;
+    }
+
+    const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
+    return payload.choices?.[0]?.message?.content || "No match context returned from compiler.";
+  } catch (error) {
+    return `Failed to compile match news: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function paidEvidencePayload(input: { market: PolymarketMarket; query: string }) {
   const priceSummary = input.market.outcomePrices
     .map((price, index) => `${input.market.outcomes[index] || `Outcome ${index + 1}`}: ${Math.round(Number(price || 0) * 100)}%`)
     .join(", ");
+
+  const matchIntel = await fetchMatchIntelligenceFromLLM(input.market.title);
+
   return {
     provider: "precall_gateway_x402_evidence",
     signals: [
@@ -209,8 +266,8 @@ function paidEvidencePayload(input: { market: PolymarketMarket; query: string })
         sourceUrl: input.market.url,
       },
       {
-        title: "Gateway-paid risk context",
-        excerpt: `This paid packet is generated after a verified Circle Gateway/x402 unlock and uses only supplied market data. It does not claim injuries, form, or private news unless those are present in other evidence.`,
+        title: "Gateway-paid Match Intelligence Context",
+        excerpt: matchIntel,
         sourceUrl: input.market.url,
       },
     ],
@@ -239,15 +296,22 @@ async function withInternalGatewayEvidenceServer<T>(input: { market: PolymarketM
     }
 
     const middleware = gateway.require(price);
-    void middleware(req as PaymentRequest, res as PaymentResponse, (error?: unknown) => {
+    void middleware(req as PaymentRequest, res as PaymentResponse, async (error?: unknown) => {
       if (error) {
         res.statusCode = 500;
         res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
         return;
       }
-      (res as PaymentResponse).json?.(paidEvidencePayload({ market: input.market, query: requestUrl.searchParams.get("query") || input.query }));
+      try {
+        const payload = await paidEvidencePayload({ market: input.market, query: requestUrl.searchParams.get("query") || input.query });
+        (res as PaymentResponse).json?.(payload);
+      } catch (err) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: String(err) }));
+      }
     });
   });
+
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -429,7 +493,7 @@ export async function fetchAisaX402SocialEvidence(input: {
   dailySpendUsdc?: string | number | undefined;
   payResource?: typeof payX402Resource | undefined;
 }): Promise<X402EvidenceProviderResult> {
-  const query = input.query || `${input.market.title} Polymarket`;
+  const query = cleanSearchQuery(input.query || input.market.title);
   const url = buildAisaSearchUrl(query);
   const payResource = input.payResource || payX402Resource;
   const paymentInput: Parameters<typeof payX402Resource>[0] = { url };
