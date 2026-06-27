@@ -24,8 +24,8 @@ export function numberEnv(name: string, fallback: number): number {
 export function llmConfig() {
   const geminiKey = process.env.GEMINI_API_KEY || (process.env.OPENAI_API_KEY?.startsWith("AIzaSy") ? process.env.OPENAI_API_KEY : undefined);
   if (geminiKey) {
-    const rawModel = process.env.OPENAI_MODEL || "gemini-1.5-flash";
-    const model = rawModel.startsWith("gemini-") ? rawModel : "gemini-1.5-flash";
+    const rawModel = process.env.OPENAI_MODEL || "gemini-2.5-flash";
+    const model = rawModel.startsWith("gemini-") ? rawModel : "gemini-2.5-flash";
     return {
       apiKey: geminiKey,
       baseUrl: process.env.OPENAI_BASE_URL && !process.env.OPENAI_BASE_URL.includes("api.openai.com") && !process.env.OPENAI_BASE_URL.includes("freemodel.dev")
