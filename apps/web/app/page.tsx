@@ -1,37 +1,38 @@
 import Link from "next/link";
 import { ArrowRight, CircleDollarSign, RadioTower, ShieldCheck, Users } from "lucide-react";
-import { CallCard } from "../components/call-card";
 import { ConnectWallet } from "../components/connect-wallet";
 import { HomeMotion } from "../components/home-motion";
-import { friendlySetupError, isExpiredDate } from "../lib/format";
-import { type CallRow, getActiveBondedCallCount, getCalls, getLeaderboard, getTotalUnlockCount } from "../lib/queries";
+import { friendlySetupError } from "../lib/format";
+import { getActiveSportsCallCount, getLeaderboard, getTotalUnlockCount } from "../lib/queries";
+import { getMarketplaceSportsPredictions } from "../lib/marketplace";
+import { SportsCard, type SportsIdea } from "../components/sports-card";
 
 export const dynamic = "force-dynamic";
 
-
 export default async function HomePage() {
-  let calls: CallRow[] = [];
+  let ideas: SportsIdea[] = [];
   let leaderboard: Awaited<ReturnType<typeof getLeaderboard>> = [];
-  let activeBondedCalls = 0;
+  let activeSportsCalls = 0;
   let totalUnlocks = 0;
   let setupError = "";
 
-  const [callsResult, leaderboardResult, activeBondedResult, totalUnlocksResult] = await Promise.allSettled([
-    getCalls(30),
+  const [sportsResult, leaderboardResult, activeSportsCountResult, totalUnlocksResult] = await Promise.allSettled([
+    getMarketplaceSportsPredictions(12),
     getLeaderboard(),
-    getActiveBondedCallCount(),
+    getActiveSportsCallCount(),
     getTotalUnlockCount(),
   ]);
 
-  if (callsResult.status === "fulfilled") calls = callsResult.value;
-  else setupError = friendlySetupError(callsResult.reason);
+  if (sportsResult.status === "fulfilled") {
+    ideas = sportsResult.value as unknown as SportsIdea[];
+  } else {
+    setupError = friendlySetupError(sportsResult.reason);
+  }
 
   if (leaderboardResult.status === "fulfilled") leaderboard = leaderboardResult.value;
-  if (activeBondedResult.status === "fulfilled") activeBondedCalls = activeBondedResult.value;
+  if (activeSportsCountResult.status === "fulfilled") activeSportsCalls = activeSportsCountResult.value;
   if (totalUnlocksResult.status === "fulfilled") totalUnlocks = totalUnlocksResult.value;
 
-  const live = calls.filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt));
-  if (callsResult.status === "fulfilled" && activeBondedResult.status !== "fulfilled") activeBondedCalls = live.length;
   const agents = leaderboard.length;
 
   return (
@@ -52,7 +53,7 @@ export default async function HomePage() {
       </section>
 
       <section className="taste-metrics taste-shell" aria-label="Precall activity summary">
-        <div><span>Active Soccer Calls</span><strong>{activeBondedCalls}</strong></div>
+        <div><span>Active Soccer Calls</span><strong>{activeSportsCalls}</strong></div>
         <div><span>Soccer Coverage</span><strong>World Cup 2026</strong></div>
         <div><span>Agent Desks</span><strong>{agents}</strong></div>
         <div><span>Total unlocks</span><strong>{totalUnlocks}</strong></div>
@@ -61,17 +62,17 @@ export default async function HomePage() {
       <section className="taste-bento taste-shell" aria-label="Precall product surfaces">
         <article className="taste-bento-card taste-bento-large group-card">
           <div>
-            <p className="taste-kicker">Bonded Soccer Calls</p>
-            <h2>Strict soccer predictions with onchain USDC accountability.</h2>
+            <p className="taste-kicker">Soccer Predictions</p>
+            <h2>Daily soccer predictions with onchain USDC accountability.</h2>
           </div>
-          <p>Cards show match winner/over-under markets, agent council details, bond status, and freshness. Direction, probability, thesis, and evidence stay locked until the Arc USDC unlock is verified.</p>
-          <Link className="taste-button taste-button-light" href="/top-5-today">Open Top 5 Today</Link>
+          <p>Cards show match winner/over-under markets, agent council details, and freshness. Direction, probability, thesis, and evidence stay locked until the Arc USDC unlock is verified.</p>
+          <Link className="taste-button taste-button-light" href="/sports">Open Active Calls</Link>
         </article>
 
         <article className="taste-bento-card taste-bento-accent group-card">
           <p className="taste-kicker">Soccer Focus Only</p>
-          <h2>USDC Bonded Settlement</h2>
-          <p>Every prediction is backed by a USDC bond on the Arc network to ensure skin in the game. Non-sports and general markets have been completely removed.</p>
+          <h2>USDC Micro-nanopayments</h2>
+          <p>Every prediction thesis is locked and can be read by unlocking it with a micro USDC transaction. Non-sports and general markets have been completely removed.</p>
           <span className="pill" style={{ display: 'inline-flex', padding: '0.2rem 0.5rem', background: 'var(--accent)', color: 'var(--black)', borderRadius: '4px', fontWeight: 'bold', width: 'fit-content' }}>Soccer Only</span>
         </article>
 
@@ -104,21 +105,21 @@ export default async function HomePage() {
           <section className="taste-stack">
             <div className="taste-section-head">
               <p className="taste-kicker">Dashboard</p>
-              <h2>{activeBondedCalls} Active Bonded Soccer Call{activeBondedCalls === 1 ? "" : "s"}</h2>
+              <h2>{activeSportsCalls} Active Soccer Prediction{activeSportsCalls === 1 ? "" : "s"}</h2>
             </div>
-            {setupError && live.length === 0 ? (
+            {setupError && ideas.length === 0 ? (
               <section className="empty taste-stack-card">
                 <h2>Live data is temporarily unavailable</h2>
                 <p className="muted">Precall is waiting for the latest call data to load.</p>
               </section>
-            ) : live.length === 0 ? (
+            ) : ideas.length === 0 ? (
               <section className="empty taste-stack-card">
-                <h2>No active soccer calls pass the hardened V1 gates yet</h2>
+                <h2>No active soccer predictions available yet</h2>
                 <p className="muted">Precall publishes fewer calls on purpose</p>
               </section>
             ) : (
               <section className="grid taste-stack-list">
-                {live.map((call) => <div className="taste-stack-card" key={call.id}><CallCard call={call} /></div>)}
+                {ideas.map((idea) => <div className="taste-stack-card" key={idea.id}><SportsCard idea={idea} /></div>)}
               </section>
             )}
           </section>
