@@ -338,7 +338,7 @@ export function AdminConsole() {
         ? actionStartedAsync
           ? "Railway job started. Long-running worker commands continue in Railway; check logs or job status before re-running."
           : runPayload.proxiedToRailway ? "Action complete via Railway." : "Action complete."
-        : actionTimedOut ? "Railway action did not finish before the Vercel proxy timeout. Check Railway logs before re-running." : "Action failed.");
+        : actionTimedOut ? "Railway action did not finish before the Vercel proxy timeout. Check Railway logs before re-running." : `Action failed: ${runPayload.error || "Unknown error"}`);
       await refreshAdminData();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
