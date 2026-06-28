@@ -58,7 +58,7 @@ type SportsAnalysisPayload = {
   }>;
 };
 
-export function UnlockSportsCall({ sportsPredictionId, unlockPrice }: { sportsPredictionId: number; unlockPrice: string }) {
+export function UnlockSportsCall({ sportsPredictionId, unlockPrice, onUnlockSuccess }: { sportsPredictionId: number; unlockPrice: string; onUnlockSuccess?: () => void }) {
   const receiver = process.env.NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS as `0x${string}` | undefined;
   const usdcAddress = process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS as `0x${string}` | undefined;
   const { address, isConnected } = useAccount();
@@ -92,6 +92,7 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice }: { sportsPr
     if (!response.ok) return false;
     setDetails((await response.json()) as SportsAnalysisPayload);
     setStatus(successStatus);
+    onUnlockSuccess?.();
     return true;
   }
 

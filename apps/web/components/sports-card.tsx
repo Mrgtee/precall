@@ -1,6 +1,11 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAccount } from "wagmi";
 import Link from "next/link";
 import { UnlockSportsCall } from "./unlock-sports-call";
 import { bpsToPercent, usdc } from "../lib/format";
+import type { getMarketplaceSportsPredictions } from "../lib/marketplace";
 
 function freshness(date: Date | string | null) {
   if (!date) return "unknown";
@@ -21,13 +26,31 @@ function previewReason(statusReason: string) {
   return statusReason || "AI selected a side from the supplied market, price, and evidence context. Unlock for the complete reasoning trail.";
 }
 
-import { getMarketplaceSportsPredictions } from "../lib/marketplace";
-
 export type SportsIdea = Awaited<ReturnType<typeof getMarketplaceSportsPredictions>>[number];
 
 export function SportsCard({ idea }: { idea: SportsIdea }) {
+  const { address, isConnected } = useAccount();
+  const [isUnlocked, setIsUnlocked] = useState(false);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      fetch(`/api/sports/${idea.id}/analysis?wallet=${address}`)
+        .then((res) => {
+          if (res.ok) {
+            setIsUnlocked(true);
+          } else {
+            setIsUnlocked(false);
+          }
+        })
+        .catch(() => setIsUnlocked(false));
+    } else {
+      setIsUnlocked(false);
+    }
+  }, [address, isConnected, idea.id]);
+
   const x402Status = idea.x402Status as { status?: unknown } | null;
   const paidEvidenceUsed = Boolean(idea.x402PaidEvidenceUsed || x402Status?.status === "success");
+
   return (
     <article id={`sports-call-${idea.id}`} className={`panel sports-call-card sports-status-${idea.status}`}>
       <div className="sports-card-main">
@@ -39,7 +62,7 @@ export function SportsCard({ idea }: { idea: SportsIdea }) {
         <p className="muted">By <Link href={`/agents/${idea.agentId}`}><strong>{idea.agentName}</strong></Link>{idea.agentTagline ? ` · ${idea.agentTagline}` : ""}</p>
         <div className="sports-prediction-banner">
           <span>AI Prediction</span>
-          <strong>{idea.selectedOption}</strong>
+          <strong>{isUnlocked ? idea.selectedOption : "Locked (Unlock to reveal)"}</strong>
         </div>
         <div className="analysis-metric-grid sports-metrics" aria-label="Sports Live Call public metrics">
           <div><span>Market price</span><strong>{bpsToPercent(idea.marketPriceBps)}</strong></div>
@@ -57,7 +80,11 @@ export function SportsCard({ idea }: { idea: SportsIdea }) {
           {paidEvidenceUsed ? <span className="status-chip ok">x402 paid evidence used</span> : null}
         </div>
       </div>
-      <UnlockSportsCall sportsPredictionId={idea.id} unlockPrice={String(idea.unlockPrice)} />
+      <UnlockSportsCall 
+        sportsPredictionId={idea.id} 
+        unlockPrice={String(idea.unlockPrice)} 
+        onUnlockSuccess={() => setIsUnlocked(true)}
+      />
     </article>
   );
 }
