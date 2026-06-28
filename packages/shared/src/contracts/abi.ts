@@ -183,3 +183,29 @@ export const precallRegistryAbi = [
     inputs: [{ name: "protocolTreasury", type: "address", indexed: true }],
   },
 ] as const;
+
+export const precallSportsSplitterAbi = [
+  {
+    type: "function",
+    name: "unlockSportsCall",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "predictionId", type: "uint256" },
+      { name: "agentOwner", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "SportsCallUnlocked",
+    inputs: [
+      { name: "predictionId", type: "uint256", indexed: true },
+      { name: "buyer", type: "address", indexed: true },
+      { name: "agentOwner", type: "address", indexed: true },
+      { name: "totalAmount", type: "uint256", indexed: false },
+      { name: "agentShare", type: "uint256", indexed: false },
+      { name: "protocolShare", type: "uint256", indexed: false },
+    ],
+  },
+] as const;

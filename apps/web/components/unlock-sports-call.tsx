@@ -5,7 +5,7 @@ import { createPublicClient, http, parseUnits } from "viem";
 import { getWalletClient } from "@wagmi/core";
 import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } from "wagmi";
 import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
-import { erc20Abi } from "@precall/shared/contracts/abi";
+import { erc20Abi, precallSportsSplitterAbi } from "@precall/shared/contracts/abi";
 import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
 import { bpsToPercent, usdc } from "../lib/format";
 import { TipJar } from "./unlock-thesis";
@@ -58,9 +58,10 @@ type SportsAnalysisPayload = {
   }>;
 };
 
-export function UnlockSportsCall({ sportsPredictionId, unlockPrice, onUnlockSuccess }: { sportsPredictionId: number; unlockPrice: string; onUnlockSuccess?: () => void }) {
+export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, onUnlockSuccess }: { sportsPredictionId: number; unlockPrice: string; agentOwner?: string; onUnlockSuccess?: () => void }) {
   const receiver = process.env.NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS as `0x${string}` | undefined;
   const usdcAddress = process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS as `0x${string}` | undefined;
+  const splitterAddress = process.env.NEXT_PUBLIC_SPORTS_SPLITTER_ADDRESS as `0x${string}` | undefined;
   const { address, isConnected } = useAccount();
   const config = useConfig();
   const { connect, connectors } = useConnect();
@@ -122,8 +123,43 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, onUnlockSucc
 
       const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
       const amount = parseUnits(unlockPrice, 6);
-      setStatus("Approve the Arc USDC sports unlock transfer in your wallet...");
-      const transferHash = await writeContractAsync({ address: usdcAddress, abi: erc20Abi, functionName: "transfer", args: [receiver, amount], chainId: arcTestnet.id });
+      let transferHash: `0x${string}`;
+
+      if (splitterAddress) {
+        if (!agentOwner) {
+          setStatus("Missing agent owner address for splits.");
+          return;
+        }
+        setStatus("Approve the Precall Splitter contract to spend USDC...");
+        const approveHash = await writeContractAsync({
+          address: usdcAddress,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [splitterAddress, amount],
+          chainId: arcTestnet.id,
+        });
+        setStatus("Waiting for approval confirmation...");
+        await waitForReceiptWithTimeout(publicClient, approveHash, "USDC approval");
+
+        setStatus("Submitting onchain unlock splits...");
+        transferHash = await writeContractAsync({
+          address: splitterAddress,
+          abi: precallSportsSplitterAbi,
+          functionName: "unlockSportsCall",
+          args: [BigInt(sportsPredictionId), agentOwner as `0x${string}`, amount],
+          chainId: arcTestnet.id,
+        });
+      } else {
+        setStatus("Approve the Arc USDC sports unlock transfer in your wallet...");
+        transferHash = await writeContractAsync({
+          address: usdcAddress,
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [receiver, amount],
+          chainId: arcTestnet.id,
+        });
+      }
+
       setTxHash(transferHash);
       setStatus("Sports unlock submitted. Waiting for Arc confirmation...");
       await waitForReceiptWithTimeout(publicClient, transferHash, "Sports unlock transaction");

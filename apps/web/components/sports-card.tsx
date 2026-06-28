@@ -83,6 +83,7 @@ export function SportsCard({ idea }: { idea: SportsIdea }) {
       <UnlockSportsCall 
         sportsPredictionId={idea.id} 
         unlockPrice={String(idea.unlockPrice)} 
+        agentOwner={idea.agentOwnerWallet}
         onUnlockSuccess={() => setIsUnlocked(true)}
       />
     </article>

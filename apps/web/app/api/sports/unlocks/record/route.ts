@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { createPublicClient, formatUnits, getAddress, http, parseEventLogs, parseUnits, type Address, type Hex } from "viem";
 import { ARC_TESTNET_USDC, arcTestnet } from "@precall/shared/chains";
-import { erc20Abi } from "@precall/shared/contracts/abi";
+import { erc20Abi, precallSportsSplitterAbi } from "@precall/shared/contracts/abi";
 import { createDb } from "@precall/shared/db/client";
-import { circleActions, sportsPredictions, sportsUnlocks, users } from "@precall/shared/db/schema";
+import { circleActions, sportsPredictions, sportsUnlocks, users, agents } from "@precall/shared/db/schema";
 
 function sportsUnlockReceiver(): Address | null {
   const raw = process.env.SPORTS_UNLOCK_RECEIVER_ADDRESS || process.env.PROTOCOL_TREASURY_ADDRESS || process.env.NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS || "";
@@ -48,25 +48,52 @@ export async function POST(request: Request) {
   }
 
   const usdcAddress = getAddress(process.env.ARC_USDC_ADDRESS || process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS || ARC_TESTNET_USDC);
+  const splitterEnv = process.env.NEXT_PUBLIC_SPORTS_SPLITTER_ADDRESS || process.env.SPORTS_SPLITTER_ADDRESS;
+  const splitterAddress = splitterEnv ? getAddress(splitterEnv) : null;
+
   const publicClient = createPublicClient({
     chain: arcTestnet,
     transport: http(process.env.ARC_TESTNET_RPC_URL || arcTestnet.rpcUrls.default.http[0]),
   });
   const receipt = await publicClient.getTransactionReceipt({ hash: body.txHash });
-  const usdcLogs = receipt.logs.filter((log) => log.address.toLowerCase() === usdcAddress.toLowerCase());
-  const events = parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: usdcLogs });
   const requiredAmount = parseUnits(String(prediction.unlockPrice), 6);
-  const event = events.find((item) => {
-    const from = String(item.args.from || "").toLowerCase();
-    const to = String(item.args.to || "").toLowerCase();
-    return from === wallet.toLowerCase() && to === receiver.toLowerCase() && item.args.value >= requiredAmount;
-  });
+  let amount: string;
 
-  if (!event) {
-    return NextResponse.json({ error: "Transaction does not contain the expected Arc USDC sports unlock transfer." }, { status: 422 });
+  if (splitterAddress) {
+    const agent = await db.query.agents.findFirst({ where: eq(agents.id, prediction.agentId) });
+    if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404 });
+
+    const splitterLogs = receipt.logs.filter((log) => log.address.toLowerCase() === splitterAddress.toLowerCase());
+    const events = parseEventLogs({ abi: precallSportsSplitterAbi, eventName: "SportsCallUnlocked", logs: splitterLogs });
+    const event = events.find((item) => {
+      const buyer = String(item.args.buyer || "").toLowerCase();
+      const agentOwner = String(item.args.agentOwner || "").toLowerCase();
+      return (
+        buyer === wallet.toLowerCase() &&
+        agentOwner === agent.ownerWallet.toLowerCase() &&
+        item.args.predictionId === BigInt(prediction.id) &&
+        item.args.totalAmount >= requiredAmount
+      );
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: "Transaction does not contain the expected PrecallSportsSplitter unlock event." }, { status: 422 });
+    }
+    amount = formatUnits(event.args.totalAmount, 6);
+  } else {
+    const usdcLogs = receipt.logs.filter((log) => log.address.toLowerCase() === usdcAddress.toLowerCase());
+    const events = parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: usdcLogs });
+    const event = events.find((item) => {
+      const from = String(item.args.from || "").toLowerCase();
+      const to = String(item.args.to || "").toLowerCase();
+      return from === wallet.toLowerCase() && to === receiver.toLowerCase() && item.args.value >= requiredAmount;
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: "Transaction does not contain the expected Arc USDC sports unlock transfer." }, { status: 422 });
+    }
+    amount = formatUnits(event.args.value, 6);
   }
-
-  const amount = formatUnits(event.args.value, 6);
   await db.insert(users).values({ walletAddress: wallet }).onConflictDoNothing();
   await db
     .insert(sportsUnlocks)
