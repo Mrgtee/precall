@@ -205,6 +205,7 @@ export interface SportsPredictionIdea {
   verdict: string;
   evidence: EvidenceItemInput[];
   votes: SportsVote[];
+  suggestedSizeBps?: number;
 }
 
 export interface AggregatedCall {
