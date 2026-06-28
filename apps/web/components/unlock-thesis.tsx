@@ -123,7 +123,7 @@ export function UnlockThesis({
         return;
       }
 
-      const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http("https://rpc.testnet.arc.network") });
       const amount = parseUnits(unlockPrice, 6);
 
       setStatus("Checking current USDC allowance...");

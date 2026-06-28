@@ -121,7 +121,7 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, 
         return;
       }
 
-      const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http("https://rpc.testnet.arc.network") });
       const amount = parseUnits(unlockPrice, 6);
       let transferHash: `0x${string}`;
 
