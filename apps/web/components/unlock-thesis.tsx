@@ -124,13 +124,23 @@ export function UnlockThesis({
       }
 
       const publicClient = createPublicClient({ chain: arcTestnet, transport: http(arcTestnet.rpcUrls.default.http[0]) });
-
-      setStatus("Approve the USDC spend in your wallet...");
       const amount = parseUnits(unlockPrice, 6);
-      const approveHash = await writeContractAsync({ address: usdcAddress, abi: erc20Abi, functionName: "approve", args: [registry, amount], chainId: arcTestnet.id });
-      setTxHash(approveHash);
-      setStatus("Approval submitted. Waiting for Arc confirmation...");
-      await waitForReceiptWithTimeout(publicClient, approveHash, "Approval transaction");
+
+      setStatus("Checking current USDC allowance...");
+      const allowance = await publicClient.readContract({
+        address: usdcAddress,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [address, registry],
+      });
+
+      if (allowance < amount) {
+        setStatus("Approve the USDC spend in your wallet...");
+        const approveHash = await writeContractAsync({ address: usdcAddress, abi: erc20Abi, functionName: "approve", args: [registry, amount], chainId: arcTestnet.id });
+        setTxHash(approveHash);
+        setStatus("Approval submitted. Waiting for Arc confirmation...");
+        await waitForReceiptWithTimeout(publicClient, approveHash, "Approval transaction");
+      }
 
       setStatus("Approve thesis unlock in your wallet...");
       const unlockHash = await writeContractAsync({ address: registry, abi: precallRegistryAbi, functionName: "unlockThesis", args: [BigInt(onchainCallId)], chainId: arcTestnet.id });

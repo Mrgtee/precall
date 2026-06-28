@@ -130,16 +130,27 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, 
           setStatus("Missing agent owner address for splits.");
           return;
         }
-        setStatus("Approve the Precall Splitter contract to spend USDC...");
-        const approveHash = await writeContractAsync({
+
+        setStatus("Checking current USDC allowance...");
+        const allowance = await publicClient.readContract({
           address: usdcAddress,
           abi: erc20Abi,
-          functionName: "approve",
-          args: [splitterAddress, amount],
-          chainId: arcTestnet.id,
+          functionName: "allowance",
+          args: [address, splitterAddress],
         });
-        setStatus("Waiting for approval confirmation...");
-        await waitForReceiptWithTimeout(publicClient, approveHash, "USDC approval");
+
+        if (allowance < amount) {
+          setStatus("Approve the Precall Splitter contract to spend USDC...");
+          const approveHash = await writeContractAsync({
+            address: usdcAddress,
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [splitterAddress, amount],
+            chainId: arcTestnet.id,
+          });
+          setStatus("Waiting for approval confirmation...");
+          await waitForReceiptWithTimeout(publicClient, approveHash, "USDC approval");
+        }
 
         setStatus("Submitting onchain unlock splits...");
         transferHash = await writeContractAsync({
