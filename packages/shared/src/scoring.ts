@@ -37,11 +37,15 @@ export function calculateEdgeBps(action: CallAction, yesProbabilityBps: number, 
   return 0;
 }
 
-export function suggestedSizeBps(edgeBps: number, confidenceBps: number): number {
+export function suggestedSizeBps(edgeBps: number, confidenceBps: number, priceBps: number = 5_000): number {
+  if (priceBps >= 10_000 || edgeBps <= 0) return 0;
   const confidence = confidenceBps / 10_000;
-  const edge = edgeBps / 10_000;
-  const rawKelly = edge * confidence * 0.5;
-  return clampBps(Math.min(rawKelly, 0.035) * 10_000);
+  // True binary contract Kelly Criterion: edge / (1 - price)
+  const fullKelly = edgeBps / (10_000 - priceBps);
+  // Apply Quarter-Kelly (0.25) risk multiplier scaled by agent confidence
+  const rawKelly = fullKelly * confidence * 0.25;
+  // Clamp suggested size to a maximum of 5% (500 bps) of bankroll to manage risk
+  return clampBps(Math.min(rawKelly, 0.05) * 10_000);
 }
 
 export function brierScoreBps(yesProbabilityBps: number, outcomeYes: boolean): number {
@@ -104,7 +108,7 @@ export function aggregateVotes(
     yesMarketPriceBps: snapshot.yesPriceBps,
     edgeBps,
     confidenceBps,
-    suggestedSizeBps: suggestedSizeBps(edgeBps, confidenceBps),
+    suggestedSizeBps: suggestedSizeBps(edgeBps, confidenceBps, marketPriceBps),
     thesis,
     counterarguments,
     evidence: uniqueEvidence,
