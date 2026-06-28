@@ -1,5 +1,5 @@
 import { numberEnv, optionalEnv } from "./env";
-import { clampBps } from "./scoring";
+import { clampBps, suggestedSizeBps } from "./scoring";
 import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsPredictionIdea, SportsRiskLevel, SportsVote } from "./types";
 
 export type SportsCategory = "soccer" | "nba" | "mlb" | "nhl" | "ufc" | "football" | "esports" | "tennis" | "cricket" | "golf" | "rugby" | "other_sports";
@@ -412,6 +412,7 @@ export function aggregateSportsVotes(input: { market: PolymarketMarket; snapshot
     verdict: edgeBps > 0 ? `${selectedOption} is a ${riskLevel}-risk AI sports call, not a guarantee.` : `${selectedOption} is a high-risk AI sports call with no positive selected-side edge after council review.`,
     evidence: input.evidence,
     votes: selectedVotes,
+    suggestedSizeBps: suggestedSizeBps(edgeBps, confidenceBps, marketPriceBps),
   };
 }
 
