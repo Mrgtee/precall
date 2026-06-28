@@ -645,7 +645,16 @@ export async function runSportsEdge() {
     skipped.push({ ...sportsCandidateSummary(candidate), reasons: ["analysis_limit"] });
   }
 
-  const sportsCalls = [];
+  const sportsCalls: Array<{
+    id: number;
+    status: string;
+    market: string;
+    selectedOption: string;
+    edgeBps: number;
+    confidenceBps: number;
+    riskLevel: string;
+    statusReason: string;
+  }> = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
 
