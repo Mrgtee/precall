@@ -645,64 +645,70 @@ export async function runSportsEdge() {
     skipped.push({ ...sportsCandidateSummary(candidate), reasons: ["analysis_limit"] });
   }
 
-  let dailyX402SpendUsdc = await getTodayX402SpendUsdc();
   const sportsCalls = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
 
-  for (const candidate of candidatesForAnalysis) {
-    const { market, classification } = candidate;
-    let x402Result: X402EvidenceProviderResult | undefined;
+  await Promise.all(
+    candidatesForAnalysis.map(async (candidate) => {
+      const { market, classification } = candidate;
+      let x402Result: X402EvidenceProviderResult | undefined;
 
-    try {
-      analyzed += 1;
-      const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-      x402Result = await fetchAisaX402SocialEvidence({ market, snapshot: marketSnapshotFromOutcome(provisionalSnapshot), dailySpendUsdc: dailyX402SpendUsdc, query: `${market.title} injuries form stats news` });
-      if (x402Result.status === "success") dailyX402SpendUsdc = addUsdc(dailyX402SpendUsdc, x402Result.paymentAmountUsdc);
+      try {
+        const currentDailySpendUsdc = await getTodayX402SpendUsdc();
+        analyzed += 1;
+        const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
+        x402Result = await fetchAisaX402SocialEvidence({
+          market,
+          snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
+          dailySpendUsdc: currentDailySpendUsdc,
+          query: `${market.title} injuries form stats news`
+        });
 
-      if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
-        const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
-        const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
-        await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
-        failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
-        continue;
+        if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
+          const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
+          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
+          await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+          failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
+          return;
+        }
+
+        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
+        const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
+        let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+        if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
+          const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
+          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
+          idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+        }
+        const thresholdFailures = sportsThresholdFailures(idea, thresholds);
+        const sportsStatus = classifySportsCallStatus(idea, thresholds);
+        const statusReason = sportsStatusReason(sportsStatus, thresholdFailures);
+        idea = { ...idea, verdict: sportsVerdictForStatus(sportsStatus, idea) };
+
+        const candidateRun = await recordAgentRun({
+          status: "sports_analyzed",
+          model: councilResult.model,
+          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
+          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
+          evidenceContext,
+          retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
+          latencyMs: councilResult.totalLatencyMs,
+        });
+        if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
+
+        const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
+        const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
+        callsByStatus[reportedStatus] += 1;
+        sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
+        if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+        failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
       }
-
-      let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
-      const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
-      let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
-      if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
-        const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
-        evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
-        idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
-      }
-      const thresholdFailures = sportsThresholdFailures(idea, thresholds);
-      const sportsStatus = classifySportsCallStatus(idea, thresholds);
-      const statusReason = sportsStatusReason(sportsStatus, thresholdFailures);
-      idea = { ...idea, verdict: sportsVerdictForStatus(sportsStatus, idea) };
-
-      const candidateRun = await recordAgentRun({
-        status: "sports_analyzed",
-        model: councilResult.model,
-        inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
-        outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
-        evidenceContext,
-        retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
-        latencyMs: councilResult.totalLatencyMs,
-      });
-      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: candidateRun?.id });
-
-      const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
-      const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
-      callsByStatus[reportedStatus] += 1;
-      sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
-      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
-      failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
-    }
-  }
+    })
+  );
 
   return {
     discoveryLimit,
