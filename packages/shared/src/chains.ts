@@ -11,8 +11,8 @@ export const arcTestnet = {
     decimals: 18,
   },
   rpcUrls: {
-    default: { http: ["https://rpc.testnet.arc.network"] },
-    public: { http: ["https://rpc.testnet.arc.network"] },
+    default: { http: [process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.ARC_RPC_URL || process.env.ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_9199d41912495c50f474948f27c3ef4d86681a072ac89fc694d2d00c525a5630"] },
+    public: { http: [process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.ARC_RPC_URL || process.env.ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_9199d41912495c50f474948f27c3ef4d86681a072ac89fc694d2d00c525a5630"] },
   },
   blockExplorers: {
     default: {
