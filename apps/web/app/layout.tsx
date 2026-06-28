@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AdminNavLink } from "../components/admin-nav-link";
 import { WalletProvider } from "../components/wallet-provider";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </header>
           {children}
         </WalletProvider>
+        <Analytics />
       </body>
     </html>
   );
