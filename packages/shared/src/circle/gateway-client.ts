@@ -628,8 +628,11 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
   });
 
   const fetchWithPayment = wrapFetchWithPayment(input.fetch || globalThis.fetch, paymentClient);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
   const requestInit: RequestInit = {
     headers: { "Content-Type": "application/json", ...(input.headers || {}) },
+    signal: controller.signal,
   };
   if (input.method) requestInit.method = input.method;
   if (input.body !== undefined) {
@@ -638,6 +641,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
 
   try {
     const response = await fetchWithPayment(input.url, requestInit);
+    clearTimeout(timeoutId);
     const rawBody = await response.text();
     let data: T | undefined;
     try {
