@@ -95,7 +95,7 @@ function db() {
   if (!dbClient) {
     const connection = createDbConnection();
     dbClient = connection.db;
-    closeDbClient = () => connection.client.end();
+    closeDbClient = () => connection.client.end({ timeout: 5 });
   }
   return dbClient;
 }
