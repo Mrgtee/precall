@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchAisaX402SocialEvidence } from "./x402-provider";
+import { fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
 import type { MarketSnapshot, PolymarketMarket } from "../../types";
 
 const market: PolymarketMarket = {
@@ -261,3 +261,62 @@ test("provider fallback can be disabled", async () => {
     else process.env.ENABLE_X402_FALLBACK_PROVIDERS = previous;
   }
 });
+
+test("tavily x402 payment successfully parses search results and answer summary", async () => {
+  const result = await fetchTavilyX402SearchEvidence({
+    market,
+    payResource: async <T>() => ({
+      enabled: true,
+      status: "success",
+      paid: true,
+      supported: true,
+      url: "https://api.aisa.one/apis/v2/tavily/search",
+      amountUsdc: "0.009600",
+      maxPaymentUsdc: "0.01",
+      dailySpendUsdc: "0.000000",
+      dailyBudgetUsdc: "0.10",
+      paymentNetwork: "eip155:8453",
+      selectedChain: "base",
+      paymentRef: "0xtavily",
+      txHash: "0xtavily",
+      data: {
+        results: [
+          { title: "Match Outlook", url: "https://espn.com/match", content: "Injury updates on key players." }
+        ],
+        answer: "The match will likely favor the home team."
+      } as T,
+    }),
+  });
+
+  assert.equal(result.status, "success");
+  assert.equal(result.provider, "aisa_x402_tavily");
+  assert.equal(result.evidence.length, 2); // Summary + 1 result
+  assert.equal(result.evidence[0]?.title, "Tavily AI Match Summary Brief");
+  assert.equal(result.evidence[0]?.excerpt, "The match will likely favor the home team.");
+  assert.equal(result.evidence[1]?.title, "Match Outlook");
+  assert.equal(result.evidence[1]?.excerpt, "Injury updates on key players.");
+  assert.equal(result.evidence[1]?.sourceUrl, "https://espn.com/match");
+});
+
+test("tavily x402 payment failure handles error states correctly", async () => {
+  const result = await fetchTavilyX402SearchEvidence({
+    market,
+    payResource: async () => ({
+      enabled: true,
+      status: "insufficient_balance",
+      paid: false,
+      supported: true,
+      url: "https://api.aisa.one/apis/v2/tavily/search",
+      maxPaymentUsdc: "0.01",
+      dailySpendUsdc: "0.000000",
+      dailyBudgetUsdc: "0.10",
+      failureReason: "insufficient_balance",
+      error: "Gateway wallet has insufficient balance.",
+    }),
+  });
+
+  assert.equal(result.status, "insufficient_balance");
+  assert.equal(result.provider, "aisa_x402_tavily");
+  assert.equal(result.evidence.length, 0);
+});
+

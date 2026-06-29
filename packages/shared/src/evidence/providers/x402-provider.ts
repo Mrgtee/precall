@@ -21,10 +21,15 @@ export function cleanSearchQuery(title: string): string {
 
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
 const STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT = "https://stableenrich.dev/api/reddit/search";
+const AISA_TAVILY_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/tavily/search";
 const INTERNAL_GATEWAY_EVIDENCE_PRICE_USDC = "0.001";
 
 function aisaTwitterSearchEndpoint() {
   return optionalEnv("AISA_X402_TWITTER_SEARCH_ENDPOINT", AISA_TWITTER_SEARCH_ENDPOINT);
+}
+
+function aisaTavilySearchEndpoint() {
+  return optionalEnv("AISA_X402_TAVILY_SEARCH_ENDPOINT", AISA_TAVILY_SEARCH_ENDPOINT);
 }
 
 function stableEnrichRedditSearchEndpoint() {
@@ -566,4 +571,135 @@ export async function supportsAisaX402SocialEvidence(query: string) {
   return supportsX402Resource(buildAisaSearchUrl(query));
 }
 
-export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT };
+function buildAisaTavilyRequest(query: string) {
+  return {
+    url: aisaTavilySearchEndpoint(),
+    method: "POST" as const,
+    body: {
+      query,
+      search_depth: "basic",
+      include_answer: true,
+      max_results: 5,
+    },
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
+function evidenceFromTavily(input: {
+  data: any;
+  url: string;
+  market: PolymarketMarket;
+  payment: PayX402ResourceResult;
+}): EvidenceItemInput[] {
+  const fetchedAt = nowIso();
+  const results = (input.data as { results?: { title?: string; url?: string; content?: string }[] })?.results || [];
+
+  const items: EvidenceItemInput[] = results.map((res, index) => ({
+    evidenceId: `circle-x402-tavily-${index + 1}`,
+    sourceType: "circle_x402_news" as const,
+    provider: "aisa_x402_tavily",
+    sourceUrl: res.url || input.url,
+    title: res.title || `x402 Tavily Search Result ${index + 1}`,
+    excerpt: (res.content || "").slice(0, 800),
+    credibilityScore: 85,
+    fetchedAt,
+    capturedAt: fetchedAt,
+    paid: true,
+    paymentAmountUsdc: input.payment.amountUsdc,
+    paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
+    paymentRef: input.payment.paymentRef,
+    txHash: input.payment.txHash,
+    metadata: {
+      provider: "aisa_x402_tavily",
+      endpoint: aisaTavilySearchEndpoint(),
+      marketId: input.market.marketId,
+      selectedChain: input.payment.selectedChain,
+    },
+  }));
+
+  const answer = (input.data as { answer?: string })?.answer;
+  if (answer) {
+    items.unshift({
+      evidenceId: "circle-x402-tavily-summary",
+      sourceType: "circle_x402_news" as const,
+      provider: "aisa_x402_tavily",
+      sourceUrl: input.market.url || input.url,
+      title: "Tavily AI Match Summary Brief",
+      excerpt: answer.slice(0, 800),
+      credibilityScore: 90,
+      fetchedAt,
+      capturedAt: fetchedAt,
+      paid: true,
+      paymentAmountUsdc: input.payment.amountUsdc,
+      paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
+      paymentRef: input.payment.paymentRef,
+      txHash: input.payment.txHash,
+      metadata: {
+        provider: "aisa_x402_tavily",
+        endpoint: aisaTavilySearchEndpoint(),
+        marketId: input.market.marketId,
+        selectedChain: input.payment.selectedChain,
+      },
+    });
+  }
+
+  return items.filter((item) => item.excerpt.length > 0);
+}
+
+export async function fetchTavilyX402SearchEvidence(input: {
+  market: PolymarketMarket;
+  query?: string;
+  dailySpendUsdc?: string | number | undefined;
+  payResource?: typeof payX402Resource | undefined;
+}): Promise<X402EvidenceProviderResult> {
+  const query = cleanSearchQuery(input.query || input.market.title);
+  const request = buildAisaTavilyRequest(query);
+  const payResource = input.payResource || payX402Resource;
+  const paymentInput: Parameters<typeof payX402Resource>[0] = {
+    url: request.url,
+    method: request.method,
+    body: request.body,
+    headers: request.headers,
+  };
+  if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
+  const payment = await payResource<any>(paymentInput);
+
+  if (payment.status !== "success" || !payment.paid) {
+    return {
+      enabled: payment.enabled,
+      provider: "aisa_x402_tavily",
+      status: payment.status,
+      url: request.url,
+      evidence: [],
+      paymentAmountUsdc: payment.amountUsdc,
+      paymentNetwork: payment.paymentNetwork,
+      selectedChain: payment.selectedChain,
+      supportChecks: payment.supportChecks,
+      failureReason: payment.failureReason,
+      paymentRef: payment.paymentRef,
+      txHash: payment.txHash,
+      error: payment.error,
+    };
+  }
+
+  return {
+    enabled: true,
+    provider: "aisa_x402_tavily",
+    status: "success",
+    url: request.url,
+    evidence: evidenceFromTavily({ data: payment.data, url: request.url, market: input.market, payment }),
+    paymentAmountUsdc: payment.amountUsdc,
+    paymentNetwork: payment.paymentNetwork,
+    selectedChain: payment.selectedChain,
+    supportChecks: payment.supportChecks,
+    failureReason: payment.failureReason,
+    paymentRef: payment.paymentRef,
+    txHash: payment.txHash,
+  };
+}
+
+export async function supportsTavilyX402SearchEvidence(query: string) {
+  return supportsX402Resource(aisaTavilySearchEndpoint());
+}
+
+export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };
