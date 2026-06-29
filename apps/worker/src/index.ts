@@ -45,6 +45,7 @@ function stringifyResult(result: unknown) {
 main()
   .then((result) => {
     console.log(stringifyResult(result));
+    process.exitCode = 0;
   })
   .catch((error) => {
     console.error(error.stack || error.message);
@@ -52,4 +53,5 @@ main()
   })
   .finally(async () => {
     await closeRepository();
+    process.exit(process.exitCode || 0);
   });
