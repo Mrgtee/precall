@@ -654,6 +654,7 @@ export async function runSportsEdge() {
     confidenceBps: number;
     riskLevel: string;
     statusReason: string;
+    suggestedSizeBps?: number | undefined;
   }> = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
@@ -709,7 +710,7 @@ export async function runSportsEdge() {
         const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
         const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
         callsByStatus[reportedStatus] += 1;
-        sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason });
+        sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason, suggestedSizeBps: idea.suggestedSizeBps });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
