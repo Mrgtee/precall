@@ -56,6 +56,8 @@ function toNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+import { execSync } from "node:child_process";
+
 async function fetchJson<T>(url: string, timeoutMs = 15_000): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -69,6 +71,13 @@ async function fetchJson<T>(url: string, timeoutMs = 15_000): Promise<T> {
       throw new Error(`${url} returned ${response.status}`);
     }
     return (await response.json()) as T;
+  } catch (fetchError) {
+    try {
+      const stdout = execSync(`curl -s -m 15 -H "accept: application/json" "${url}"`, { encoding: "utf-8" });
+      return JSON.parse(stdout) as T;
+    } catch (curlError) {
+      throw fetchError;
+    }
   } finally {
     clearTimeout(timeout);
   }
