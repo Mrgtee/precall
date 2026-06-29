@@ -49,17 +49,31 @@ export async function runSportsCouncilDetailed(input: {
   const votes: SportsVote[] = [];
   const failures: SportsAgentFailure[] = [];
 
-  for (const agent of SPORTS_AGENTS) {
-    const agentStartedAt = Date.now();
-    try {
-      votes.push(await runSingleSportsAgent({ ...input, agent, model, baseUrl, apiKey }));
-    } catch (error) {
-      failures.push({
-        agent: agent.name,
-        error: error instanceof Error ? error.message : String(error),
-        latencyMs: Date.now() - agentStartedAt,
-        retryCount: numberEnv("MODEL_RETRY_COUNT", 2),
-      });
+  const results = await Promise.all(
+    SPORTS_AGENTS.map(async (agent) => {
+      const agentStartedAt = Date.now();
+      try {
+        const vote = await runSingleSportsAgent({ ...input, agent, model, baseUrl, apiKey });
+        return { ok: true as const, vote };
+      } catch (error) {
+        return {
+          ok: false as const,
+          failure: {
+            agent: agent.name,
+            error: error instanceof Error ? error.message : String(error),
+            latencyMs: Date.now() - agentStartedAt,
+            retryCount: numberEnv("MODEL_RETRY_COUNT", 2),
+          },
+        };
+      }
+    })
+  );
+
+  for (const res of results) {
+    if (res.ok) {
+      votes.push(res.vote);
+    } else {
+      failures.push(res.failure);
     }
   }
 
