@@ -14,6 +14,7 @@
     "@gsap/react": "^2.1.2",
     "@precall/shared": "*",
     "@precall/worker": "*",
+    "@rainbow-me/rainbowkit": "^2.2.11",
     "@tanstack/react-query": "^5.80.7",
     "@vercel/analytics": "^2.0.1",
     "drizzle-orm": "^0.45.2",
