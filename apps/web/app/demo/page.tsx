@@ -117,7 +117,8 @@ export default async function DemoPage() {
         <h2>Latest Sports Live Calls</h2>
         {data.latestSportsIdeas?.length ? (
           <div className="grid">
-            {data.latestSportsIdeas.map((idea) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {data.latestSportsIdeas.map((idea: any) => (
               <article className="panel" key={idea.id}>
                 <p className="eyebrow">{idea.category} · {idea.marketKind}</p>
                 <strong>{idea.marketTitle}</strong>

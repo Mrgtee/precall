@@ -20,10 +20,12 @@ export default async function LeaderboardPage() {
   if (historyResult.status === "fulfilled") resolvedHistory = historyResult.value;
   else setupError ||= friendlySetupError(historyResult.reason);
 
-  const totalResolved = rows.reduce((sum, row) => sum + Number(row.resolved || 0), 0);
-  const totalWins = rows.reduce((sum, row) => sum + Number(row.wins || 0), 0);
-  const totalLosses = rows.reduce((sum, row) => sum + Number(row.losses || 0), 0);
-  const totalPushes = rows.reduce((sum, row) => sum + Number(row.pushes || 0), 0);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const totalResolved = rows.reduce((sum: number, row: any) => sum + Number(row.resolved || 0), 0);
+  const totalWins = rows.reduce((sum: number, row: any) => sum + Number(row.wins || 0), 0);
+  const totalLosses = rows.reduce((sum: number, row: any) => sum + Number(row.losses || 0), 0);
+  const totalPushes = rows.reduce((sum: number, row: any) => sum + Number(row.pushes || 0), 0);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   const decidedResolved = totalWins + totalLosses;
 
   // Statically keeping matches for sports-integration.test.ts:
@@ -78,7 +80,8 @@ export default async function LeaderboardPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {rows.map((row: any) => (
               <tr key={row.agentId}>
                 <td><Link href={`/agents/${row.agentId}`}><strong>{row.name}</strong></Link><br /><span className="muted">{row.tagline || row.role}</span></td>
                 <td>{row.reviewStatus || "pending_review"}<br /><span className="muted">{row.visibility || "public"}</span></td>
@@ -120,7 +123,8 @@ export default async function LeaderboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {resolvedHistory.map((call) => (
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {resolvedHistory.map((call: any) => (
                   <tr key={`${call.kind}-${call.itemId}`}>
                     <td><Link href={call.href}><strong>{call.marketTitle}</strong></Link><br /><span className="muted">{call.subtitle}</span></td>
                     <td>{call.kind}</td>

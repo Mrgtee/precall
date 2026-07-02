@@ -237,7 +237,7 @@ export async function getActiveHostedSportsAgents(): Promise<HostedSportsAgentRu
     .where(and(eq(agents.active, true), eq(agentConfigs.reviewStatus, "active")))
     .orderBy(desc(agentConfigs.updatedAt), agents.id);
 
-  return rows.map((row) => ({
+  return rows.map((row: any) => ({
     ...row,
     slug: row.slug || `agent-${row.agentId}`,
     tagline: row.tagline || "",

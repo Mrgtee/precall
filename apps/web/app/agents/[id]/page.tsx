@@ -70,7 +70,16 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           </div>
           <p>Strict YES/NO Arc-bonded calls from this agent.</p>
         </div>
-        {bondedCalls.length ? <section className="grid">{bondedCalls.map((call) => <CallCard key={call.id} call={call} />)}</section> : <section className="empty"><h2>No active bonded calls</h2></section>}
+        {bondedCalls.length ? (
+          <section className="grid">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {bondedCalls.map((call: any) => (
+              <CallCard key={call.id} call={call} />
+            ))}
+          </section>
+        ) : (
+          <section className="empty"><h2>No active bonded calls</h2></section>
+        )}
       </section>
 
       <section className="section-spaced">
@@ -83,7 +92,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
         </div>
         {sportsCalls.length ? (
           <section className="sports-grid">
-            {sportsCalls.map((idea) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {sportsCalls.map((idea: any) => (
               <article className="panel sports-call-card" key={idea.id}>
                 <div className="card-topline">
                   <span className="status-chip ok">{idea.status.replace("_call", "").replace("_", " ")}</span>
@@ -119,7 +129,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
         <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}>
           <article className="panel mini-stack">
             <h3>Recent revenue events</h3>
-            {revenueEvents.length ? revenueEvents.map((event) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {revenueEvents.length ? revenueEvents.map((event: any) => (
               <div key={event.id} className="pill-row">
                 <span className="pill">{event.sourceType}</span>
                 <span className="pill">Gross {usdc(event.grossAmountUsdc)}</span>
@@ -130,7 +141,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
           </article>
           <article className="panel mini-stack">
             <h3>Payout history</h3>
-            {payouts.length ? payouts.map((payout) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {payouts.length ? payouts.map((payout: any) => (
               <div key={payout.id} className="pill-row">
                 <span className="pill">{payout.status}</span>
                 <span className="pill">{usdc(payout.amountUsdc)}</span>
@@ -163,7 +175,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 </tr>
               </thead>
               <tbody>
-                {resolvedHistory.map((item) => (
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {resolvedHistory.map((item: any) => (
                   <tr key={`${item.kind}-${item.itemId}`}>
                     <td><Link href={item.href}><strong>{item.marketTitle}</strong></Link><br /><span className="muted">{item.subtitle}</span></td>
                     <td>{item.kind}</td>

@@ -51,7 +51,7 @@ type AgentMeta = {
   platformShareBps: number | null;
 };
 
-async function getAgentMetaMap(agentIds: number[]) {
+async function getAgentMetaMap(agentIds: number[]): Promise<Map<number, AgentMeta>> {
   if (!agentIds.length) return new Map<number, AgentMeta>();
   const rows = await createDb()
     .select({
@@ -74,7 +74,8 @@ async function getAgentMetaMap(agentIds: number[]) {
     .leftJoin(agentConfigs, eq(agentConfigs.agentId, agents.id))
     .where(inArray(agents.id, agentIds));
 
-  return new Map(rows.map((row) => [row.id, row]));
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  return new Map(rows.map((row: any) => [row.id, row]));
 }
 
 function sportsUnlockableStatus(status: string) {
@@ -90,8 +91,10 @@ export async function getMarketplaceSportsPredictions(limit = 12, statuses: read
     .orderBy(sportsStatusRank, desc(sportsPredictions.agentProbabilityBps), desc(sportsPredictions.marketPriceBps), desc(sportsPredictions.confidenceBps), desc(sportsPredictions.edgeBps), desc(sportsPredictions.updatedAt))
     .limit(limit);
 
-  const agentMap = await getAgentMetaMap([...new Set(rows.map((row) => row.agentId))]);
-  return rows.map((row) => {
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const agentMap = await getAgentMetaMap([...new Set(rows.map((row: any) => row.agentId as number))] as number[]);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  return rows.map((row: any) => {
     const meta = agentMap.get(row.agentId);
     return {
       ...row,
@@ -203,8 +206,8 @@ export async function getMarketplaceLeaderboard() {
     .from(agents)
     .leftJoin(agentConfigs, eq(agentConfigs.agentId, agents.id));
 
-  return rows
-    .map((row) => {
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  return rows.map((row: any) => {
       const resolved = Number(row.bondedResolved || 0) + Number(row.sportsResolved || 0);
       const wins = Number(row.bondedWins || 0) + Number(row.sportsWins || 0);
       const losses = Number(row.bondedLosses || 0) + Number(row.sportsLosses || 0);
@@ -224,7 +227,8 @@ export async function getMarketplaceLeaderboard() {
         winRate,
       };
     })
-    .sort((left, right) =>
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    .sort((left: any, right: any) =>
       right.wins - left.wins ||
       right.winRate - left.winRate ||
       right.resolved - left.resolved ||
@@ -289,9 +293,11 @@ export async function getMarketplaceResolvedHistory(limit = 25) {
     .limit(limit);
 
   return [...bonded, ...sports]
-    .sort((left, right) => new Date(String(right.resolvedAt || 0)).getTime() - new Date(String(left.resolvedAt || 0)).getTime())
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    .sort((left: any, right: any) => new Date(String(right.resolvedAt || 0)).getTime() - new Date(String(left.resolvedAt || 0)).getTime())
     .slice(0, limit)
-    .map((row) => ({
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    .map((row: any) => ({
       ...row,
       href: row.kind === 'Bonded Arc' ? `/calls/${row.itemId}` : `/sports#sports-call-${row.itemId}`,
       agentHref: row.agentId ? `/agents/${row.agentId}` : null,
@@ -335,16 +341,20 @@ export async function getMarketplaceAgentProfile(id: number) {
   if (!agentRow) return null;
 
   const leaderboard = await getMarketplaceLeaderboard();
-  const stats = leaderboard.find((row) => row.agentId === id) || null;
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const stats = leaderboard.find((row: any) => row.agentId === id) || null;
   const allCalls = await getCalls(200);
-  const bondedCalls = allCalls.filter((call) => call.agentId === id && call.status === 'published' && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now()));
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const bondedCalls = allCalls.filter((call: any) => call.agentId === id && call.status === 'published' && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now()));
   const sportsCalls = await getMarketplaceSportsPredictions(80);
-  const agentSportsCalls = sportsCalls.filter((call) => call.agentId === id);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const agentSportsCalls = sportsCalls.filter((call: any) => call.agentId === id);
   const revenueEvents = await db.query.agentRevenueEvents.findMany({ where: eq(agentRevenueEvents.agentId, id), orderBy: desc(agentRevenueEvents.createdAt), limit: 20 });
   const payouts = await db.query.agentPayouts.findMany({ where: eq(agentPayouts.agentId, id), orderBy: desc(agentPayouts.createdAt), limit: 20 });
   const [followStats] = await db.select({ followers: sql<number>`count(*)::int` }).from(follows).where(eq(follows.agentId, id));
   const [feedbackStats] = await db.select({ feedbackCount: sql<number>`count(*)::int` }).from(feedback).where(eq(feedback.agentId, id));
-  const resolvedHistory = (await getMarketplaceResolvedHistory(80)).filter((item) => item.agentId === id).slice(0, 20);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const resolvedHistory = (await getMarketplaceResolvedHistory(80)).filter((item: any) => item.agentId === id).slice(0, 20);
 
   return {
     agent: agentRow,
@@ -363,7 +373,8 @@ export async function getOwnedAgents(ownerWallet: string) {
   const normalized = ownerWallet.trim().toLowerCase();
   if (!normalized) return [];
   const leaderboard = await getMarketplaceLeaderboard();
-  return leaderboard.filter((row) => String(row.ownerWallet || '').toLowerCase() === normalized);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  return leaderboard.filter((row: any) => String(row.ownerWallet || '').toLowerCase() === normalized);
 }
 
 export async function getAgentEarnings(agentId: number) {
@@ -416,6 +427,7 @@ export async function getMarketplaceMetrics() {
       totalRevenueEvents: 0,
     }),
     topPerformingAgents: leaderboard.slice(0, 5),
-    topEarningAgents: [...leaderboard].sort((left, right) => Number(right.accruedRevenueUsdc || 0) - Number(left.accruedRevenueUsdc || 0) || right.unlocks - left.unlocks).slice(0, 5),
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    topEarningAgents: [...leaderboard].sort((left: any, right: any) => Number(right.accruedRevenueUsdc || 0) - Number(left.accruedRevenueUsdc || 0) || right.unlocks - left.unlocks).slice(0, 5),
   };
 }

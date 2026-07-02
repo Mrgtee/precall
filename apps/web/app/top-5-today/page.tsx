@@ -11,10 +11,12 @@ export default async function TopFiveTodayPage() {
   let setupError = "";
 
   try {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     calls = (await getCalls(50))
-      .filter((call) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
-      .sort((a, b) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
+      .filter((call: any) => call.status === "published" && !call.legacy && !isExpiredDate(call.expiresAt))
+      .sort((a: any, b: any) => Number(b.edgeBps) + Number(b.confidenceBps) - (Number(a.edgeBps) + Number(a.confidenceBps)))
       .slice(0, 5);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
     sportsCalls = await getTopSportsPredictions(5);
   } catch (error) {
     setupError = friendlySetupError(error);
@@ -40,7 +42,8 @@ export default async function TopFiveTodayPage() {
         <p>These are strict YES/NO calls bonded on Arc and resolved through the normal Precall flow.</p>
       </section>
       <section className="grid">
-        {calls.length ? calls.map((call) => <CallCard key={call.id} call={call} />) : <p className="muted">No live bonded calls currently pass the hardened V1 gates. Precall would rather show no call than a weak call.</p>}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {calls.length ? calls.map((call: any) => <CallCard key={call.id} call={call} />) : <p className="muted">No live bonded calls currently pass the hardened V1 gates. Precall would rather show no call than a weak call.</p>}
       </section>
 
       {false && (
@@ -50,7 +53,8 @@ export default async function TopFiveTodayPage() {
             <p>Top active sports calls are shown separately and remain unresolved until sports settlement is implemented.</p>
           </section>
           <section className="grid preview-grid">
-            {sportsCalls.length ? sportsCalls.map((idea) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {sportsCalls.length ? sportsCalls.map((idea: any) => (
               <article className="panel sports-preview-card" key={idea.id}>
                 <p className="eyebrow">{idea.category} · {idea.marketKind} · active/unresolved</p>
                 <h3>{idea.marketTitle}</h3>

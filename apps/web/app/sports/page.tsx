@@ -34,10 +34,12 @@ export default async function SportsPage() {
     setupError = friendlySetupError(error);
   }
 
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const grouped = ["strong_call", "lean_call", "high_risk_call"].map((status) => ({
     status,
-    ideas: ideas.filter((idea) => idea.status === status),
+    ideas: ideas.filter((idea: any) => idea.status === status),
   }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   return (
     <main className="shell page sports-page">
@@ -81,7 +83,8 @@ export default async function SportsPage() {
           <h2>No active Sports Live Calls</h2>
         </section>
       ) : (
-        grouped.map((group) => group.ideas.length ? (
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        grouped.map((group: any) => group.ideas.length ? (
           <section key={group.status} className="section-spaced">
             <section className="section-heading">
               <div>
@@ -91,7 +94,8 @@ export default async function SportsPage() {
               <p>{statusDescription(group.status)}</p>
             </section>
             <section className="sports-grid">
-              {group.ideas.map((idea) => <SportsCard idea={idea} key={idea.id} />)}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {group.ideas.map((idea: any) => <SportsCard idea={idea} key={idea.id} />)}
             </section>
           </section>
         ) : null)

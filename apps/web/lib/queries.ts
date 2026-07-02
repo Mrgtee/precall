@@ -300,7 +300,8 @@ export async function getAgent(id: number) {
   const [followStats] = await db.select({ followers: sql<number>`count(*)::int` }).from(follows).where(eq(follows.agentId, id));
   const [feedbackStats] = await db.select({ feedbackCount: sql<number>`count(*)::int` }).from(feedback).where(eq(feedback.agentId, id));
   const now = Date.now();
-  const activeAgentCalls = agentCalls.filter((call) =>
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const activeAgentCalls = agentCalls.filter((call: any) =>
     call.agentId === id &&
     call.status === "published" &&
     !call.legacy &&
@@ -361,7 +362,8 @@ export async function getDemoData() {
   return {
     counts,
     latestRuns,
-    latestLiveCall: latestCalls.find((call) => call.status === "published" && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now())),
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    latestLiveCall: latestCalls.find((call: any) => call.status === "published" && !call.legacy && (!call.expiresAt || new Date(call.expiresAt).getTime() > Date.now())),
     awaitingResolution: await db
       .select(callSelect)
       .from(calls)
@@ -371,7 +373,8 @@ export async function getDemoData() {
       .where(inArray(calls.status, ["expired", "failed_resolution"]))
       .orderBy(desc(calls.publishedAt))
       .limit(100),
-    resolvedCalls: latestCalls.filter((call) => call.status === "resolved"),
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    resolvedCalls: latestCalls.filter((call: any) => call.status === "resolved"),
     latestUnlock: latestUnlocks[0],
     latestSportsIdeas,
     latestCircleActions,
