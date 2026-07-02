@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@circle-fin/x402-batching": "^3.2.0",
     "@gsap/react": "^2.1.2",
     "@precall/shared": "*",
     "@precall/worker": "*",
