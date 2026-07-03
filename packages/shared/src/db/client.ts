@@ -4,8 +4,8 @@ import * as schema from "./schema";
 import { requireEnv } from "../env";
 
 function databaseConnectTimeoutSeconds() {
-  const parsed = Number(process.env.DATABASE_CONNECT_TIMEOUT_SECONDS || 5);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+  const parsed = Number(process.env.DATABASE_CONNECT_TIMEOUT_SECONDS || 15);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
 }
 
 let globalDb: any;
