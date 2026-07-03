@@ -116,7 +116,17 @@ The worker runs outside the public web app.
 - Reports skipped reasons, failures, health, Gateway status, and x402 status.
 - Long worker jobs can be started asynchronously from the admin UI so Vercel requests do not have to wait 10-30 minutes.
 
-## F. Leaderboard / Top 5
+## G. Paid Soccer Predictions API (x402 V2)
+
+Precall exposes a standardized REST endpoint to allow external AI trading agents to fetch our structured prediction data programmatically.
+
+- **Endpoint**: `/api/v1/soccer/predictions`
+- **Protocol**: Standard **x402 Version 2** protocol (negotiation and settlement).
+- **Price**: `$0.01 USDC` (10,000 micro-USDC units).
+- **Security & Replay Protection**: Each transaction hash is verified on-chain against the Circle EVM Batching Facilitator and logged in the database to prevent double-spending or replay attacks.
+- **Graceful Error Handling**: Malformed or unverified transaction payloads are handled resiliently (returning a clean `400 Bad Request` validation JSON instead of triggering server-side 500 errors).
+
+## H. Leaderboard / Top 5
 
 Precall separates active predictions from historical reputation.
 
@@ -184,9 +194,10 @@ Precall uses Arc Testnet as the accountability and settlement layer.
 
 Precall uses Circle in three main ways:
 
-- **USDC rails:** Arc USDC powers bonds and unlock payments.
-- **Circle Agent Stack / Gateway / x402:** the worker can pay for premium evidence from allowlisted providers. Production paid evidence should use Base Mainnet when supported; Arc Testnet remains available for hackathon/demo configuration.
-- **Circle action tracking:** `circle_actions` records x402 payments, Gateway deposits, Arc bonds, thesis unlocks, and sports unlocks.
+- **USDC rails**: Arc USDC powers bonds and unlock payments.
+- **Circle Agent Stack / Gateway / x402**: The worker can pay for premium evidence from allowlisted providers. Production paid evidence should use Base Mainnet when supported; Arc Testnet remains available for hackathon/demo configuration.
+- **Circle x402 V2 Server Endpoint**: Exposes the paid predictions endpoint `/api/v1/soccer/predictions` to charge incoming AI buyer agents a micro-USDC payment via the Batch Facilitator.
+- **Circle action tracking**: `circle_actions` records x402 payments, Gateway deposits, Arc bonds, thesis unlocks, sports unlocks, and x402 API predictions sales.
 
 x402 has optional and required modes:
 
@@ -199,14 +210,15 @@ Private keys stay in Railway/server environments only. They are never moved into
 
 Precall exposes several reusable primitives for Arc/Circle builders:
 
-- **USDC-backed agent accountability:** agents publish bonded calls with onchain consequences.
-- **Arc USDC unlockable reasoning:** users pay a small USDC unlock to reveal full analysis.
-- **Selected-outcome sports prediction model:** sports calls can select outcomes beyond YES/NO.
-- **Evidence-based agent analysis:** every agent vote must reference supplied evidence IDs.
-- **Public frontend + private worker architecture:** Vercel renders the product while Railway owns long-running, key-bearing work.
-- **Market filtering and quality gates:** liquidity, spread, price-band, confidence, edge, and expiry gates protect output quality.
-- **Performance tracking and leaderboard:** resolved calls drive reputation instead of unresolved hype.
-- **x402 paid evidence flow:** provider support detection, budget controls, allowlists, and paid-evidence metadata.
+- **USDC-backed agent accountability**: agents publish bonded calls with onchain consequences.
+- **Arc USDC unlockable reasoning**: users pay a small USDC unlock to reveal full analysis.
+- **x402 V2 API endpoint**: Server-side Batch Facilitator middleware pattern showing how to charge other AI agents micro-fees for database prediction access.
+- **Selected-outcome sports prediction model**: sports calls can select outcomes beyond YES/NO.
+- **Evidence-based agent analysis**: every agent vote must reference supplied evidence IDs.
+- **Public frontend + private worker architecture**: Vercel renders the product while Railway owns long-running, key-bearing work.
+- **Market filtering and quality gates**: liquidity, spread, price-band, confidence, edge, and expiry gates protect output quality.
+- **Performance tracking and leaderboard**: resolved calls drive reputation instead of unresolved hype.
+- **x402 paid evidence flow**: provider support detection, budget controls, allowlists, and paid-evidence metadata.
 
 How this differs from `circlefin/arc-*` reference repos:
 
@@ -375,6 +387,12 @@ For local web development:
 
 ```bash
 npm run dev
+```
+
+To test the paid predictions API flow locally:
+
+```bash
+npx tsx scratch/test_precall_api_x402.ts
 ```
 
 # 16. Worker Commands
