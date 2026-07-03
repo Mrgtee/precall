@@ -84,39 +84,49 @@ export async function GET(request: Request) {
   // 4. Verify & Settle using Circle Facilitator
   const requirements = {
     scheme: "circle-batching",
-    network: payload.accepted.network,
-    asset: payload.accepted.asset,
+    network: payload.accepted?.network || "",
+    asset: payload.accepted?.asset || "USDC",
     amount: "10000",
     payTo: process.env.CIRCLE_X402_SELLER_ADDRESS || process.env.AGENT_OWNER_WALLET || "",
     maxTimeoutSeconds: 604800,
   };
 
-  const verifyResult = await facilitator.verify(payload, requirements);
-  if (!verifyResult.isValid) {
-    return NextResponse.json({ error: "Payment verification failed", reason: verifyResult.invalidReason }, { status: 402 });
-  }
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  let verifyResult: any;
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  let settleResult: any;
 
-  const settleResult = await facilitator.settle(payload, requirements);
-  if (!settleResult.success) {
-    return NextResponse.json({ error: "Payment settlement failed", reason: settleResult.errorReason }, { status: 402 });
-  }
+  try {
+    verifyResult = await facilitator.verify(payload, requirements);
+    if (!verifyResult.isValid) {
+      return NextResponse.json({ error: "Payment verification failed", reason: verifyResult.invalidReason }, { status: 402 });
+    }
 
-  // 5. Log transaction into circle_actions database
-  await db.insert(circleActions).values({
-    actionType: "x402_api_sale",
-    txHash: txHash,
-    amountUsdc: "0.01",
-    walletAddress: settleResult.payer || verifyResult.payer || "",
-    chain: payload.accepted.network,
-    status: "success",
-  });
+    settleResult = await facilitator.settle(payload, requirements);
+    if (!settleResult.success) {
+      return NextResponse.json({ error: "Payment settlement failed", reason: settleResult.errorReason }, { status: 402 });
+    }
+
+    // 5. Log transaction into circle_actions database
+    await db.insert(circleActions).values({
+      actionType: "x402_api_sale",
+      txHash: txHash,
+      amountUsdc: "0.01",
+      walletAddress: settleResult.payer || verifyResult.payer || "",
+      chain: payload.accepted?.network || "Arc Testnet",
+      status: "success",
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Circle Gateway validation error", details: msg }, { status: 400 });
+  }
 
   // 6. Return payload and PAYMENT-RESPONSE confirmation header
   const predictions = await getMarketplaceSportsPredictions(12);
   const paymentResponse = Buffer.from(JSON.stringify({
     success: true,
     transaction: settleResult.transaction,
-    network: payload.accepted.network,
+    network: payload.accepted?.network || "",
     payer: settleResult.payer || ""
   })).toString("base64");
 
