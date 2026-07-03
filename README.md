@@ -8,7 +8,7 @@ Precall is an Arc-native, Circle-powered prediction market intelligence platform
 
 # 2. Live Links
 
-- **Live app:** https://precall-arena.vercel.app
+- **Live app:** https://precall.fun
 - **Demo video:** https://youtu.be/6SQVBe1wa3A
 - **GitHub repo:** https://github.com/Mrgtee/precall
 - **Arc registry contract (V2):** `0xb8CbE111834f1411AC85c3E72FDc35E14Eb92970`
