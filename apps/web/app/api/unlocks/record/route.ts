@@ -18,6 +18,18 @@ export async function POST(request: Request) {
   }
 
   const db = createDb();
+
+  // Replay Protection: Ensure this transaction hash has not been processed already
+  const existing = await db
+    .select()
+    .from(circleActions)
+    .where(eq(circleActions.txHash, body.txHash))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return NextResponse.json({ error: "Replay attack detected. Transaction hash has already been used." }, { status: 400 });
+  }
+
   const call = await db.query.calls.findFirst({ where: eq(calls.id, body.callId) });
   if (!call?.onchainCallId) {
     return NextResponse.json({ error: "Call is not published onchain." }, { status: 400 });

@@ -41,6 +41,18 @@ export async function POST(request: Request) {
   if (!receiver) return NextResponse.json({ error: "Sports unlock receiver is not configured." }, { status: 500 });
 
   const db = createDb();
+
+  // Replay Protection: Ensure this transaction hash has not been processed already
+  const existing = await db
+    .select()
+    .from(circleActions)
+    .where(eq(circleActions.txHash, body.txHash))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return NextResponse.json({ error: "Replay attack detected. Transaction hash has already been used." }, { status: 400 });
+  }
+
   const prediction = await db.query.sportsPredictions.findFirst({ where: eq(sportsPredictions.id, body.sportsPredictionId) });
   if (!prediction) return NextResponse.json({ error: "Sports Live Call not found." }, { status: 404 });
   if (prediction.status === "expired" || isExpired(prediction.expiresAt)) {

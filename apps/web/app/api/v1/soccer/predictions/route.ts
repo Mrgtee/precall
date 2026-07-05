@@ -3,7 +3,7 @@ import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
 import { getMarketplaceSportsPredictions } from "../../../../../lib/marketplace";
 import { createDb } from "@precall/shared/db/client";
 import { circleActions } from "@precall/shared/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const facilitator = new BatchFacilitatorClient({
   url: process.env.X402_FACILITATOR_URL || "https://gateway-api-testnet.circle.com",
@@ -69,12 +69,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing transactionHash in signature payload" }, { status: 400 });
   }
 
-  // 3. Replay Protection: Check if this transaction has already been processed
+  // 3. Fork Gating: Verify client network matches platform allowed networks
+  const allowedNetworks = (process.env.X402_ACCEPTED_NETWORKS || "").split(",").map(n => n.trim()).filter(Boolean);
+  const clientNetwork = payload.accepted?.network;
+  if (clientNetwork && allowedNetworks.length > 0 && !allowedNetworks.includes(clientNetwork)) {
+    return NextResponse.json({ error: `Fork mismatch. Network '${clientNetwork}' is not supported.` }, { status: 400 });
+  }
+
+  // 4. Replay Protection: Check if this transaction has already been processed across any action type
   const db = createDb();
   const existing = await db
     .select()
     .from(circleActions)
-    .where(and(eq(circleActions.txHash, txHash), eq(circleActions.actionType, "x402_api_sale")))
+    .where(eq(circleActions.txHash, txHash))
     .limit(1);
 
   if (existing.length > 0) {
