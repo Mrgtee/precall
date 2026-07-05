@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, BadgeDollarSign, ExternalLink, ShieldCheck } from "lucide-react";
 import type { CallRow } from "../lib/queries";
 import { isExpiredDate, statusLabel, usdc } from "../lib/format";
+import { safeArcTxUrl } from "../lib/safe-url";
 
 function freshness(date: Date | string | null) {
   if (!date) return "unknown age";
@@ -45,7 +46,7 @@ export function CallCard({ call }: { call: CallRow }) {
         </p>
         {isAwaitingResolution ? <p className="muted"><strong>Market closed:</strong> this call is kept for auditability and should not be treated as active.</p> : null}
         {call.txHash ? (
-          <Link href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">
+          <Link href={safeArcTxUrl(call.txHash)} rel="noopener noreferrer" target="_blank">
             Arc bond tx <ExternalLink size={14} />
           </Link>
         ) : null}

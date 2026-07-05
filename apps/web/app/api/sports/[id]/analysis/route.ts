@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { getAddress, type Address } from "viem";
 import { getSportsPrediction, hasSportsUnlock } from "../../../../../lib/queries";
+import { errorJson, noStoreJson } from "../../../../../lib/api-security";
 
 function isExpired(expiresAt: Date | string | null) {
   return Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
@@ -9,25 +9,26 @@ function isExpired(expiresAt: Date | string | null) {
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wallet = new URL(request.url).searchParams.get("wallet");
-  if (!wallet) return NextResponse.json({ error: "wallet query param is required." }, { status: 400 });
+  if (!Number.isInteger(Number(id)) || Number(id) <= 0) return errorJson("Valid sports prediction id is required.", 400);
+  if (!wallet) return errorJson("wallet query param is required.", 400);
 
   let walletAddress: Address;
   try {
     walletAddress = getAddress(wallet);
   } catch {
-    return NextResponse.json({ error: "wallet query param must be a valid address." }, { status: 400 });
+    return errorJson("wallet query param must be a valid address.", 400);
   }
 
   const prediction = await getSportsPrediction(Number(id));
-  if (!prediction) return NextResponse.json({ error: "Sports Live Call not found." }, { status: 404 });
+  if (!prediction) return errorJson("Sports Live Call not found.", 404);
   if (prediction.status === "expired" || isExpired(prediction.expiresAt)) {
-    return NextResponse.json({ error: "Sports Live Call is expired and no longer unlockable." }, { status: 410 });
+    return errorJson("Sports Live Call is expired and no longer unlockable.", 410);
   }
 
   const unlocked = await hasSportsUnlock(prediction.id, walletAddress);
-  if (!unlocked) return NextResponse.json({ error: "Sports analysis is locked for this wallet." }, { status: 403 });
+  if (!unlocked) return errorJson("Sports analysis is locked for this wallet.", 403);
 
-  return NextResponse.json({
+  return noStoreJson({
     call: {
       id: prediction.id,
       marketId: prediction.marketId,

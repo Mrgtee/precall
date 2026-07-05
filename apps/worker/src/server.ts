@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { loadDotenv } from "./dotenv";
 import { closeRepository } from "./repository";
@@ -31,7 +31,7 @@ function serializeResult(value: unknown) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.stack || error.message : String(error);
+  return error instanceof Error ? error.message : String(error);
 }
 
 
@@ -42,12 +42,20 @@ function workerBuildInfo() {
   };
 }
 
+function safeSecretEqual(value: string | null, secret: string) {
+  if (!value) return false;
+  const left = Buffer.from(value);
+  const right = Buffer.from(secret);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 function authorized(headers: Headers) {
   const secret = process.env.WORKER_TRIGGER_SECRET;
   if (!secret) return false;
   const auth = headers.get("authorization");
   const headerSecret = headers.get("x-worker-trigger-secret");
-  return auth === `Bearer ${secret}` || headerSecret === secret;
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+  return safeSecretEqual(bearer, secret) || safeSecretEqual(headerSecret, secret);
 }
 
 async function execute(command: WorkerTriggerCommand) {

@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { createPublicClient, formatUnits, getAddress, http, parseEventLogs, type Address, type Hex } from "viem";
+import { createPublicClient, formatUnits, getAddress, http, parseEventLogs, type Address } from "viem";
 import { ARC_TESTNET_USDC, arcTestnet } from "@precall/shared/chains";
 import { erc20Abi } from "@precall/shared/contracts/abi";
 import { createDb } from "@precall/shared/db/client";
 import { agents, calls, circleActions, sportsPredictions, users } from "@precall/shared/db/schema";
+import { addressSchema, errorJson, noStoreJson, parseJsonBody, positiveIntSchema, requireSameOrigin, txHashSchema } from "../../../../lib/api-security";
+import { z } from "zod";
 
 function sportsUnlockReceiver(): Address | null {
   const raw = process.env.SPORTS_UNLOCK_RECEIVER_ADDRESS || process.env.PROTOCOL_TREASURY_ADDRESS || process.env.NEXT_PUBLIC_SPORTS_UNLOCK_RECEIVER_ADDRESS || "";
@@ -15,24 +16,22 @@ function sportsUnlockReceiver(): Address | null {
   }
 }
 
+const tipRecordSchema = z.object({
+  callId: positiveIntSchema.optional(),
+  sportsPredictionId: positiveIntSchema.optional(),
+  wallet: addressSchema,
+  txHash: txHashSchema,
+}).refine((value) => Boolean(value.callId) !== Boolean(value.sportsPredictionId), {
+  message: "Exactly one of callId or sportsPredictionId is required.",
+});
+
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    callId?: number;
-    sportsPredictionId?: number;
-    wallet?: string;
-    txHash?: Hex;
-  };
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
 
-  if ((!body.callId && !body.sportsPredictionId) || !body.wallet || !body.txHash) {
-    return NextResponse.json({ error: "Either callId or sportsPredictionId, plus wallet and txHash are required." }, { status: 400 });
-  }
-
-  let wallet: Address;
-  try {
-    wallet = getAddress(body.wallet);
-  } catch {
-    return NextResponse.json({ error: "wallet must be a valid address." }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, tipRecordSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const db = createDb();
   let receiver: Address | null = null;
@@ -40,14 +39,13 @@ export async function POST(request: Request) {
 
   if (body.callId) {
     const call = await db.query.calls.findFirst({ where: eq(calls.id, body.callId) });
-    if (!call) return NextResponse.json({ error: "Call not found." }, { status: 404 });
+    if (!call) return errorJson("Call not found.", 404);
     relatedMarketId = call.marketId;
     const agent = await db.query.agents.findFirst({ where: eq(agents.id, call.agentId) });
     if (agent?.ownerWallet) {
       try {
         receiver = getAddress(agent.ownerWallet);
       } catch {
-        // Fallback to protocol treasury
         receiver = sportsUnlockReceiver();
       }
     } else {
@@ -55,14 +53,12 @@ export async function POST(request: Request) {
     }
   } else if (body.sportsPredictionId) {
     const prediction = await db.query.sportsPredictions.findFirst({ where: eq(sportsPredictions.id, body.sportsPredictionId) });
-    if (!prediction) return NextResponse.json({ error: "Sports Live Call not found." }, { status: 404 });
+    if (!prediction) return errorJson("Sports Live Call not found.", 404);
     relatedMarketId = prediction.marketId;
     receiver = sportsUnlockReceiver();
   }
 
-  if (!receiver) {
-    return NextResponse.json({ error: "Tip receiver is not configured." }, { status: 500 });
-  }
+  if (!receiver) return errorJson("Tip receiver is not configured.", 500);
 
   const usdcAddress = getAddress(process.env.ARC_USDC_ADDRESS || process.env.NEXT_PUBLIC_ARC_USDC_ADDRESS || ARC_TESTNET_USDC);
   const publicClient = createPublicClient({
@@ -72,25 +68,26 @@ export async function POST(request: Request) {
 
   try {
     const receipt = await publicClient.getTransactionReceipt({ hash: body.txHash });
+    if (receipt.status !== "success") {
+      return errorJson("Transaction did not complete successfully.", 422);
+    }
     const usdcLogs = receipt.logs.filter((log) => log.address.toLowerCase() === usdcAddress.toLowerCase());
     const events = parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: usdcLogs });
 
     const event = events.find((item) => {
       const from = String(item.args.from || "").toLowerCase();
       const to = String(item.args.to || "").toLowerCase();
-      return from === wallet.toLowerCase() && to === receiver!.toLowerCase();
+      return from === body.wallet.toLowerCase() && to === receiver!.toLowerCase();
     });
 
-    if (!event) {
-      return NextResponse.json({ error: "Transaction does not contain the expected Arc USDC tip transfer." }, { status: 422 });
-    }
+    if (!event) return errorJson("Transaction does not contain the expected Arc USDC tip transfer.", 422);
 
     const amount = formatUnits(event.args.value, 6);
-    await db.insert(users).values({ walletAddress: wallet }).onConflictDoNothing();
+    await db.insert(users).values({ walletAddress: body.wallet }).onConflictDoNothing();
 
     await db.insert(circleActions).values({
       actionType: "thesis_tip",
-      walletAddress: wallet,
+      walletAddress: body.wallet,
       amount,
       amountUsdc: amount,
       chain: "Arc Testnet",
@@ -106,8 +103,8 @@ export async function POST(request: Request) {
       },
     }).onConflictDoNothing();
 
-    return NextResponse.json({ ok: true, amount });
+    return noStoreJson({ ok: true, amount });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return errorJson(error instanceof Error ? error.message : String(error), 500);
   }
 }

@@ -99,6 +99,13 @@
       "when": 1782421193290,
       "tag": "0013_gray_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783299600000,
+      "tag": "0014_admin_challenge_replay_protection",
+      "breakpoints": true
     }
   ]
 }

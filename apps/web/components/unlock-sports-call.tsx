@@ -4,10 +4,11 @@ import { useState } from "react";
 import { createPublicClient, http, parseUnits } from "viem";
 import { getWalletClient } from "@wagmi/core";
 import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } from "wagmi";
-import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
+import { arcTestnet } from "@precall/shared/chains";
 import { erc20Abi, precallSportsSplitterAbi } from "@precall/shared/contracts/abi";
 import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
 import { bpsToPercent, usdc } from "../lib/format";
+import { safeArcTxUrl, safeExternalUrl } from "../lib/safe-url";
 import { TipJar } from "./unlock-thesis";
 
 type SportsAnalysisPayload = {
@@ -224,7 +225,7 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, 
             <span className="pill">Resolution {details.call.resolutionStatus}</span>
             {details.call.x402PaidEvidenceUsed ? <span className="pill">x402 evidence</span> : null}
           </div>
-          <p><a className="inline-link" href={details.call.marketUrl} rel="noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
+          <p><a className="inline-link" href={safeExternalUrl(details.call.marketUrl)} rel="noopener noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
         </section>
 
         <section className="analysis-section">
@@ -259,7 +260,7 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, 
                 <p className="muted"><span className="status-chip">{item.sourceType || "evidence"}</span>{item.paid ? <span className="status-chip ok">x402-paid</span> : null} Provider {item.provider || "unknown"} · Score {item.credibilityScore ?? "n/a"}</p>
                 <p className="muted">{item.excerpt || "No excerpt available."}</p>
                 {item.paid ? <p className="muted">Paid {usdc(item.paymentAmountUsdc || 0)} via {item.paymentNetwork || "Circle Gateway/x402"}</p> : null}
-                {item.sourceUrl ? <a className="inline-link" href={item.sourceUrl} rel="noreferrer" target="_blank">Source <ExternalLink size={14} /></a> : null}
+                {item.sourceUrl ? <a className="inline-link" href={safeExternalUrl(item.sourceUrl)} rel="noopener noreferrer" target="_blank">Source <ExternalLink size={14} /></a> : null}
               </article>
             ))}
           </div>
@@ -309,7 +310,7 @@ export function UnlockSportsCall({ sportsPredictionId, unlockPrice, agentOwner, 
         {isConnected ? "Unlock sports call" : "Connect to unlock"}
       </button>
       {status ? <p className="muted">{status}</p> : null}
-      {txHash ? <p className="muted">Transaction: <a href={arcTxUrl(txHash)} rel="noreferrer" target="_blank">view on ArcScan</a></p> : null}
+      {txHash ? <p className="muted">Transaction: <a href={safeArcTxUrl(txHash)} rel="noopener noreferrer" target="_blank">view on ArcScan</a></p> : null}
     </section>
   );
 }

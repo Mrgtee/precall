@@ -365,6 +365,24 @@ export const adminWallets = pgTable(
   }),
 );
 
+export const adminChallengeUses = pgTable(
+  "admin_challenge_uses",
+  {
+    id: serial("id").primaryKey(),
+    challengeMac: text("challenge_mac").notNull(),
+    nonce: text("nonce").notNull(),
+    action: text("action").notNull(),
+    signerWallet: text("signer_wallet").notNull(),
+    targetWallet: text("target_wallet").notNull().default(""),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    challengeMacIdx: uniqueIndex("admin_challenge_uses_mac_idx").on(table.challengeMac),
+    signerIdx: index("admin_challenge_uses_signer_idx").on(table.signerWallet),
+    consumedAtIdx: index("admin_challenge_uses_consumed_at_idx").on(table.consumedAt),
+  }),
+);
+
 export const circleActions = pgTable(
   "circle_actions",
   {

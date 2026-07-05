@@ -1,21 +1,34 @@
-import { NextResponse } from "next/server";
 import { createAdminChallenge, isAdminAction, isAdminWallet, isAdminWalletAction } from "../../../../lib/admin-auth";
+import { errorJson, noStoreJson, parseJsonBody, requireSameOrigin } from "../../../../lib/api-security";
+import { z } from "zod";
+
+const challengeBodySchema = z.object({
+  action: z.string(),
+  address: z.string(),
+  targetAddress: z.string().optional(),
+});
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { action?: string; address?: string; targetAddress?: string };
-  if (!body.action || !isAdminAction(body.action)) {
-    return NextResponse.json({ error: "Valid admin action is required." }, { status: 400 });
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+
+  const parsed = await parseJsonBody(request, challengeBodySchema);
+  if (!parsed.ok) return parsed.response;
+
+  const body = parsed.data;
+  if (!isAdminAction(body.action)) {
+    return errorJson("Valid admin action is required.", 400);
   }
-  if (!body.address || !(await isAdminWallet(body.address))) {
-    return NextResponse.json({ error: "Wallet is not whitelisted for admin access." }, { status: 403 });
+  if (!(await isAdminWallet(body.address))) {
+    return errorJson("Wallet is not whitelisted for admin access.", 403);
   }
   if (isAdminWalletAction(body.action) && !body.targetAddress) {
-    return NextResponse.json({ error: "Target wallet is required for this admin action." }, { status: 400 });
+    return errorJson("Target wallet is required for this admin action.", 400);
   }
 
   try {
-    return NextResponse.json(createAdminChallenge({ action: body.action, address: body.address, targetAddress: body.targetAddress }));
+    return noStoreJson(createAdminChallenge({ action: body.action, address: body.address, targetAddress: body.targetAddress }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return errorJson(error instanceof Error ? error.message : String(error), 400);
   }
 }

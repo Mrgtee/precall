@@ -4,6 +4,7 @@ import { ExternalLink, LockKeyhole, ShieldCheck } from "lucide-react";
 import { FollowAgent } from "../../../components/follow-agent";
 import { UnlockThesis } from "../../../components/unlock-thesis";
 import { isExpiredDate, statusLabel, usdc } from "../../../lib/format";
+import { safeArcTxUrl } from "../../../lib/safe-url";
 import { getCall } from "../../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
             <span><LockKeyhole size={16} /> Copy link locked</span>
           </div>
           {call.txHash ? (
-            <Link className="button secondary fit-button" href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">
+            <Link className="button secondary fit-button" href={safeArcTxUrl(call.txHash)} rel="noopener noreferrer" target="_blank">
               Arc bond tx <ExternalLink size={16} />
             </Link>
           ) : null}

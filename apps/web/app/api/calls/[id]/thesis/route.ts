@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { createPublicClient, formatUnits, getAddress, http, parseAbiItem, type Address } from "viem";
 import { arcTestnet } from "@precall/shared/chains";
 import { precallRegistryAbi } from "@precall/shared/contracts/abi";
@@ -6,6 +5,7 @@ import { createDb } from "@precall/shared/db/client";
 import { desc, eq } from "drizzle-orm";
 import { agentRuns, circleActions, thesisUnlocks, users } from "@precall/shared/db/schema";
 import { getCall, getEvidence, hasUnlock } from "../../../../../lib/queries";
+import { errorJson, noStoreJson } from "../../../../../lib/api-security";
 
 const thesisUnlockedEvent = parseAbiItem(
   "event ThesisUnlocked(uint256 indexed callId, address indexed buyer, uint256 amount)",
@@ -14,17 +14,18 @@ const thesisUnlockedEvent = parseAbiItem(
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wallet = new URL(request.url).searchParams.get("wallet");
-  if (!wallet) return NextResponse.json({ error: "wallet query param is required." }, { status: 400 });
+  if (!Number.isInteger(Number(id)) || Number(id) <= 0) return errorJson("Valid call id is required.", 400);
+  if (!wallet) return errorJson("wallet query param is required.", 400);
 
   let walletAddress: Address;
   try {
     walletAddress = getAddress(wallet);
   } catch {
-    return NextResponse.json({ error: "wallet query param must be a valid address." }, { status: 400 });
+    return errorJson("wallet query param must be a valid address.", 400);
   }
 
   const call = await getCall(Number(id));
-  if (!call) return NextResponse.json({ error: "Call not found." }, { status: 404 });
+  if (!call) return errorJson("Call not found.", 404);
 
   let unlocked = await hasUnlock(call.id, walletAddress);
   const registry = (call.registryAddress || process.env.PRECALL_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS) as
@@ -89,7 +90,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
   }
 
-  if (!unlocked) return NextResponse.json({ error: "Thesis is locked for this wallet." }, { status: 403 });
+  if (!unlocked) return errorJson("Thesis is locked for this wallet.", 403);
 
   const evidence = await getEvidence(call.id);
   const db = createDb();
@@ -100,7 +101,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const outputs = (sourceRun?.outputs || {}) as { call?: { votes?: unknown[] }; votes?: unknown[] };
   const votes = outputs.call?.votes || outputs.votes;
 
-  return NextResponse.json({
+  return noStoreJson({
     call: {
       id: call.id,
       title: call.marketTitle,

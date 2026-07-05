@@ -1,36 +1,40 @@
-import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
-import { getAddress, verifyMessage, type Hex } from "viem";
+import { verifyMessage, type Hex } from "viem";
 import { createDb } from "@precall/shared/db/client";
 import { agents, follows, users } from "@precall/shared/db/schema";
+import { addressSchema, errorJson, noStoreJson, parseJsonBody, positiveIntSchema, requireSameOrigin } from "../../../lib/api-security";
+import { z } from "zod";
+
+const followBodySchema = z.object({
+  agentId: positiveIntSchema,
+  wallet: addressSchema,
+  message: z.string().min(1),
+  signature: z.custom<Hex>((value) => typeof value === "string" && value.startsWith("0x")),
+});
 
 function expectedFollowMessage(agentId: number, wallet: string) {
   return [`Precall Arena follow`, `Agent: ${agentId}`, `Wallet: ${wallet}`].join("\n");
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { agentId?: number; wallet?: string; message?: string; signature?: Hex };
-  const agentId = Number(body.agentId);
-  if (!Number.isInteger(agentId) || agentId <= 0) return NextResponse.json({ error: "agentId is required." }, { status: 400 });
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
 
-  let wallet: `0x${string}`;
-  try {
-    wallet = getAddress(body.wallet || "") as `0x${string}`;
-  } catch {
-    return NextResponse.json({ error: "A valid wallet address is required." }, { status: 400 });
-  }
-  if (!body.message || !body.signature) return NextResponse.json({ error: "Signed follow message is required." }, { status: 401 });
-  if (body.message !== expectedFollowMessage(agentId, wallet)) return NextResponse.json({ error: "Signed follow message does not match request." }, { status: 401 });
-  const verified = await verifyMessage({ address: wallet, message: body.message, signature: body.signature });
-  if (!verified) return NextResponse.json({ error: "Follow signature verification failed." }, { status: 401 });
+  const parsed = await parseJsonBody(request, followBodySchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+
+  if (body.message !== expectedFollowMessage(body.agentId, body.wallet)) return errorJson("Signed follow message does not match request.", 401);
+  const verified = await verifyMessage({ address: body.wallet, message: body.message, signature: body.signature });
+  if (!verified) return errorJson("Follow signature verification failed.", 401);
 
   const db = createDb();
-  const agent = await db.query.agents.findFirst({ where: eq(agents.id, agentId) });
-  if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404 });
+  const agent = await db.query.agents.findFirst({ where: eq(agents.id, body.agentId) });
+  if (!agent) return errorJson("Agent not found.", 404);
 
-  await db.insert(users).values({ walletAddress: wallet }).onConflictDoNothing();
-  await db.insert(follows).values({ agentId, userWallet: wallet, signature: body.signature, signedMessage: body.message, signatureStatus: "verified" }).onConflictDoNothing();
+  await db.insert(users).values({ walletAddress: body.wallet }).onConflictDoNothing();
+  await db.insert(follows).values({ agentId: body.agentId, userWallet: body.wallet, signature: body.signature, signedMessage: body.message, signatureStatus: "verified" }).onConflictDoNothing();
 
-  const [stats] = await db.select({ followers: sql<number>`count(*)::int` }).from(follows).where(eq(follows.agentId, agentId));
-  return NextResponse.json({ ok: true, followers: stats?.followers ?? 0 });
+  const [stats] = await db.select({ followers: sql<number>`count(*)::int` }).from(follows).where(eq(follows.agentId, body.agentId));
+  return noStoreJson({ ok: true, followers: stats?.followers ?? 0 });
 }

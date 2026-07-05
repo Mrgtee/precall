@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { getAddress, isAddress, verifyMessage, type Hex } from "viem";
 import { createDb } from "@precall/shared/db/client";
-import { adminWallets as adminWalletRows } from "@precall/shared/db/schema";
+import { adminChallengeUses, adminWallets as adminWalletRows } from "@precall/shared/db/schema";
 
 export type WorkerAdminAction = "health" | "run-once" | "sports" | "resolve" | "expire";
 export type AdminWalletAction = "admin-add" | "admin-remove";
@@ -178,6 +178,26 @@ function safeEqual(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+async function consumeAdminChallenge(input: { challenge: AdminChallenge; address: string; targetAddress?: string | undefined }) {
+  try {
+    await createDb().insert(adminChallengeUses).values({
+      challengeMac: input.challenge.mac,
+      nonce: input.challenge.nonce,
+      action: input.challenge.action,
+      signerWallet: normalizeAddress(input.address),
+      targetWallet: input.targetAddress ? normalizeAddress(input.targetAddress) : "",
+    });
+    return { ok: true as const };
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    const message = error instanceof Error ? error.message : String(error);
+    if (code === "23505" || /duplicate key|unique/i.test(message)) {
+      return { ok: false as const, error: "Admin challenge has already been used. Please request a new challenge." };
+    }
+    return { ok: false as const, error: "Admin challenge replay protection failed. Run database migrations and try again." };
+  }
+}
+
 export async function verifyAdminSignature(input: {
   action: AdminAction;
   address: string;
@@ -212,6 +232,13 @@ export async function verifyAdminSignature(input: {
     signature: input.signature,
   });
   if (!verified) return { ok: false, error: "Wallet signature verification failed." };
+
+  const consumed = await consumeAdminChallenge({
+    challenge: input.challenge,
+    address: input.address,
+    targetAddress: input.targetAddress,
+  });
+  if (!consumed.ok) return consumed;
 
   return { ok: true };
 }

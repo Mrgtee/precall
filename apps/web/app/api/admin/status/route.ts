@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { isAdminWallet } from "../../../../lib/admin-auth";
+import { noStoreJson } from "../../../../lib/api-security";
 
 export async function GET(request: Request) {
   const address = new URL(request.url).searchParams.get("address") || "";
-  return NextResponse.json({ isAdmin: address ? await isAdminWallet(address) : false });
+  return noStoreJson({ isAdmin: address ? await isAdminWallet(address) : false });
 }

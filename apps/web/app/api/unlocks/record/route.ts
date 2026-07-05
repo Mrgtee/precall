@@ -1,21 +1,25 @@
-import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { createPublicClient, formatUnits, http, parseEventLogs, type Hex } from "viem";
+import { createPublicClient, formatUnits, http, parseEventLogs } from "viem";
 import { arcTestnet } from "@precall/shared/chains";
 import { precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { createDb } from "@precall/shared/db/client";
 import { calls, circleActions, thesisUnlocks, users } from "@precall/shared/db/schema";
+import { addressSchema, errorJson, noStoreJson, parseJsonBody, positiveIntSchema, requireSameOrigin, txHashSchema } from "../../../../lib/api-security";
+import { z } from "zod";
+
+const unlockRecordSchema = z.object({
+  callId: positiveIntSchema,
+  wallet: addressSchema,
+  txHash: txHashSchema,
+});
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    callId?: number;
-    wallet?: string;
-    txHash?: Hex;
-  };
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
 
-  if (!body.callId || !body.wallet || !body.txHash) {
-    return NextResponse.json({ error: "callId, wallet, and txHash are required." }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, unlockRecordSchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const db = createDb();
 
@@ -27,12 +31,12 @@ export async function POST(request: Request) {
     .limit(1);
 
   if (existing.length > 0) {
-    return NextResponse.json({ error: "Replay attack detected. Transaction hash has already been used." }, { status: 400 });
+    return errorJson("Replay attack detected. Transaction hash has already been used.", 400);
   }
 
   const call = await db.query.calls.findFirst({ where: eq(calls.id, body.callId) });
   if (!call?.onchainCallId) {
-    return NextResponse.json({ error: "Call is not published onchain." }, { status: 400 });
+    return errorJson("Call is not published onchain.", 400);
   }
 
   const publicClient = createPublicClient({
@@ -41,6 +45,9 @@ export async function POST(request: Request) {
   });
   const registry = (call.registryAddress || process.env.PRECALL_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_PRECALL_REGISTRY_ADDRESS || "").toLowerCase();
   const receipt = await publicClient.getTransactionReceipt({ hash: body.txHash });
+  if (receipt.status !== "success") {
+    return errorJson("Transaction did not complete successfully.", 422);
+  }
   const registryLogs = registry ? receipt.logs.filter((log) => log.address.toLowerCase() === registry) : receipt.logs;
   const events = parseEventLogs({
     abi: precallRegistryAbi,
@@ -50,16 +57,13 @@ export async function POST(request: Request) {
   const event = events.find(
     (item) =>
       Number(item.args.callId) === call.onchainCallId &&
-      item.args.buyer.toLowerCase() === body.wallet!.toLowerCase(),
+      item.args.buyer.toLowerCase() === body.wallet.toLowerCase(),
   );
   if (!event) {
-    return NextResponse.json({ error: "Transaction does not contain the expected ThesisUnlocked event." }, { status: 422 });
+    return errorJson("Transaction does not contain the expected ThesisUnlocked event.", 422);
   }
 
-  await db
-    .insert(users)
-    .values({ walletAddress: body.wallet })
-    .onConflictDoNothing();
+  await db.insert(users).values({ walletAddress: body.wallet }).onConflictDoNothing();
   const amount = formatUnits(event.args.amount, 6);
   await db
     .insert(thesisUnlocks)
@@ -82,5 +86,5 @@ export async function POST(request: Request) {
     metadata: { onchainCallId: call.onchainCallId, registryAddress: registry },
   }).onConflictDoNothing();
 
-  return NextResponse.json({ ok: true });
+  return noStoreJson({ ok: true });
 }

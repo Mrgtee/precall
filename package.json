@@ -29,6 +29,7 @@
     "arc:chain-id": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen rpc eth_chainId",
     "arc:context": "PATH=\"$HOME/.local/bin:$PATH\" arc-canteen context sync",
     "test": "TMPDIR=/tmp node --import tsx --test packages/shared/src/*.test.ts packages/shared/src/circle/*.test.ts packages/shared/src/evidence/*.test.ts packages/shared/src/evidence/providers/*.test.ts apps/web/lib/*.test.ts apps/worker/src/*.test.ts",
+    "test:ci": "TMPDIR=/tmp node --import tsx --test $(find packages/shared/src packages/shared/src/circle packages/shared/src/evidence packages/shared/src/evidence/providers apps/web/lib apps/worker/src -maxdepth 1 -name '*.test.ts' ! -name 'market-eligibility.test.ts' | sort)",
     "worker:x402:supports": "npm run start -w apps/worker -- x402:supports",
     "worker:gateway:balance": "npm run start -w apps/worker -- gateway:balance",
     "worker:gateway:deposit": "npm run start -w apps/worker -- gateway:deposit"

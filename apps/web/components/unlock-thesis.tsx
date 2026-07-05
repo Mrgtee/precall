@@ -4,10 +4,11 @@ import { useState } from "react";
 import { createPublicClient, http, parseUnits } from "viem";
 import { getWalletClient } from "@wagmi/core";
 import { useAccount, useConfig, useConnect, useSwitchChain, useWriteContract } from "wagmi";
-import { arcTestnet, arcTxUrl } from "@precall/shared/chains";
+import { arcTestnet } from "@precall/shared/chains";
 import { erc20Abi, precallRegistryAbi } from "@precall/shared/contracts/abi";
 import { ExternalLink, LockKeyhole, Unlock } from "lucide-react";
 import { actionLabel, bpsToPercent, outcomeForAction, recommendationHelp, recommendationLabel, selectedProbabilityForAction, usdc } from "../lib/format";
+import { safeArcTxUrl, safeExternalUrl } from "../lib/safe-url";
 import { FeedbackCapture } from "./feedback-capture";
 
 type UnlockedPayload = {
@@ -202,7 +203,7 @@ export function UnlockThesis({
           </div>
           <p className="muted">This is probability-based analysis, not a guarantee or automatic trade instruction.</p>
           {(details.call.copyUrl || details.call.marketUrl) ? (
-            <p><a className="inline-link" href={details.call.copyUrl || details.call.marketUrl || "#"} rel="noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
+            <p><a className="inline-link" href={safeExternalUrl(details.call.copyUrl || details.call.marketUrl)} rel="noopener noreferrer" target="_blank">Open Polymarket market <ExternalLink size={14} /></a></p>
           ) : null}
         </section>
 
@@ -227,7 +228,7 @@ export function UnlockThesis({
                 <p className="muted"><span className="status-chip">{item.sourceType}</span>{item.paid ? <span className="status-chip ok">x402-paid evidence</span> : null} Provider {item.provider || "unknown"} · Score {item.credibilityScore}</p>
                 <p className="muted">{item.excerpt}</p>
                 {item.paid ? <p className="muted">Paid {usdc(item.paymentAmountUsdc || 0)} via {item.paymentNetwork || "Circle Gateway/x402"}</p> : null}
-                <a className="inline-link" href={item.sourceUrl} rel="noreferrer" target="_blank">Source <ExternalLink size={14} /></a>
+                <a className="inline-link" href={safeExternalUrl(item.sourceUrl)} rel="noopener noreferrer" target="_blank">Source <ExternalLink size={14} /></a>
               </article>
             ))}
           </div>
@@ -277,7 +278,7 @@ export function UnlockThesis({
         {isConnected ? "Unlock thesis" : "Connect to unlock"}
       </button>
       {status ? <p className="muted">{status}</p> : null}
-      {txHash ? <p className="muted">Transaction: <a href={arcTxUrl(txHash)} rel="noreferrer" target="_blank">view on ArcScan</a></p> : null}
+      {txHash ? <p className="muted">Transaction: <a href={safeArcTxUrl(txHash)} rel="noopener noreferrer" target="_blank">view on ArcScan</a></p> : null}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, CircleDollarSign, ExternalLink, RadioTower, ShieldCheck } from "lucide-react";
 import { shortAddress, usdc } from "../../lib/format";
+import { safeArcTxUrl } from "../../lib/safe-url";
 import { getDemoData } from "../../lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -83,9 +84,9 @@ export default async function DemoPage() {
           <h3>Latest paid evidence</h3>
           {data.latestX402Payment ? <p>success · {usdc(data.latestX402Payment.amountUsdc || data.latestX402Payment.amount || 0)} · {data.circleStack.x402PaymentNetworkLabel || data.latestX402Payment.chain || data.circleStack.latestX402SelectedChain || "network unknown"} · {data.latestX402Payment.provider || "x402 provider"}</p> : <p className="muted">No successful x402 payment recorded yet.</p>}
           <h3>Latest Arc bond</h3>
-          {data.latestArcBond?.txHash ? <p>{usdc(data.latestArcBond.amountUsdc || data.latestArcBond.amount)} <Link href={`https://testnet.arcscan.app/tx/${data.latestArcBond.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No Arc bond action recorded yet.</p>}
+          {data.latestArcBond?.txHash ? <p>{usdc(data.latestArcBond.amountUsdc || data.latestArcBond.amount)} <Link href={safeArcTxUrl(data.latestArcBond.txHash)} rel="noopener noreferrer" target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No Arc bond action recorded yet.</p>}
           <h3>Latest thesis unlock</h3>
-          {data.latestThesisUnlock?.txHash ? <p>{usdc(data.latestThesisUnlock.amountUsdc || data.latestThesisUnlock.amount)} <Link href={`https://testnet.arcscan.app/tx/${data.latestThesisUnlock.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No thesis unlock action recorded yet.</p>}
+          {data.latestThesisUnlock?.txHash ? <p>{usdc(data.latestThesisUnlock.amountUsdc || data.latestThesisUnlock.amount)} <Link href={safeArcTxUrl(data.latestThesisUnlock.txHash)} rel="noopener noreferrer" target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No thesis unlock action recorded yet.</p>}
         </aside>
       </section>
 
@@ -101,13 +102,13 @@ export default async function DemoPage() {
                 <span className="pill">Unlock {usdc(call.unlockPrice)}</span>
               </div>
               <p className="muted">Pick direction, probability, edge, thesis, evidence, and Polymarket link stay locked until a user pays the USDC unlock fee.</p>
-              {call.txHash ? <Link href={`https://testnet.arcscan.app/tx/${call.txHash}`} target="_blank">Arc tx <ExternalLink size={14} /></Link> : null}
+              {call.txHash ? <Link href={safeArcTxUrl(call.txHash)} rel="noopener noreferrer" target="_blank">Arc tx <ExternalLink size={14} /></Link> : null}
             </>
           ) : <p className="muted">No current live call passes hardened V1 filters. Run the worker from admin or cron.</p>}
         </div>
         <aside className="panel info-note">
           <h3>Latest bonded thesis unlock</h3>
-          {latestUnlock ? <p>{shortAddress(latestUnlock.userWallet)} paid {usdc(latestUnlock.amount)} <Link href={`https://testnet.arcscan.app/tx/${latestUnlock.txHash}`} target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No bonded thesis unlock recorded yet.</p>}
+          {latestUnlock ? <p>{shortAddress(latestUnlock.userWallet)} paid {usdc(latestUnlock.amount)} <Link href={safeArcTxUrl(latestUnlock.txHash)} rel="noopener noreferrer" target="_blank">tx <ExternalLink size={14} /></Link></p> : <p className="muted">No bonded thesis unlock recorded yet.</p>}
           <h3>Circle-powered rails</h3>
           <p className="muted">Agent bonds, bonded thesis unlocks, sports unlocks, and optional x402 evidence payments are tracked as Circle actions when real events exist.</p>
         </aside>

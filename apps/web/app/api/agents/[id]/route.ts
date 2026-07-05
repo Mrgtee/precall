@@ -1,28 +1,29 @@
-import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getAddress, verifyMessage, type Hex } from "viem";
 import { createDb } from "@precall/shared/db/client";
 import { agentConfigs, agents } from "@precall/shared/db/schema";
 import { updateAgentMessage, sanitizeSlug, type UpdatableAgentInput } from "../../../../lib/agent-marketplace-auth";
 import { getMarketplaceAgentProfile } from "../../../../lib/marketplace";
+import { addressSchema, errorJson, noStoreJson, parseJsonBody, requireSameOrigin } from "../../../../lib/api-security";
+import { z } from "zod";
 
-type Body = {
-  wallet?: string;
-  message?: string;
-  signature?: Hex;
-  name?: string;
-  tagline?: string;
-  description?: string;
-  categoryScope?: string[];
-  strategyMode?: "hit_rate" | "balanced" | "contrarian";
-  riskProfile?: "conservative" | "balanced" | "aggressive";
-  unlockPriceUsdc?: string;
-  dailyX402BudgetUsdc?: string;
-  maxX402PaymentUsdc?: string;
-  maxCallsPerRun?: number;
-  requireX402?: boolean;
-  visibility?: "public" | "hidden";
-};
+const updateBodySchema = z.object({
+  wallet: addressSchema,
+  message: z.string().min(1),
+  signature: z.custom<Hex>((value) => typeof value === "string" && value.startsWith("0x")),
+  name: z.string().optional().default(""),
+  tagline: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  categoryScope: z.array(z.string()).optional(),
+  strategyMode: z.enum(["hit_rate", "balanced", "contrarian"]).optional(),
+  riskProfile: z.enum(["conservative", "balanced", "aggressive"]).optional(),
+  unlockPriceUsdc: z.string().optional(),
+  dailyX402BudgetUsdc: z.string().optional(),
+  maxX402PaymentUsdc: z.string().optional(),
+  maxCallsPerRun: z.number().optional(),
+  requireX402: z.boolean().optional(),
+  visibility: z.enum(["public", "hidden"]).optional(),
+});
 
 function validMoney(value: string | undefined, fallback: string) {
   const candidate = String(value || fallback).trim();
@@ -36,29 +37,31 @@ function cleanScope(scope: string[] | undefined) {
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const profile = await getMarketplaceAgentProfile(Number(id));
-  if (!profile) return NextResponse.json({ error: "Agent not found." }, { status: 404 });
-  return NextResponse.json({ ok: true, profile });
+  const agentId = Number(id);
+  if (!Number.isInteger(agentId) || agentId <= 0) return errorJson("Valid agent id is required.", 400);
+  const profile = await getMarketplaceAgentProfile(agentId);
+  if (!profile) return errorJson("Agent not found.", 404);
+  return noStoreJson({ ok: true, profile });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+
   const { id } = await params;
   const agentId = Number(id);
-  if (!Number.isInteger(agentId) || agentId <= 0) return NextResponse.json({ error: "Valid agent id is required." }, { status: 400 });
+  if (!Number.isInteger(agentId) || agentId <= 0) return errorJson("Valid agent id is required.", 400);
 
-  const body = (await request.json().catch(() => ({}))) as Body;
-  let wallet: `0x${string}`;
-  try {
-    wallet = getAddress(body.wallet || "") as `0x${string}`;
-  } catch {
-    return NextResponse.json({ error: "A valid wallet address is required." }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, updateBodySchema);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
+  const wallet = body.wallet as `0x${string}`;
 
   const payload: UpdatableAgentInput = {
     agentId,
-    name: (body.name || "").trim().slice(0, 80),
-    tagline: (body.tagline || "").trim().slice(0, 140),
-    description: (body.description || "").trim().slice(0, 700),
+    name: body.name.trim().slice(0, 80),
+    tagline: body.tagline.trim().slice(0, 140),
+    description: body.description.trim().slice(0, 700),
     categoryScope: cleanScope(body.categoryScope),
     strategyMode: body.strategyMode,
     riskProfile: body.riskProfile,
@@ -70,29 +73,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     visibility: body.visibility === "hidden" ? "hidden" : "public",
   };
 
-  if (!body.message || !body.signature) {
-    return NextResponse.json({ error: "A signed update message is required." }, { status: 401 });
-  }
   const expectedMessage = updateAgentMessage({ wallet, payload });
-  if (body.message !== expectedMessage) {
-    return NextResponse.json({ error: "Signed update message does not match request." }, { status: 401 });
-  }
+  if (body.message !== expectedMessage) return errorJson("Signed update message does not match request.", 401);
   const verified = await verifyMessage({ address: wallet, message: body.message, signature: body.signature });
-  if (!verified) {
-    return NextResponse.json({ error: "Update signature verification failed." }, { status: 401 });
-  }
+  if (!verified) return errorJson("Update signature verification failed.", 401);
 
   const db = createDb();
   const agent = await db.query.agents.findFirst({ where: eq(agents.id, agentId) });
-  if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404 });
+  if (!agent) return errorJson("Agent not found.", 404);
   if (getAddress(agent.ownerWallet).toLowerCase() !== wallet.toLowerCase()) {
-    return NextResponse.json({ error: "Only the owning wallet can update this agent." }, { status: 403 });
+    return errorJson("Only the owning wallet can update this agent.", 403);
   }
 
   if (payload.name) {
     await db.update(agents).set({
       name: payload.name,
-      role: `Hosted ${payload.strategyMode || 'hit_rate'} ${payload.riskProfile || 'balanced'} sports market agent.`,
+      role: `Hosted ${payload.strategyMode || "hit_rate"} ${payload.riskProfile || "balanced"} sports market agent.`,
       metadataUri: `https://precall.arena/agents/${sanitizeSlug(payload.name)}`,
     }).where(eq(agents.id, agentId));
   }
@@ -127,5 +123,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const profile = await getMarketplaceAgentProfile(agentId);
-  return NextResponse.json({ ok: true, profile });
+  return noStoreJson({ ok: true, profile });
 }
