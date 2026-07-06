@@ -120,11 +120,52 @@ The worker runs outside the public web app.
 
 Precall exposes a standardized REST endpoint to allow external AI trading agents to fetch our structured prediction data programmatically.
 
-- **Endpoint**: `/api/v1/soccer/predictions`
-- **Protocol**: Standard **x402 Version 2** protocol (negotiation and settlement).
+- **Live endpoint**: `GET https://precall.fun/api/v1/soccer/predictions`
+- **Local endpoint**: `GET http://localhost:3002/api/v1/soccer/predictions`
+- **Protocol**: Circle Gateway **x402 Version 2** using Gateway batched settlement (`exact` scheme with `GatewayWalletBatched` metadata).
 - **Price**: `$0.01 USDC` (10,000 micro-USDC units).
 - **Security & Replay Protection**: Each transaction hash is verified on-chain against the Circle EVM Batching Facilitator and logged in the database to prevent double-spending or replay attacks.
 - **Graceful Error Handling**: Malformed or unverified transaction payloads are handled resiliently (returning a clean `400 Bad Request` validation JSON instead of triggering server-side 500 errors).
+
+Seller flow:
+
+1. A buyer or agent calls the endpoint without payment.
+2. The API returns `402 Payment Required` with a base64 `PAYMENT-REQUIRED` header.
+3. The buyer pays using Circle Gateway/x402 batching.
+4. The API verifies and settles the payment, records the transaction in `circle_actions`, and returns the protected JSON resource with a `PAYMENT-RESPONSE` header.
+
+Buyer integration with Circle CLI:
+
+```bash
+circle services inspect https://precall.fun/api/v1/soccer/predictions --output json
+```
+
+Estimate before paying:
+
+```bash
+circle services pay https://precall.fun/api/v1/soccer/predictions \
+  -X GET \
+  --address <BUYER_WALLET_ADDRESS> \
+  --chain eip155:5042002 \
+  --max-amount 0.01 \
+  --estimate \
+  --output json
+```
+
+Pay and fetch the resource:
+
+```bash
+circle services pay https://precall.fun/api/v1/soccer/predictions \
+  -X GET \
+  --address <BUYER_WALLET_ADDRESS> \
+  --chain eip155:5042002 \
+  --max-amount 0.01 \
+  --output json
+```
+
+The current Arc demo flow uses Arc Testnet (`eip155:5042002`). If `X402_ACCEPTED_NETWORKS` is changed for another deployment, buyers should use a chain returned by `circle services inspect` and allowed by the server config. Mainnet chains move real USDC.
+
+The protected response is a JSON array of up to 12 active soccer prediction records. Each row includes market identifiers, selected option, market price, AI probability, edge, confidence, status/risk labels, event timing, rationale/evidence fields, source URLs, and agent metadata.
 
 ## H. Leaderboard / Top 5
 
@@ -389,11 +430,37 @@ For local web development:
 npm run dev
 ```
 
-To test the paid predictions API flow locally:
+To test the paid predictions API flow locally, start the web app on the port used by the scratch verifier:
 
 ```bash
-npx tsx scratch/test_precall_api_x402.ts
+set -a; [ -f .env ] && . ./.env; set +a; npm run dev -w apps/web -- -p 3002
 ```
+
+Then run:
+
+```bash
+TMPDIR=/tmp npx tsx scratch/test_precall_api_x402.ts
+```
+
+You can also inspect the local endpoint with the Circle CLI. The response should include a `seller` address, an Arc Testnet chain entry, and a real USDC asset address in the raw `PAYMENT-REQUIRED` challenge:
+
+```bash
+circle services inspect http://localhost:3002/api/v1/soccer/predictions --output json
+```
+
+For a local paid fetch, prefer `127.0.0.1` and a longer timeout so the CLI does not trip over local Next.js compile latency:
+
+```bash
+circle services pay http://127.0.0.1:3002/api/v1/soccer/predictions \
+  -X GET \
+  --address <BUYER_WALLET_ADDRESS> \
+  --chain eip155:5042002 \
+  --max-amount 0.01 \
+  --timeout 120 \
+  --output json
+```
+
+If this reaches settlement but returns `Insufficient Gateway balance`, deposit testnet USDC into Gateway for the buyer wallet before retrying.
 
 # 16. Worker Commands
 

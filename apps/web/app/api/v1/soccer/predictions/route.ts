@@ -3,11 +3,71 @@ import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
 import { getMarketplaceSportsPredictions } from "../../../../../lib/marketplace";
 import { createDb } from "@precall/shared/db/client";
 import { circleActions } from "@precall/shared/db/schema";
-import { eq } from "drizzle-orm";
 
 const facilitator = new BatchFacilitatorClient({
   url: process.env.X402_FACILITATOR_URL || "https://gateway-api-testnet.circle.com",
 });
+
+const evmAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+const x402PriceAtomicUsdc = "10000"; // $0.01 USDC in micro-units (1e6)
+const gatewayAuthValidityWindowSeconds = 604900;
+
+type SupportedKind = {
+  network: string;
+  extra?: Record<string, unknown>;
+};
+
+function getSellerAddress() {
+  const address = process.env.CIRCLE_X402_SELLER_ADDRESS || process.env.AGENT_OWNER_WALLET || "";
+  return evmAddressPattern.test(address) ? address : null;
+}
+
+function getAcceptedNetworks() {
+  return (process.env.X402_ACCEPTED_NETWORKS || "")
+    .split(",")
+    .map(network => network.trim())
+    .filter(Boolean);
+}
+
+function getUsdcAddress(kind: SupportedKind) {
+  const assets = kind.extra?.assets;
+  if (!Array.isArray(assets)) return null;
+
+  const usdc = assets.find(asset => {
+    if (!asset || typeof asset !== "object") return false;
+    return (asset as { symbol?: unknown }).symbol === "USDC";
+  }) as { address?: unknown } | undefined;
+
+  const address = typeof usdc?.address === "string" ? usdc.address : "";
+  return evmAddressPattern.test(address) ? address : null;
+}
+
+function getVerifyingContract(kind: SupportedKind) {
+  const verifyingContract = kind.extra?.verifyingContract;
+  return typeof verifyingContract === "string" && evmAddressPattern.test(verifyingContract)
+    ? verifyingContract
+    : null;
+}
+
+function toPaymentRequirement(kind: SupportedKind, sellerAddress: string) {
+  const asset = getUsdcAddress(kind);
+  const verifyingContract = getVerifyingContract(kind);
+  if (!asset || !verifyingContract) return null;
+
+  return {
+    scheme: "exact",
+    network: kind.network,
+    asset,
+    amount: x402PriceAtomicUsdc,
+    payTo: sellerAddress,
+    maxTimeoutSeconds: gatewayAuthValidityWindowSeconds,
+    extra: {
+      name: "GatewayWalletBatched",
+      version: "1",
+      verifyingContract,
+    },
+  };
+}
 
 export async function GET(request: Request) {
   const headers = request.headers;
@@ -16,20 +76,29 @@ export async function GET(request: Request) {
   // 1. If payment is missing, construct the x402 V2 PAYMENT-REQUIRED challenge
   if (!paymentSignature) {
     try {
+      const sellerAddress = getSellerAddress();
+      if (!sellerAddress) {
+        return NextResponse.json(
+          { error: "Missing or invalid x402 seller address configuration" },
+          { status: 500 },
+        );
+      }
+
+      const acceptedNetworks = getAcceptedNetworks();
       const supported = await facilitator.getSupported();
-      const accepts = supported.kinds.map(kind => ({
-        scheme: "circle-batching",
-        network: kind.network,
-        asset: "USDC",
-        amount: "10000", // $0.01 USDC in micro-units (1e6)
-        payTo: process.env.CIRCLE_X402_SELLER_ADDRESS || process.env.AGENT_OWNER_WALLET,
-        maxTimeoutSeconds: 604800,
-        extra: {
-          name: "circle-batching",
-          version: "1.0.0",
-          verifyingContract: kind.extra?.verifyingContract
-        }
-      }));
+      const supportedKinds = acceptedNetworks.length
+        ? supported.kinds.filter(kind => acceptedNetworks.includes(kind.network))
+        : supported.kinds;
+      const accepts = supportedKinds
+        .map(kind => toPaymentRequirement(kind, sellerAddress))
+        .filter((requirement): requirement is NonNullable<typeof requirement> => Boolean(requirement));
+
+      if (!accepts.length) {
+        return NextResponse.json(
+          { error: "No Circle x402 facilitator networks match X402_ACCEPTED_NETWORKS" },
+          { status: 500 },
+        );
+      }
 
       const paymentRequired = {
         x402Version: 2,
@@ -64,38 +133,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid payment-signature header format (base64 expected)" }, { status: 400 });
   }
 
-  const txHash = payload.transactionHash;
-  if (!txHash) {
-    return NextResponse.json({ error: "Missing transactionHash in signature payload" }, { status: 400 });
-  }
-
   // 3. Fork Gating: Verify client network matches platform allowed networks
-  const allowedNetworks = (process.env.X402_ACCEPTED_NETWORKS || "").split(",").map(n => n.trim()).filter(Boolean);
+  const allowedNetworks = getAcceptedNetworks();
   const clientNetwork = payload.accepted?.network;
   if (clientNetwork && allowedNetworks.length > 0 && !allowedNetworks.includes(clientNetwork)) {
     return NextResponse.json({ error: `Fork mismatch. Network '${clientNetwork}' is not supported.` }, { status: 400 });
   }
 
-  // 4. Replay Protection: Check if this transaction has already been processed across any action type
-  const db = createDb();
-  const existing = await db
-    .select()
-    .from(circleActions)
-    .where(eq(circleActions.txHash, txHash))
-    .limit(1);
-
-  if (existing.length > 0) {
-    return NextResponse.json({ error: "Replay attack detected. Transaction hash has already been used." }, { status: 400 });
+  // 4. Verify & Settle using Circle Facilitator
+  const sellerAddress = getSellerAddress();
+  if (!sellerAddress) {
+    return NextResponse.json(
+      { error: "Missing or invalid x402 seller address configuration" },
+      { status: 500 },
+    );
   }
 
-  // 4. Verify & Settle using Circle Facilitator
   const requirements = {
-    scheme: "circle-batching",
+    scheme: "exact",
     network: payload.accepted?.network || "",
-    asset: payload.accepted?.asset || "USDC",
-    amount: "10000",
-    payTo: process.env.CIRCLE_X402_SELLER_ADDRESS || process.env.AGENT_OWNER_WALLET || "",
-    maxTimeoutSeconds: 604800,
+    asset: payload.accepted?.asset || "",
+    amount: x402PriceAtomicUsdc,
+    payTo: sellerAddress,
+    maxTimeoutSeconds: gatewayAuthValidityWindowSeconds,
+    extra: payload.accepted?.extra || {},
   };
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -114,10 +175,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Payment settlement failed", reason: settleResult.errorReason }, { status: 402 });
     }
 
-    // 5. Log transaction into circle_actions database
-    await db.insert(circleActions).values({
+    // 5. Log settled Gateway transaction into circle_actions database.
+    const txHash = typeof settleResult.transaction === "string" && settleResult.transaction
+      ? settleResult.transaction
+      : typeof payload.transactionHash === "string"
+        ? payload.transactionHash
+        : null;
+
+    await createDb().insert(circleActions).values({
       actionType: "x402_api_sale",
-      txHash: txHash,
+      txHash,
       amountUsdc: "0.01",
       walletAddress: settleResult.payer || verifyResult.payer || "",
       chain: payload.accepted?.network || "Arc Testnet",
