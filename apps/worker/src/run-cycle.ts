@@ -15,7 +15,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -641,6 +641,7 @@ export async function runSportsEdge() {
   const dailyTarget = sportsDailyTarget();
   const maxAnalyzed = maxSportsAnalyzedPerRun();
   const requireX402 = boolEnv("REQUIRE_SPORTS_X402", true);
+  const enforcedSportsCategory = sportsOnlyCategory("soccer");
   const sportsCouncil = await ensureSportsCouncilAgent({
     ownerWallet: optionalEnv("AGENT_OWNER_WALLET", "0x0000000000000000000000000000000000000000"),
   });
@@ -661,6 +662,10 @@ export async function runSportsEdge() {
     const evaluation = evaluateSportsCandidate(market, thresholds);
     if (!evaluation.eligible || !evaluation.candidate) {
       skipped.push(sportsRejectedSummary(market, evaluation.reasons));
+      continue;
+    }
+    if (enforcedSportsCategory && evaluation.candidate.classification.category !== enforcedSportsCategory) {
+      skipped.push({ ...sportsCandidateSummary(evaluation.candidate), reasons: ["wrong_sports_category"] });
       continue;
     }
     candidates.push(evaluation.candidate);
@@ -778,6 +783,7 @@ export async function runSportsEdge() {
   return {
     discoveryLimit,
     dailyTarget,
+    sportsOnlyCategory: enforcedSportsCategory ?? "all",
     maxAnalyzedSportsMarkets: maxAnalyzed,
     discovered: markets.length,
     checked: markets.length,

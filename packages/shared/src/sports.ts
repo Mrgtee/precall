@@ -57,6 +57,11 @@ export type SportsSkip = {
   candidateScore?: number;
 };
 
+export function sportsOnlyCategory(fallback = "") {
+  const category = optionalEnv("SPORTS_ONLY_CATEGORY", fallback).toLowerCase();
+  return category && category !== "all" && category !== "*" ? category : undefined;
+}
+
 const SPORTS_PATTERNS = [
   /\b(nba|wnba|mlb|nhl|nfl|ufc|ucl|atp|wta|ipl|mma|cs2|lol)\b/,
   /\b(champions league|premier league|la liga|serie a|bundesliga|ligue 1|world cup|soccer|football|basketball|baseball|hockey|tennis|golf|cricket|rugby|boxing|dota|counter-strike|league of legends|valorant)\b/,
@@ -94,8 +99,8 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   else if (/\b(cricket|ipl|cricipl|indian premier league)\b/.test(text)) category = "cricket";
   else if (/\b(golf)\b/.test(text)) category = "golf";
   else if (/\b(rugby)\b/.test(text)) category = "rugby";
+  else if (/\b(dota\s*2?|dota2|counter-strike|cs2|league of legends|lol|valorant|esports?)\b/.test(text)) category = "esports";
   else if (/\b(soccer|ucl|champions league|epl|ere|fifwc|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|united|city|hotspur|ajax|inter)\b/.test(text)) category = "soccer";
-  else if (/\b(dota|counter-strike|cs2|league of legends|lol|valorant)\b/.test(text)) category = "esports";
   else if (/\bfootball\b/.test(text)) category = "football";
   else if (isSports) category = "other_sports";
 
@@ -260,7 +265,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   const reasons = [...classification.reasons];
   if (market.status !== "active") reasons.push("inactive");
 
-  const forceCategory = optionalEnv("SPORTS_ONLY_CATEGORY");
+  const forceCategory = sportsOnlyCategory();
   if (forceCategory && classification.category !== forceCategory) {
     reasons.push("wrong_sports_category");
   }

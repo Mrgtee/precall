@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
 import type { OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -118,6 +118,37 @@ test("sports classifier supports match winner and spread markets", () => {
   const spread = classifySportsMarket(market({ title: "Thunder vs. Spurs: Spurs +7.5", slug: "nba-okc-sas-2026-05-24-spread-away-7pt5" }));
   assert.equal(spread.category, "nba");
   assert.equal(spread.marketKind, "spread");
+});
+
+test("sports classifier prioritizes explicit esports over broad soccer terms", () => {
+  const classification = classifySportsMarket(market({
+    title: "Valorant: Team Vitality vs Nongshim RedForce (BO3) - Esports World Cup Playoffs",
+    slug: "val-vit-ns1-2026-07-10",
+    description: "Esports playoff market with clear outcomes.",
+    outcomes: ["Team Vitality", "Nongshim RedForce"],
+    outcomePrices: [0.58, 0.42],
+  }));
+  assert.equal(classification.isSports, true);
+  assert.equal(classification.category, "esports");
+  assert.equal(classification.marketKind, "moneyline");
+});
+
+test("sports-only category helper supports worker soccer default", () => {
+  const previous = process.env.SPORTS_ONLY_CATEGORY;
+  try {
+    delete process.env.SPORTS_ONLY_CATEGORY;
+    assert.equal(sportsOnlyCategory(), undefined);
+    assert.equal(sportsOnlyCategory("soccer"), "soccer");
+
+    process.env.SPORTS_ONLY_CATEGORY = "all";
+    assert.equal(sportsOnlyCategory("soccer"), undefined);
+
+    process.env.SPORTS_ONLY_CATEGORY = "esports";
+    assert.equal(sportsOnlyCategory("soccer"), "esports");
+  } finally {
+    if (previous === undefined) delete process.env.SPORTS_ONLY_CATEGORY;
+    else process.env.SPORTS_ONLY_CATEGORY = previous;
+  }
 });
 
 test("sports event date keeps same-day markets eligible when Polymarket close time is later", () => {
