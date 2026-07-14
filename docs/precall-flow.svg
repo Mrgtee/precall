@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">How Precall Works</title>
+  <desc id="desc">A seven-stage flow showing market discovery, quality checks, a Circle Gateway x402 nanopayment for AISA and Tavily evidence, Sports Council analysis, locked publication, and a 0.05 USDC user unlock on Arc.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0f172a" flood-opacity="0.09"/>
+    </filter>
+    <style>
+      .title { font: 800 62px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .number { font: 800 21px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; text-anchor: middle; letter-spacing: 0; }
+      .label { font: 800 23px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .body { font: 500 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #475569; text-anchor: middle; letter-spacing: 0; }
+      .detail { font: 700 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #334155; text-anchor: middle; letter-spacing: 0; }
+      .price { font: 800 27px Inter, ui-sans-serif, system-ui, sans-serif; fill: #047857; text-anchor: middle; letter-spacing: 0; }
+      .card { fill: #ffffff; stroke: #dbe4ee; stroke-width: 2; rx: 8; filter: url(#shadow); }
+      .arrow { fill: none; stroke: #64748b; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#f8fafc"/>
+  <rect x="54" y="46" width="1812" height="988" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="960" y="154">How Precall Works</text>
+
+  <path class="arrow" d="M300 522 H326"/>
+  <path class="arrow" d="M555 522 H581"/>
+  <path class="arrow" d="M810 522 H836"/>
+  <path class="arrow" d="M1065 522 H1091"/>
+  <path class="arrow" d="M1320 522 H1346"/>
+  <path class="arrow" d="M1575 522 H1601"/>
+
+  <rect class="card" x="80" y="300" width="220" height="444"/>
+  <rect x="80" y="300" width="220" height="7" rx="3" fill="#0891b2"/>
+  <circle cx="190" cy="359" r="25" fill="#0891b2"/>
+  <text class="number" x="190" y="367">1</text>
+  <text class="label" x="190" y="430">Discover</text>
+  <text class="label" x="190" y="460">Markets</text>
+  <text class="body" x="190" y="518">Polymarket Gamma</text>
+  <text class="body" x="190" y="546">and CLOB provide</text>
+  <text class="body" x="190" y="574">live soccer markets,</text>
+  <text class="body" x="190" y="602">prices, and liquidity.</text>
+  <text class="detail" x="190" y="682">POLYMARKET</text>
+
+  <rect class="card" x="335" y="300" width="220" height="444"/>
+  <rect x="335" y="300" width="220" height="7" rx="3" fill="#d97706"/>
+  <circle cx="445" cy="359" r="25" fill="#d97706"/>
+  <text class="number" x="445" y="367">2</text>
+  <text class="label" x="445" y="430">Verify</text>
+  <text class="label" x="445" y="460">Quality</text>
+  <text class="body" x="445" y="518">Precall checks</text>
+  <text class="body" x="445" y="546">liquidity, spread,</text>
+  <text class="body" x="445" y="574">start time, and</text>
+  <text class="body" x="445" y="602">market clarity.</text>
+  <text class="detail" x="445" y="682">CHECK BEFORE SPEND</text>
+
+  <rect class="card" x="590" y="270" width="220" height="504" stroke="#0f766e" stroke-width="3"/>
+  <rect x="590" y="270" width="220" height="8" rx="3" fill="#0f766e"/>
+  <circle cx="700" cy="329" r="25" fill="#0f766e"/>
+  <text class="number" x="700" y="337">3</text>
+  <text class="label" x="700" y="398">Pay for</text>
+  <text class="label" x="700" y="428">Evidence</text>
+  <text class="body" x="700" y="486">The AISA endpoint</text>
+  <text class="body" x="700" y="514">quotes the resource.</text>
+  <text class="body" x="700" y="552">Circle Gateway x402</text>
+  <text class="body" x="700" y="580">pays the required</text>
+  <text class="body" x="700" y="608">USDC nanopayment.</text>
+  <text class="detail" x="700" y="690">CAPPED AGENT SPEND</text>
+  <text class="detail" x="700" y="718">CIRCLE GATEWAY x402</text>
+
+  <rect class="card" x="845" y="270" width="220" height="504" stroke="#2563eb" stroke-width="3"/>
+  <rect x="845" y="270" width="220" height="8" rx="3" fill="#2563eb"/>
+  <circle cx="955" cy="329" r="25" fill="#2563eb"/>
+  <text class="number" x="955" y="337">4</text>
+  <text class="label" x="955" y="398">Receive Paid</text>
+  <text class="label" x="955" y="428">Evidence</text>
+  <text class="body" x="955" y="486">AISA X/social signals</text>
+  <text class="body" x="955" y="514">and Tavily web/news</text>
+  <text class="body" x="955" y="542">results return as</text>
+  <text class="body" x="955" y="570">verified evidence.</text>
+  <text class="detail" x="955" y="680">api.aisa.one</text>
+  <text class="detail" x="955" y="708">AISA + TAVILY</text>
+
+  <rect class="card" x="1100" y="270" width="220" height="504" stroke="#7c3aed" stroke-width="3"/>
+  <rect x="1100" y="270" width="220" height="8" rx="3" fill="#7c3aed"/>
+  <circle cx="1210" cy="329" r="25" fill="#7c3aed"/>
+  <text class="number" x="1210" y="337">5</text>
+  <text class="label" x="1210" y="398">Sports</text>
+  <text class="label" x="1210" y="428">Council</text>
+  <text class="body" x="1210" y="486">Five specialist agents</text>
+  <text class="body" x="1210" y="514">review market data</text>
+  <text class="body" x="1210" y="542">and paid evidence,</text>
+  <text class="body" x="1210" y="570">then vote.</text>
+  <text class="detail" x="1210" y="630">FormScout / InjuryNews</text>
+  <text class="detail" x="1210" y="658">MarketMover / MatchupDesk</text>
+  <text class="detail" x="1210" y="686">Skeptic</text>
+
+  <rect class="card" x="1355" y="300" width="220" height="444"/>
+  <rect x="1355" y="300" width="220" height="7" rx="3" fill="#475569"/>
+  <circle cx="1465" cy="359" r="25" fill="#475569"/>
+  <text class="number" x="1465" y="367">6</text>
+  <text class="label" x="1465" y="430">Publish</text>
+  <text class="label" x="1465" y="460">Locked Call</text>
+  <text class="body" x="1465" y="518">A qualified call</text>
+  <text class="body" x="1465" y="546">shows the match and</text>
+  <text class="body" x="1465" y="574">risk label while the</text>
+  <text class="body" x="1465" y="602">analysis stays locked.</text>
+  <text class="detail" x="1465" y="682">PRECALL</text>
+
+  <rect class="card" x="1610" y="270" width="220" height="504" fill="#ecfdf5" stroke="#059669" stroke-width="3"/>
+  <rect x="1610" y="270" width="220" height="8" rx="3" fill="#059669"/>
+  <circle cx="1720" cy="329" r="25" fill="#059669"/>
+  <text class="number" x="1720" y="337">7</text>
+  <text class="label" x="1720" y="398">User Unlocks</text>
+  <text class="label" x="1720" y="428">the Call</text>
+  <text class="price" x="1720" y="490">0.05 USDC</text>
+  <text class="body" x="1720" y="538">Paid on Arc to reveal</text>
+  <text class="body" x="1720" y="566">the prediction,</text>
+  <text class="body" x="1720" y="594">probability, thesis,</text>
+  <text class="body" x="1720" y="622">and evidence.</text>
+  <rect x="1645" y="683" width="150" height="42" rx="6" fill="#059669"/>
+  <text x="1720" y="711" text-anchor="middle" style="font: 800 16px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; letter-spacing: 0;">ARC USDC</text>
+</svg>

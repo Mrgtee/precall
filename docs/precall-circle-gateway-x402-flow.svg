@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Precall Circle Gateway x402 Payment Flow</title>
+  <desc id="desc">A sequence flow showing how Precall funds a Gateway Wallet, requests paid AISA evidence, receives an HTTP 402 quote, applies spending controls, signs an x402 authorization, settles USDC through Circle Gateway, receives evidence, and records payment proof for the Sports Council.</desc>
+  <defs>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowTeal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#0f766e"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .title { font: 800 54px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .actor { font: 800 22px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .actorSub { font: 600 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #475569; text-anchor: middle; letter-spacing: 0; }
+      .step { font: 800 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .detail { font: 500 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #475569; text-anchor: middle; letter-spacing: 0; }
+      .localTitle { font: 800 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; letter-spacing: 0; }
+      .localBody { font: 600 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #475569; text-anchor: middle; letter-spacing: 0; }
+      .lane { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 7 8; }
+      .arrow { fill: none; stroke: #475569; stroke-width: 3; marker-end: url(#arrowSlate); }
+      .paymentArrow { fill: none; stroke: #0f766e; stroke-width: 3.5; marker-end: url(#arrowTeal); }
+      .actorCard { fill: #ffffff; stroke-width: 2; rx: 8; filter: url(#shadow); }
+      .localCard { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 7; filter: url(#shadow); }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#f8fafc"/>
+  <rect x="42" y="34" width="1836" height="1012" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <text class="title" x="960" y="108">Precall Circle Gateway x402 Payment Flow</text>
+
+  <rect class="actorCard" x="70" y="148" width="340" height="82" stroke="#334155"/>
+  <rect x="70" y="148" width="340" height="6" rx="3" fill="#334155"/>
+  <text class="actor" x="240" y="184">Precall Worker</text>
+  <text class="actorSub" x="240" y="210">Agent wallet + payment policy</text>
+
+  <rect class="actorCard" x="520" y="148" width="340" height="82" stroke="#2563eb"/>
+  <rect x="520" y="148" width="340" height="6" rx="3" fill="#2563eb"/>
+  <text class="actor" x="690" y="184">AISA Seller API</text>
+  <text class="actorSub" x="690" y="210">api.aisa.one: social + Tavily search</text>
+
+  <rect class="actorCard" x="970" y="148" width="340" height="82" stroke="#0f766e"/>
+  <rect x="970" y="148" width="340" height="6" rx="3" fill="#0f766e"/>
+  <text class="actor" x="1140" y="184">Circle Gateway x402</text>
+  <text class="actorSub" x="1140" y="210">Gateway Wallet + facilitator</text>
+
+  <rect class="actorCard" x="1420" y="148" width="340" height="82" stroke="#7c3aed"/>
+  <rect x="1420" y="148" width="340" height="6" rx="3" fill="#7c3aed"/>
+  <text class="actor" x="1590" y="184">Precall Evidence Layer</text>
+  <text class="actorSub" x="1590" y="210">Database + Sports Council</text>
+
+  <line class="lane" x1="240" y1="230" x2="240" y2="1018"/>
+  <line class="lane" x1="690" y1="230" x2="690" y2="1018"/>
+  <line class="lane" x1="1140" y1="230" x2="1140" y2="1018"/>
+  <line class="lane" x1="1590" y1="230" x2="1590" y2="1018"/>
+
+  <path class="paymentArrow" d="M240 274 H1140"/>
+  <rect x="485" y="244" width="410" height="52" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="step" x="690" y="265">1. Fund the Gateway Wallet</text>
+  <text class="detail" x="690" y="285">Deposit USDC so the agent has a unified Gateway balance.</text>
+
+  <rect class="localCard" x="84" y="316" width="312" height="70" stroke="#d97706"/>
+  <rect x="84" y="316" width="6" height="70" rx="3" fill="#d97706"/>
+  <text class="localTitle" x="240" y="342">2. Candidate Passes Quality Gates</text>
+  <text class="localBody" x="240" y="365">No paid request is made for a rejected market.</text>
+
+  <path class="arrow" d="M240 430 H690"/>
+  <rect x="312" y="400" width="306" height="52" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text class="step" x="465" y="421">3. Request Paid Evidence</text>
+  <text class="detail" x="465" y="441">AISA X/social + Tavily web/news search</text>
+
+  <path class="arrow" d="M690 500 H240"/>
+  <rect x="306" y="470" width="318" height="52" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
+  <text class="step" x="465" y="491">4. HTTP 402 Payment Required</text>
+  <text class="detail" x="465" y="511">Seller returns amount, network, and batching scheme.</text>
+
+  <rect class="localCard" x="72" y="530" width="336" height="130" stroke="#d97706"/>
+  <rect x="72" y="530" width="6" height="130" rx="3" fill="#d97706"/>
+  <text class="localTitle" x="240" y="556">5. Enforce Payment Controls</text>
+  <text class="localBody" x="240" y="579">Allowlisted host: api.aisa.one</text>
+  <text class="localBody" x="240" y="600">Accepted network + Gateway batching support</text>
+  <text class="localBody" x="240" y="621">Per-request cap + daily budget + minimum balance</text>
+  <text x="240" y="646" text-anchor="middle" style="font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #b45309; letter-spacing: 0;">FAILED CHECK: STOP BEFORE SIGNING; NO FUNDS MOVE</text>
+
+  <path class="paymentArrow" d="M240 700 H690"/>
+  <rect x="300" y="670" width="330" height="52" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="step" x="465" y="691">6. Sign and Retry the Request</text>
+  <text class="detail" x="465" y="711">Agent wallet signs locally; its private key never leaves Precall.</text>
+
+  <path class="paymentArrow" d="M690 770 H1140"/>
+  <rect x="752" y="740" width="326" height="52" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="step" x="915" y="761">7. Verify and Settle USDC</text>
+  <text class="detail" x="915" y="781">Seller submits authorization through the facilitator.</text>
+
+  <path class="paymentArrow" d="M1140 840 H690"/>
+  <rect x="750" y="810" width="330" height="52" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="step" x="915" y="831">8. Return Payment Confirmation</text>
+  <text class="detail" x="915" y="851">Gateway settlement returns a payment reference.</text>
+
+  <path class="arrow" d="M690 910 H240"/>
+  <rect x="296" y="880" width="338" height="52" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text class="step" x="465" y="901">9. Deliver the Paid Evidence</text>
+  <text class="detail" x="465" y="921">Social signals, web/news results, and match context</text>
+
+  <path class="arrow" d="M240 980 H1590"/>
+  <rect x="585" y="944" width="660" height="64" rx="6" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <text class="step" x="915" y="968">10. Store Evidence and Payment Proof</text>
+  <text class="detail" x="915" y="989">Save amount, network, provider, payment reference, and evidence; then run the Sports Council.</text>
+</svg>
