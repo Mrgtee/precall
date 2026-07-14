@@ -1,6 +1,7 @@
-import { numberEnv, optionalEnv } from "./env";
+import { boolEnv, numberEnv, optionalEnv } from "./env";
 import { clampBps, suggestedSizeBps } from "./scoring";
-import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsPredictionIdea, SportsRiskLevel, SportsVote } from "./types";
+import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsEvidenceTag, SportsPredictionIdea, SportsRiskLevel, SportsVote } from "./types";
+import { sportsEvidenceTagsForItem } from "./evidence/sports-tags";
 
 export type SportsCategory = "soccer" | "nba" | "mlb" | "nhl" | "ufc" | "football" | "esports" | "tennis" | "cricket" | "golf" | "rugby" | "other_sports";
 export type SportsMarketKind =
@@ -300,7 +301,13 @@ export function rankSportsCandidates(candidates: SportsCandidate[]) {
   );
 }
 
-export function buildSportsEvidenceContext(input: { market: PolymarketMarket; snapshot: OutcomeSnapshot; x402Evidence?: EvidenceItemInput[] | undefined }): EvidenceItemInput[] {
+export function buildSportsEvidenceContext(input: {
+  market: PolymarketMarket;
+  snapshot: OutcomeSnapshot;
+  x402Evidence?: EvidenceItemInput[] | undefined;
+  structuredEvidence?: EvidenceItemInput[] | undefined;
+  externalEvidence?: EvidenceItemInput[] | undefined;
+}): EvidenceItemInput[] {
   const fetchedAt = input.snapshot.capturedAt;
   const publicEvidence: EvidenceItemInput[] = [
     {
@@ -314,7 +321,7 @@ export function buildSportsEvidenceContext(input: { market: PolymarketMarket; sn
       fetchedAt,
       capturedAt: fetchedAt,
       paid: false,
-      metadata: { marketId: input.market.marketId, sports: true, liquidityUsd: input.market.liquidityUsd, volume24hUsd: input.market.volume24hUsd, publicData: true },
+      metadata: { marketId: input.market.marketId, sports: true, liquidityUsd: input.market.liquidityUsd, volume24hUsd: input.market.volume24hUsd, publicData: true, evidenceTags: ["fixture_context"] },
     },
     {
       evidenceId: "pm-selected-outcome",
@@ -327,10 +334,68 @@ export function buildSportsEvidenceContext(input: { market: PolymarketMarket; sn
       fetchedAt,
       capturedAt: fetchedAt,
       paid: false,
-      metadata: { outcomeIndex: input.snapshot.outcomeIndex, outcome: input.snapshot.outcome, priceBps: input.snapshot.priceBps, spreadBps: input.snapshot.spreadBps, publicData: true },
+      metadata: { outcomeIndex: input.snapshot.outcomeIndex, outcome: input.snapshot.outcome, priceBps: input.snapshot.priceBps, spreadBps: input.snapshot.spreadBps, publicData: true, evidenceTags: ["market_odds"] },
     },
   ];
-  return [...publicEvidence, ...(input.x402Evidence || [])];
+  return [...publicEvidence, ...(input.structuredEvidence || []), ...(input.x402Evidence || []), ...(input.externalEvidence || [])];
+}
+
+export type SportsEvidenceQualityResult = {
+  ok: boolean;
+  enabled: boolean;
+  reasons: string[];
+  minRealEvidenceItems: number;
+  realEvidenceCount: number;
+  realEvidenceIds: string[];
+  tags: SportsEvidenceTag[];
+  realEvidenceTags: SportsEvidenceTag[];
+};
+
+export function sportsEvidenceQualityGateEnabled() {
+  return boolEnv("REQUIRE_REAL_SPORTS_EVIDENCE", true);
+}
+
+function metadataFlagIsFalse(value: unknown) {
+  return value === false || String(value).toLowerCase() === "false";
+}
+
+function isIndependentSportsEvidence(item: EvidenceItemInput) {
+  if (item.sourceType === "polymarket_market" || item.sourceType === "polymarket_orderbook") return false;
+  if (item.provider === "polymarket_gamma" || item.provider === "polymarket_clob") return false;
+  if (item.provider === "precall_gateway_x402_evidence") return false;
+  if (item.metadata?.internalGatewayOnly === true || metadataFlagIsFalse(item.metadata?.analysisEvidence)) return false;
+  if (/failed to compile match news|failed to fetch match context|no match context returned|realistic, specific, and accurate football details/i.test(`${item.title} ${item.excerpt}`)) return false;
+  if (!item.sourceUrl || item.sourceUrl === "about:blank") return false;
+  return item.sourceType === "sports_structured" || item.sourceType === "circle_x402_news" || item.sourceType === "circle_x402_social" || item.sourceType === "free_web";
+}
+
+export function evaluateSportsEvidenceQuality(evidence: EvidenceItemInput[], options: { enabled?: boolean | undefined; minRealEvidenceItems?: number | undefined } = {}): SportsEvidenceQualityResult {
+  const enabled = options.enabled ?? sportsEvidenceQualityGateEnabled();
+  const minRealEvidenceItems = options.minRealEvidenceItems ?? numberEnv("SPORTS_MIN_REAL_EVIDENCE_ITEMS", 3);
+  const realEvidence = evidence.filter(isIndependentSportsEvidence);
+  const tags = [...new Set(evidence.flatMap(sportsEvidenceTagsForItem))];
+  const realEvidenceTags = [...new Set(realEvidence.flatMap(sportsEvidenceTagsForItem))];
+  const reasons: string[] = [];
+
+  if (!enabled) {
+    return { ok: true, enabled, reasons, minRealEvidenceItems, realEvidenceCount: realEvidence.length, realEvidenceIds: realEvidence.map((item) => item.evidenceId), tags, realEvidenceTags };
+  }
+
+  if (realEvidence.length < minRealEvidenceItems) reasons.push("insufficient_real_sports_evidence");
+  if (!realEvidenceTags.includes("form_stats") && !realEvidenceTags.includes("fixture_context")) reasons.push("missing_form_or_fixture_evidence");
+  if (!realEvidenceTags.includes("injury_lineup")) reasons.push("missing_injury_lineup_evidence");
+  if (!tags.includes("market_odds")) reasons.push("missing_market_odds_evidence");
+
+  return {
+    ok: reasons.length === 0,
+    enabled,
+    reasons,
+    minRealEvidenceItems,
+    realEvidenceCount: realEvidence.length,
+    realEvidenceIds: realEvidence.map((item) => item.evidenceId),
+    tags,
+    realEvidenceTags,
+  };
 }
 
 export function selectedSportsOptionLabel(market: PolymarketMarket, outcomeIndex: number) {

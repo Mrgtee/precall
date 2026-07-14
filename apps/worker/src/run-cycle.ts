@@ -4,6 +4,7 @@ import { runSportsCouncilDetailed } from "@precall/shared/agents/sports-council"
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
+import { fetchApiFootballEvidence, type SportsStructuredEvidenceProviderResult } from "@precall/shared/evidence/providers/api-football-provider";
 import { analysisPriceSkipReason, evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
@@ -15,7 +16,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, evaluateSportsEvidenceQuality, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -423,6 +424,20 @@ function x402Summary(result: X402EvidenceProviderResult | undefined) {
   };
 }
 
+function structuredEvidenceSummary(result: SportsStructuredEvidenceProviderResult | undefined) {
+  if (!result) return { enabled: false, status: "not_attempted", evidenceCount: 0 };
+  return {
+    enabled: result.enabled,
+    provider: result.provider,
+    status: result.status,
+    evidenceCount: result.evidence.length,
+    fixtureId: result.fixtureId,
+    teams: result.teams,
+    failureReason: result.failureReason,
+    error: result.error,
+  };
+}
+
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
@@ -697,12 +712,14 @@ export async function runSportsEdge() {
       let x402Result: X402EvidenceProviderResult | undefined;
       let aisaResult: X402EvidenceProviderResult | undefined;
       let tavilyResult: X402EvidenceProviderResult | undefined;
+      let structuredResult: SportsStructuredEvidenceProviderResult | undefined;
 
       try {
         const currentDailySpendUsdc = await getTodayX402SpendUsdc();
         analyzed += 1;
         const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-        const [aisaRes, tavilyRes] = await Promise.all([
+        const [structuredRes, aisaRes, tavilyRes] = await Promise.all([
+          fetchApiFootballEvidence({ market }),
           fetchAisaX402SocialEvidence({
             market,
             snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
@@ -715,6 +732,7 @@ export async function runSportsEdge() {
             dailySpendUsdc: currentDailySpendUsdc
           })
         ]);
+        structuredResult = structuredRes;
         aisaResult = aisaRes;
         tavilyResult = tavilyRes;
 
@@ -735,19 +753,35 @@ export async function runSportsEdge() {
 
         if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
           const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
-          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
+          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) }, failure });
           await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: failedRun?.id });
           await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: failedRun?.id });
           failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
           return;
         }
 
-        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
+        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, structuredEvidence: structuredResult.evidence, x402Evidence: x402Result.evidence });
+        const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext);
+        if (!evidenceQuality.ok) {
+          const reasons = ["insufficient_real_sports_evidence", ...evidenceQuality.reasons.filter((reason) => reason !== "insufficient_real_sports_evidence")];
+          const failure = `Sports evidence quality gate failed: ${reasons.join(", ")}`;
+          const skippedRun = await recordAgentRun({
+            status: "sports_skipped_evidence_quality",
+            model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+            inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
+            failure,
+            evidenceContext,
+          });
+          if (aisaResult) await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: skippedRun?.id });
+          if (tavilyResult) await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: skippedRun?.id });
+          skipped.push({ ...sportsCandidateSummary(candidate), reasons });
+          return;
+        }
         const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
         let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
         if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
           const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
-          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
+          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, structuredEvidence: structuredResult.evidence, x402Evidence: x402Result.evidence });
           idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
         }
         const thresholdFailures = sportsThresholdFailures(idea, thresholds);
@@ -758,8 +792,8 @@ export async function runSportsEdge() {
         const candidateRun = await recordAgentRun({
           status: "sports_analyzed",
           model: councilResult.model,
-          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), x402: x402Summary(x402Result) },
-          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, x402: x402Summary(x402Result) },
+          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
+          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
           evidenceContext,
           retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
           latencyMs: councilResult.totalLatencyMs,
@@ -773,7 +807,7 @@ export async function runSportsEdge() {
         sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason, suggestedSizeBps: idea.suggestedSizeBps });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
+        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) }, failure: message });
         if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
         failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
       }

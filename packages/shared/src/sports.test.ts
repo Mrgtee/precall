@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
-import type { OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, evaluateSportsEvidenceQuality, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
+import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
   return {
@@ -34,6 +34,24 @@ const snapshot: OutcomeSnapshot = {
   depthUsd: 120_000,
   capturedAt: now.toISOString(),
 };
+
+function sportsEvidence(evidenceId: string, tags: string[], overrides: Partial<EvidenceItemInput> = {}): EvidenceItemInput {
+  return {
+    evidenceId,
+    sourceType: "sports_structured",
+    provider: "api_football",
+    sourceUrl: `https://v3.football.api-sports.io/${evidenceId}`,
+    title: evidenceId,
+    excerpt: `${evidenceId} source-backed sports evidence`,
+    credibilityScore: 88,
+    fetchedAt: now.toISOString(),
+    capturedAt: now.toISOString(),
+    paid: false,
+    metadata: { evidenceTags: tags, provider: "api_football" },
+    ...overrides,
+  };
+}
+
 
 test("sports classifier identifies NBA and moneyline-style markets", () => {
   const classification = classifySportsMarket(market());
@@ -303,4 +321,40 @@ test("sports candidate eligibility respects SPORTS_ONLY_CATEGORY env variable", 
   } finally {
     delete process.env.SPORTS_ONLY_CATEGORY;
   }
+});
+
+
+test("sports evidence quality gate rejects Polymarket-only and internal Gateway packet evidence", () => {
+  const pmOnly = buildSportsEvidenceContext({ market: market(), snapshot });
+  const pmOnlyQuality = evaluateSportsEvidenceQuality(pmOnly, { enabled: true });
+  assert.equal(pmOnlyQuality.ok, false);
+  assert.equal(pmOnlyQuality.realEvidenceCount, 0);
+  assert.ok(pmOnlyQuality.reasons.includes("insufficient_real_sports_evidence"));
+
+  const gatewayPacket = sportsEvidence("circle-x402-gateway-1", ["market_odds"], {
+    sourceType: "circle_x402_social",
+    provider: "precall_gateway_x402_evidence",
+    sourceUrl: "https://polymarket.com/market/nba-nyk-bos-2026-05-24",
+    paid: true,
+    metadata: { evidenceTags: ["market_odds"], internalGatewayOnly: true, analysisEvidence: false },
+  });
+  const gatewayQuality = evaluateSportsEvidenceQuality(buildSportsEvidenceContext({ market: market(), snapshot, x402Evidence: [gatewayPacket] }), { enabled: true });
+  assert.equal(gatewayQuality.ok, false);
+  assert.equal(gatewayQuality.realEvidenceCount, 0);
+  assert.ok(gatewayQuality.reasons.includes("insufficient_real_sports_evidence"));
+});
+
+test("sports evidence quality gate passes with enough real structured football evidence", () => {
+  const structuredEvidence = [
+    sportsEvidence("api-football-fixture-context", ["fixture_context"]),
+    sportsEvidence("api-football-injuries", ["injury_lineup"]),
+    sportsEvidence("api-football-form-home", ["form_stats"]),
+  ];
+  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, structuredEvidence });
+  const quality = evaluateSportsEvidenceQuality(evidence, { enabled: true });
+  assert.equal(quality.ok, true);
+  assert.equal(quality.realEvidenceCount, 3);
+  assert.ok(quality.realEvidenceTags.includes("fixture_context"));
+  assert.ok(quality.realEvidenceTags.includes("injury_lineup"));
+  assert.ok(quality.tags.includes("market_odds"));
 });
