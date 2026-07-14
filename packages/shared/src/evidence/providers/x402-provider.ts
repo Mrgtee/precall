@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { createGatewayMiddleware, type PaymentRequest, type PaymentResponse } from "@circle-fin/x402-batching/server";
 import type { EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../../types";
-import { optionalEnv, llmConfig } from "../../env";
+import { optionalEnv } from "../../env";
+import { inferSportsEvidenceTagsFromText } from "../sports-tags";
 import { gatewayRuntimeConfig, payX402Resource, supportsX402Resource, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
 
 export function cleanSearchQuery(title: string): string {
@@ -68,6 +69,10 @@ export type X402EvidenceProviderResult = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function sportsEvidenceTagsForText(text: string) {
+  return inferSportsEvidenceTagsFromText(text);
 }
 
 function buildAisaSearchUrl(query: string) {
@@ -158,6 +163,7 @@ function evidenceFromAisaTweets(input: {
           marketId: input.market.marketId,
           selectedChain: input.payment.selectedChain,
           supportChecks: input.payment.supportChecks,
+          evidenceTags: sportsEvidenceTagsForText(`${tweet.text || ""} ${tweet.url || ""}`),
         },
       };
     })
@@ -197,6 +203,9 @@ function evidenceFromInternalGateway(input: {
         selectedChain: input.payment.selectedChain,
         supportChecks: input.payment.supportChecks,
         circleGatewayBatched: true,
+        internalGatewayOnly: true,
+        analysisEvidence: false,
+        evidenceTags: ["market_odds"],
       },
     }))
     .filter((item) => item.excerpt.length > 0);
@@ -215,64 +224,17 @@ function attachJsonHelpers(res: ServerResponse) {
   return response;
 }
 
-async function fetchMatchIntelligenceFromLLM(title: string): Promise<string> {
-  const config = llmConfig();
-  if (!config.apiKey) {
-    return "No active LLM credentials configured. Real-time news is temporarily unavailable.";
-  }
-
-  try {
-    const prompt = `You are a professional football match preview compiler. Compile a detailed matchup factsheet and news brief for: "${title}".
-Provide realistic, specific, and accurate football details for the following sections:
-1. Tactics & Playstyle: Typical manager setups, formations, transition speeds, low vs high line tactics, and key matchup strengths/weaknesses.
-2. Key Stats & Head-to-Head: Recent xG (expected goals), scoring margins, historical H2H results, draw frequency, and form.
-3. Squad & Injuries: 2-3 key players injured or suspended (e.g. key defender, main midfielder), schedule congestion, and expected lineup rotations.
-4. Standings & Motivation: Standings/points context, tournament progression rules (e.g. if one team only needs a draw to advance).
-
-Return only the plain compiled information. Do not suggest bet recommendations or predict the future outcome, just compile the current state, team news, and facts. Keep it under 600 words.`;
-
-    const response = await fetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${config.apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-      }),
-    });
-
-    if (!response.ok) {
-      return `Failed to fetch match context from LLM provider: ${response.statusText}`;
-    }
-
-    const payload = await response.json() as { choices?: { message?: { content?: string } }[] };
-    return payload.choices?.[0]?.message?.content || "No match context returned from compiler.";
-  } catch (error) {
-    return `Failed to compile match news: ${error instanceof Error ? error.message : String(error)}`;
-  }
-}
-
 async function paidEvidencePayload(input: { market: PolymarketMarket; query: string }) {
   const priceSummary = input.market.outcomePrices
     .map((price, index) => `${input.market.outcomes[index] || `Outcome ${index + 1}`}: ${Math.round(Number(price || 0) * 100)}%`)
     .join(", ");
-
-  const matchIntel = await fetchMatchIntelligenceFromLLM(input.market.title);
 
   return {
     provider: "precall_gateway_x402_evidence",
     signals: [
       {
         title: `Gateway-paid market packet for ${input.market.title}`,
-        excerpt: `Circle Gateway/x402 paid evidence packet. Query: ${input.query}. Polymarket prices: ${priceSummary || "unavailable"}. Liquidity: $${Math.round(input.market.liquidityUsd || 0).toLocaleString()}. Volume 24h: $${Math.round(input.market.volume24hUsd || 0).toLocaleString()}.`,
-        sourceUrl: input.market.url,
-      },
-      {
-        title: "Gateway-paid Match Intelligence Context",
-        excerpt: matchIntel,
+        excerpt: `Circle Gateway/x402 paid market packet. Query: ${input.query}. Polymarket prices: ${priceSummary || "unavailable"}. Liquidity: $${Math.round(input.market.liquidityUsd || 0).toLocaleString()}. Volume 24h: $${Math.round(input.market.volume24hUsd || 0).toLocaleString()}. This packet proves paid retrieval but is not independent match intelligence.`,
         sourceUrl: input.market.url,
       },
     ],
@@ -427,6 +389,7 @@ function evidenceFromStableEnrichReddit(input: {
           marketId: input.market.marketId,
           selectedChain: input.payment.selectedChain,
           supportChecks: input.payment.supportChecks,
+          evidenceTags: sportsEvidenceTagsForText(`${post.title || ""} ${post.selftext || post.text || ""}`),
         },
       };
     })
@@ -614,36 +577,11 @@ function evidenceFromTavily(input: {
       endpoint: aisaTavilySearchEndpoint(),
       marketId: input.market.marketId,
       selectedChain: input.payment.selectedChain,
+      evidenceTags: sportsEvidenceTagsForText(`${res.title || ""} ${res.content || ""}`),
     },
   }));
 
-  const answer = (input.data as { answer?: string })?.answer;
-  if (answer) {
-    items.unshift({
-      evidenceId: "circle-x402-tavily-summary",
-      sourceType: "circle_x402_news" as const,
-      provider: "aisa_x402_tavily",
-      sourceUrl: input.market.url || input.url,
-      title: "Tavily AI Match Summary Brief",
-      excerpt: answer.slice(0, 800),
-      credibilityScore: 90,
-      fetchedAt,
-      capturedAt: fetchedAt,
-      paid: true,
-      paymentAmountUsdc: input.payment.amountUsdc,
-      paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
-      paymentRef: input.payment.paymentRef,
-      txHash: input.payment.txHash,
-      metadata: {
-        provider: "aisa_x402_tavily",
-        endpoint: aisaTavilySearchEndpoint(),
-        marketId: input.market.marketId,
-        selectedChain: input.payment.selectedChain,
-      },
-    });
-  }
-
-  return items.filter((item) => item.excerpt.length > 0);
+  return items.filter((item) => item.excerpt.length > 0 && item.sourceUrl !== input.market.url);
 }
 
 export async function fetchTavilyX402SearchEvidence(input: {

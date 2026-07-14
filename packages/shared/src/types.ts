@@ -9,10 +9,20 @@ export type CallStatus = "draft" | "published" | "expired" | "resolving" | "reso
 export type EvidenceSourceType =
   | "polymarket_market"
   | "polymarket_orderbook"
+  | "sports_structured"
   | "circle_x402_social"
   | "circle_x402_news"
   | "free_web"
   | "admin_note";
+
+export type SportsEvidenceTag =
+  | "form_stats"
+  | "injury_lineup"
+  | "fixture_context"
+  | "head_to_head"
+  | "standings"
+  | "tactical_news"
+  | "market_odds";
 
 export type CircleActionType =
   | "x402_api_payment"

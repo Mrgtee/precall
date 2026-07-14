@@ -262,7 +262,7 @@ test("provider fallback can be disabled", async () => {
   }
 });
 
-test("tavily x402 payment successfully parses search results and answer summary", async () => {
+test("tavily x402 payment parses source-backed search results only", async () => {
   const result = await fetchTavilyX402SearchEvidence({
     market,
     payResource: async <T>() => ({
@@ -290,12 +290,11 @@ test("tavily x402 payment successfully parses search results and answer summary"
 
   assert.equal(result.status, "success");
   assert.equal(result.provider, "aisa_x402_tavily");
-  assert.equal(result.evidence.length, 2); // Summary + 1 result
-  assert.equal(result.evidence[0]?.title, "Tavily AI Match Summary Brief");
-  assert.equal(result.evidence[0]?.excerpt, "The match will likely favor the home team.");
-  assert.equal(result.evidence[1]?.title, "Match Outlook");
-  assert.equal(result.evidence[1]?.excerpt, "Injury updates on key players.");
-  assert.equal(result.evidence[1]?.sourceUrl, "https://espn.com/match");
+  assert.equal(result.evidence.length, 1);
+  assert.equal(result.evidence[0]?.title, "Match Outlook");
+  assert.equal(result.evidence[0]?.excerpt, "Injury updates on key players.");
+  assert.equal(result.evidence[0]?.sourceUrl, "https://espn.com/match");
+  assert.deepEqual(result.evidence[0]?.metadata?.evidenceTags, ["injury_lineup"]);
 });
 
 test("tavily x402 payment failure handles error states correctly", async () => {

@@ -78,6 +78,10 @@
       "types": "./src/evidence/providers/x402-provider.ts",
       "import": "./src/evidence/providers/x402-provider.ts"
     },
+    "./evidence/providers/api-football-provider": {
+      "types": "./src/evidence/providers/api-football-provider.ts",
+      "import": "./src/evidence/providers/api-football-provider.ts"
+    },
     "./agents/sports-council": {
       "types": "./src/agents/sports-council.ts",
       "import": "./src/agents/sports-council.ts"
