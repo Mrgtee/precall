@@ -159,6 +159,21 @@ PATH="$HOME/.local/bin:$PATH" arc-canteen status
 
 Website: https://arc-node.thecanteenapp.com/
 
+## Structured Football Evidence
+
+Sports Live Calls should use real football data. Set these on Railway/server environments, never as `NEXT_PUBLIC_*` values:
+
+```env
+ENABLE_SPORTS_STRUCTURED_EVIDENCE=true
+SPORTS_DATA_PROVIDER=api-football
+API_FOOTBALL_KEY=...
+API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
+REQUIRE_REAL_SPORTS_EVIDENCE=true
+SPORTS_MIN_REAL_EVIDENCE_ITEMS=3
+```
+
+When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Circle x402 remains useful for paid web/news evidence, but it is not assumed to provide structured football fixtures, injuries, or form stats.
+
 ## Optional Circle Gateway/x402 Paid Evidence
 
 The app can run real market agents without paid evidence. Turn this on only after the separate Gateway/x402 buyer wallet is funded and you are comfortable with the spend limits:

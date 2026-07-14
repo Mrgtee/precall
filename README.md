@@ -181,14 +181,15 @@ Precall separates active predictions from historical reputation.
 
 1. The Railway worker discovers live Polymarket markets.
 2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
-3. It builds an evidence packet from Polymarket data and optional x402 evidence.
-4. An AI council analyzes the market using supplied evidence IDs only.
-5. The system calculates market probability, AI probability, edge, confidence, and risk.
-6. Valid sports markets become Sports Live Calls with strong, lean, or high-risk labels.
-7. Bonded Arc Calls publish only if strict YES/NO quality gates pass.
-8. Users unlock full reasoning with Arc USDC.
-9. Expired or resolved calls move out of active views.
-10. The leaderboard records historical resolved performance.
+3. It builds an evidence packet from Polymarket data, structured API-Football data, and optional x402 paid web/news evidence.
+4. Sports calls must pass the real-evidence gate before any AI council analysis is stored publicly.
+5. An AI council analyzes the market using supplied evidence IDs only.
+6. The system calculates market probability, AI probability, edge, confidence, and risk.
+7. Valid sports markets become Sports Live Calls with strong, lean, or high-risk labels.
+8. Bonded Arc Calls publish only if strict YES/NO quality gates pass.
+9. Users unlock full reasoning with Arc USDC.
+10. Expired or resolved calls move out of active views.
+11. The leaderboard records historical resolved performance.
 
 # 8. Architecture
 
@@ -376,6 +377,13 @@ ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
 # X402_ACCEPTED_NETWORKS=eip155:5042002
 # X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
 
+ENABLE_SPORTS_STRUCTURED_EVIDENCE=true
+SPORTS_DATA_PROVIDER=api-football
+API_FOOTBALL_KEY=...
+API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
+REQUIRE_REAL_SPORTS_EVIDENCE=true
+SPORTS_MIN_REAL_EVIDENCE_ITEMS=3
+
 ENABLE_SPORTS_EDGE=true
 SPORTS_DISCOVERY_MARKET_LIMIT=350
 SPORTS_DAILY_TARGET=8
@@ -409,7 +417,7 @@ MAX_ANALYSIS_PRICE_BPS=9900
 WORKER_TRIGGER_SECRET=generate-a-long-random-secret
 ```
 
-Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
+Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. With `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `worker:sports` will record `sports_skipped_evidence_quality` instead of storing a live call when API-Football/x402 evidence is too thin. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
 
 # 15. Local Development
 
@@ -480,7 +488,7 @@ What they do:
 
 - `worker:health`: checks worker, DB, model, Polymarket, Arc, Circle, and config health.
 - `worker:run-once`: scans strict YES/NO markets and may publish bonded Arc Calls.
-- `worker:sports`: scans sports markets and stores Sports Live Calls.
+- `worker:sports`: scans sports markets, fetches structured football/x402 evidence, skips weak evidence packets, and stores qualifying Sports Live Calls.
 - `worker:expire`: expires mature bonded calls and sports calls whose event start has passed.
 - `worker:resolve`: runs expiry, then resolves supported mature YES/NO calls.
 - `worker:gateway:balance`: checks Gateway balance for the configured buyer wallet.
