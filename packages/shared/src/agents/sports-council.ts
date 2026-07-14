@@ -1,5 +1,6 @@
 import { numberEnv, llmConfig } from "../env";
 import { validateEvidenceIds } from "../evidence";
+import { explicitSportsEvidenceTagsForItem, hasSportsEvidenceTag, sportsEvidenceTagsForItem } from "../evidence/sports-tags";
 import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsAgentFailure, SportsAgentName, SportsCouncilResult, SportsVote } from "../types";
 
 export interface HostedSportsAgentPromptContext {
@@ -189,7 +190,7 @@ function buildSportsPrompt(input: {
     .map((outcome, index) => `${index}: ${outcome} at ${Math.round((input.market.outcomePrices[index] || 0) * 10_000)} bps`)
     .join("\n");
   const evidence = input.evidence
-    .map((item) => `- ${item.evidenceId} [${item.sourceType}, provider ${item.provider}, paid ${item.paid ? "yes" : "no"}, score ${item.credibilityScore}, ${item.fetchedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
+    .map((item) => `- ${item.evidenceId} [${item.sourceType}, tags ${sportsEvidenceTagsForItem(item).join(", ") || "untagged"}, provider ${item.provider}, paid ${item.paid ? "yes" : "no"}, score ${item.credibilityScore}, ${item.fetchedAt}] ${item.title}: ${item.excerpt} (${item.sourceUrl})`)
     .join("\n");
   const strategyMode = (input.hostedAgent?.strategyMode || "hit_rate").trim().toLowerCase();
   const riskProfile = (input.hostedAgent?.riskProfile || "balanced").trim().toLowerCase();
@@ -294,6 +295,15 @@ export function filterSportsEvidenceForAgent(agentName: SportsAgentName, evidenc
 
     if (agentName === "MarketMover" && (item.evidenceId === "pm-selected-outcome" || item.sourceType === "polymarket_orderbook")) {
       return true;
+    }
+
+    const explicitTags = explicitSportsEvidenceTagsForItem(item);
+    if (explicitTags.length > 0) {
+      if (agentName === "FormScout") return hasSportsEvidenceTag(item, ["form_stats", "head_to_head", "standings", "fixture_context"]);
+      if (agentName === "InjuryNews") return hasSportsEvidenceTag(item, ["injury_lineup"]);
+      if (agentName === "MarketMover") return hasSportsEvidenceTag(item, ["market_odds"]);
+      if (agentName === "MatchupDesk") return hasSportsEvidenceTag(item, ["tactical_news", "fixture_context", "injury_lineup"]);
+      return false;
     }
 
     const text = `${item.title} ${item.excerpt}`.toLowerCase();

@@ -135,3 +135,57 @@ test("filterSportsEvidenceForAgent matches keywords and segments evidence correc
   const skeptic = filterSportsEvidenceForAgent("Skeptic", mockEvidence);
   assert.equal(skeptic.length, 6);
 });
+
+
+test("filterSportsEvidenceForAgent routes explicit evidence tags before keyword fallback", () => {
+  const item = (evidenceId: string, tags: string[]): EvidenceItemInput => ({
+    evidenceId,
+    sourceType: "sports_structured",
+    provider: "api_football",
+    sourceUrl: "https://v3.football.api-sports.io/source",
+    title: "Structured source item",
+    excerpt: "Provider returned a source-backed item.",
+    credibilityScore: 88,
+    fetchedAt: "2026-06-22T00:00:00Z",
+    capturedAt: "2026-06-22T00:00:00Z",
+    paid: false,
+    metadata: { evidenceTags: tags },
+  });
+
+  const taggedEvidence: EvidenceItemInput[] = [
+    {
+      evidenceId: "pm-market",
+      sourceType: "polymarket_market",
+      provider: "polymarket",
+      sourceUrl: "https://example.com",
+      title: "Market Baseline",
+      excerpt: "Baseline market data.",
+      credibilityScore: 90,
+      fetchedAt: "2026-06-22T00:00:00Z",
+      capturedAt: "2026-06-22T00:00:00Z",
+      paid: false,
+    },
+    {
+      evidenceId: "pm-selected-outcome",
+      sourceType: "polymarket_orderbook",
+      provider: "polymarket",
+      sourceUrl: "https://example.com",
+      title: "Orderbook Detail",
+      excerpt: "Orderbook snapshot.",
+      credibilityScore: 85,
+      fetchedAt: "2026-06-22T00:00:00Z",
+      capturedAt: "2026-06-22T00:00:00Z",
+      paid: false,
+      metadata: { evidenceTags: ["market_odds"] },
+    },
+    item("tagged-form", ["form_stats"]),
+    item("tagged-injury", ["injury_lineup"]),
+    item("tagged-market", ["market_odds"]),
+    item("tagged-matchup", ["tactical_news"]),
+  ];
+
+  assert.deepEqual(filterSportsEvidenceForAgent("FormScout", taggedEvidence).map((entry) => entry.evidenceId), ["pm-market", "tagged-form"]);
+  assert.deepEqual(filterSportsEvidenceForAgent("InjuryNews", taggedEvidence).map((entry) => entry.evidenceId), ["pm-market", "tagged-injury"]);
+  assert.deepEqual(filterSportsEvidenceForAgent("MarketMover", taggedEvidence).map((entry) => entry.evidenceId), ["pm-market", "pm-selected-outcome", "tagged-market"]);
+  assert.deepEqual(filterSportsEvidenceForAgent("MatchupDesk", taggedEvidence).map((entry) => entry.evidenceId), ["pm-market", "tagged-injury", "tagged-matchup"]);
+});
