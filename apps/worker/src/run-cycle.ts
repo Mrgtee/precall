@@ -764,7 +764,7 @@ export async function runSportsEdge() {
         }
 
         let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
-        const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext);
+        const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext, { market });
         if (!evidenceQuality.ok) {
           const reasons = ["insufficient_real_sports_evidence", ...evidenceQuality.reasons.filter((reason) => reason !== "insufficient_real_sports_evidence")];
           const failure = `Sports evidence quality gate failed: ${reasons.join(", ")}`;

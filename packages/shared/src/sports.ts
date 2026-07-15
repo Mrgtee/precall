@@ -359,20 +359,97 @@ function metadataFlagIsFalse(value: unknown) {
   return value === false || String(value).toLowerCase() === "false";
 }
 
-function isIndependentSportsEvidence(item: EvidenceItemInput) {
+type SportsEvidenceQualityOptions = {
+  enabled?: boolean | undefined;
+  minRealEvidenceItems?: number | undefined;
+  market?: PolymarketMarket | undefined;
+  now?: Date | undefined;
+  maxEvidenceAgeHours?: number | undefined;
+  requireSourceBackedNews?: boolean | undefined;
+};
+
+function sportsEvidenceMaxAgeHours() {
+  return numberEnv("SPORTS_EVIDENCE_MAX_AGE_HOURS", 96);
+}
+
+function sportsRequireSourceBackedNews() {
+  return boolEnv("SPORTS_REQUIRE_SOURCE_BACKED_NEWS", true);
+}
+
+function metadataString(item: EvidenceItemInput, keys: string[]) {
+  const metadata = item.metadata || {};
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function sourcePublishedAtForItem(item: EvidenceItemInput): Date | null {
+  const raw = metadataString(item, ["sourcePublishedAt", "publishedAt", "publishedDate", "published_date", "createdAt", "created_at"]);
+  if (!raw) return null;
+  const parsed = /^\d+(?:\.\d+)?$/.test(raw) ? new Date(Number(raw) * 1000) : new Date(raw);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function eventYearForMarket(market: PolymarketMarket | undefined) {
+  if (!market) return null;
+  const eventTime = sportsEventTime(market);
+  if (!eventTime) return null;
+  const date = new Date(eventTime);
+  return Number.isFinite(date.getTime()) ? date.getUTCFullYear() : null;
+}
+
+function evidenceContainsOldSportsYear(item: EvidenceItemInput, market: PolymarketMarket | undefined) {
+  const eventYear = eventYearForMarket(market);
+  if (!eventYear) return false;
+  const text = (item.title + " " + item.excerpt).toLowerCase();
+  const tags = sportsEvidenceTagsForItem(item);
+  const currentStatusEvidence = tags.includes("injury_lineup") || /\b(injur(?:y|ies|ed)|lineups?|suspended|fitness|available|unavailable|fatigue|rotation)\b/i.test(text);
+  if (!currentStatusEvidence) return false;
+  const years = [...text.matchAll(/\b(20\d{2})\b/g)].map((match) => Number(match[1])).filter((year) => Number.isFinite(year));
+  if (years.length === 0 || years.includes(eventYear)) return false;
+  return years.some((year) => year < eventYear);
+}
+
+function staleSportsEvidenceReason(item: EvidenceItemInput, options: SportsEvidenceQualityOptions) {
+  const publishedAt = sourcePublishedAtForItem(item);
+  const now = options.now || new Date();
+  const maxAgeHours = options.maxEvidenceAgeHours ?? sportsEvidenceMaxAgeHours();
+  if (publishedAt && Number.isFinite(maxAgeHours) && maxAgeHours > 0) {
+    const ageMs = now.getTime() - publishedAt.getTime();
+    if (ageMs > maxAgeHours * 3_600_000) return "stale_sports_evidence";
+  }
+  if (evidenceContainsOldSportsYear(item, options.market)) return "old_year_sports_evidence";
+  return "";
+}
+
+function isBaseIndependentSportsEvidence(item: EvidenceItemInput) {
   if (item.sourceType === "polymarket_market" || item.sourceType === "polymarket_orderbook") return false;
   if (item.provider === "polymarket_gamma" || item.provider === "polymarket_clob") return false;
   if (item.provider === "precall_gateway_x402_evidence") return false;
   if (item.metadata?.internalGatewayOnly === true || metadataFlagIsFalse(item.metadata?.analysisEvidence)) return false;
-  if (/failed to compile match news|failed to fetch match context|no match context returned|realistic, specific, and accurate football details/i.test(`${item.title} ${item.excerpt}`)) return false;
+  if (/failed to compile match news|failed to fetch match context|no match context returned|realistic, specific, and accurate football details/i.test(item.title + " " + item.excerpt)) return false;
   if (!item.sourceUrl || item.sourceUrl === "about:blank") return false;
   return item.sourceType === "sports_structured" || item.sourceType === "circle_x402_news" || item.sourceType === "circle_x402_social" || item.sourceType === "free_web";
 }
 
-export function evaluateSportsEvidenceQuality(evidence: EvidenceItemInput[], options: { enabled?: boolean | undefined; minRealEvidenceItems?: number | undefined } = {}): SportsEvidenceQualityResult {
+function isIndependentSportsEvidence(item: EvidenceItemInput, options: SportsEvidenceQualityOptions) {
+  if (!isBaseIndependentSportsEvidence(item)) return false;
+  return staleSportsEvidenceReason(item, options) === "";
+}
+
+function isSourceBackedSportsEvidence(item: EvidenceItemInput) {
+  return item.sourceType === "sports_structured" || item.sourceType === "circle_x402_news" || item.sourceType === "free_web";
+}
+export function evaluateSportsEvidenceQuality(evidence: EvidenceItemInput[], options: SportsEvidenceQualityOptions = {}): SportsEvidenceQualityResult {
   const enabled = options.enabled ?? sportsEvidenceQualityGateEnabled();
   const minRealEvidenceItems = options.minRealEvidenceItems ?? numberEnv("SPORTS_MIN_REAL_EVIDENCE_ITEMS", 3);
-  const realEvidence = evidence.filter(isIndependentSportsEvidence);
+  const baseRealEvidence = evidence.filter(isBaseIndependentSportsEvidence);
+  const staleRejectedEvidence = baseRealEvidence.filter((item) => staleSportsEvidenceReason(item, options));
+  const realEvidence = baseRealEvidence.filter((item) => isIndependentSportsEvidence(item, options));
+  const sourceBackedRealEvidence = realEvidence.filter(isSourceBackedSportsEvidence);
   const tags = [...new Set(evidence.flatMap(sportsEvidenceTagsForItem))];
   const realEvidenceTags = [...new Set(realEvidence.flatMap(sportsEvidenceTagsForItem))];
   const reasons: string[] = [];
@@ -381,9 +458,13 @@ export function evaluateSportsEvidenceQuality(evidence: EvidenceItemInput[], opt
     return { ok: true, enabled, reasons, minRealEvidenceItems, realEvidenceCount: realEvidence.length, realEvidenceIds: realEvidence.map((item) => item.evidenceId), tags, realEvidenceTags };
   }
 
+  if (staleRejectedEvidence.length > 0) reasons.push("stale_or_old_sports_evidence");
   if (realEvidence.length < minRealEvidenceItems) reasons.push("insufficient_real_sports_evidence");
   if (!realEvidenceTags.includes("form_stats") && !realEvidenceTags.includes("fixture_context")) reasons.push("missing_form_or_fixture_evidence");
   if (!realEvidenceTags.includes("injury_lineup")) reasons.push("missing_injury_lineup_evidence");
+  const requireSourceBackedNews = options.requireSourceBackedNews ?? sportsRequireSourceBackedNews();
+  if (requireSourceBackedNews && sourceBackedRealEvidence.length === 0) reasons.push("missing_source_backed_news_evidence");
+  if (requireSourceBackedNews && realEvidenceTags.includes("injury_lineup") && !sourceBackedRealEvidence.some((item) => sportsEvidenceTagsForItem(item).includes("injury_lineup"))) reasons.push("missing_source_backed_injury_evidence");
   if (!tags.includes("market_odds")) reasons.push("missing_market_odds_evidence");
 
   return {

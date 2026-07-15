@@ -344,6 +344,49 @@ test("sports evidence quality gate rejects Polymarket-only and internal Gateway 
   assert.ok(gatewayQuality.reasons.includes("insufficient_real_sports_evidence"));
 });
 
+test("sports evidence quality gate rejects stale published sports evidence", () => {
+  const staleInjury = sportsEvidence("circle-x402-tavily-stale-injury", ["injury_lineup"], {
+    title: "Old injury report",
+    excerpt: "Key starter injury update.",
+    metadata: { evidenceTags: ["injury_lineup"], sourcePublishedAt: "2026-05-19T00:00:00.000Z" },
+  });
+  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, x402Evidence: [staleInjury] });
+  const quality = evaluateSportsEvidenceQuality(evidence, { enabled: true, market: market(), now, maxEvidenceAgeHours: 24, minRealEvidenceItems: 1 });
+  assert.equal(quality.ok, false);
+  assert.equal(quality.realEvidenceCount, 0);
+  assert.ok(quality.reasons.includes("stale_or_old_sports_evidence"));
+  assert.ok(quality.reasons.includes("missing_injury_lineup_evidence"));
+});
+
+test("sports evidence quality gate rejects old-year injury snippets", () => {
+  const oldYearInjury = sportsEvidence("circle-x402-firecrawl-old-year", ["injury_lineup"], {
+    title: "Messi injury update from 2024",
+    excerpt: "A 2024 hamstring injury note is not current team news for this event.",
+    metadata: { evidenceTags: ["injury_lineup"], sourcePublishedAt: now.toISOString() },
+  });
+  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, x402Evidence: [oldYearInjury] });
+  const quality = evaluateSportsEvidenceQuality(evidence, { enabled: true, market: market(), now, minRealEvidenceItems: 1 });
+  assert.equal(quality.ok, false);
+  assert.equal(quality.realEvidenceCount, 0);
+  assert.ok(quality.reasons.includes("stale_or_old_sports_evidence"));
+});
+
+test("sports evidence quality gate rejects social-only injury evidence", () => {
+  const sourceBackedFixture = sportsEvidence("circle-x402-tavily-fixture-context", ["fixture_context"]);
+  const sourceBackedForm = sportsEvidence("circle-x402-firecrawl-form", ["form_stats"]);
+  const socialInjury = sportsEvidence("circle-x402-social-injury", ["injury_lineup"], {
+    sourceType: "circle_x402_social",
+    provider: "aisa_x402_social",
+    sourceUrl: "https://x.com/reporter/status/1",
+    metadata: { evidenceTags: ["injury_lineup"], sourceKind: "social", sourcePublishedAt: now.toISOString() },
+  });
+  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, x402Evidence: [sourceBackedFixture, sourceBackedForm, socialInjury] });
+  const quality = evaluateSportsEvidenceQuality(evidence, { enabled: true, market: market(), now });
+  assert.equal(quality.ok, false);
+  assert.equal(quality.realEvidenceCount, 3);
+  assert.ok(quality.realEvidenceTags.includes("injury_lineup"));
+  assert.ok(quality.reasons.includes("missing_source_backed_injury_evidence"));
+});
 test("sports evidence quality gate passes with enough real Circle marketplace evidence", () => {
   const structuredEvidence = [
     sportsEvidence("circle-x402-tavily-fixture-context", ["fixture_context"]),
