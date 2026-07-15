@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
+import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchFirecrawlX402SearchEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
 import type { MarketSnapshot, PolymarketMarket } from "../../types";
 
 const market: PolymarketMarket = {
@@ -281,7 +281,7 @@ test("tavily x402 payment parses source-backed search results only", async () =>
       txHash: "0xtavily",
       data: {
         results: [
-          { title: "Match Outlook", url: "https://espn.com/match", content: "Injury updates on key players." }
+          { title: "Match Outlook", url: "https://espn.com/match", content: "Injury updates on key players.", publishedDate: "2026-07-15T12:00:00Z" }
         ],
         answer: "The match will likely favor the home team."
       } as T,
@@ -295,6 +295,43 @@ test("tavily x402 payment parses source-backed search results only", async () =>
   assert.equal(result.evidence[0]?.excerpt, "Injury updates on key players.");
   assert.equal(result.evidence[0]?.sourceUrl, "https://espn.com/match");
   assert.deepEqual(result.evidence[0]?.metadata?.evidenceTags, ["injury_lineup"]);
+  assert.equal(result.evidence[0]?.metadata?.sourcePublishedAt, "2026-07-15T12:00:00Z");
+});
+
+test("firecrawl x402 payment parses source-backed web evidence", async () => {
+  const result = await fetchFirecrawlX402SearchEvidence({
+    market,
+    payResource: async <T>() => ({
+      enabled: true,
+      status: "success",
+      paid: true,
+      supported: true,
+      url: "https://stableenrich.dev/api/firecrawl/search",
+      amountUsdc: "0.025200",
+      maxPaymentUsdc: "0.03",
+      dailySpendUsdc: "0.000000",
+      dailyBudgetUsdc: "0.10",
+      paymentNetwork: "eip155:8453",
+      selectedChain: "base",
+      paymentRef: "0xfirecrawl",
+      txHash: "0xfirecrawl",
+      data: {
+        results: [
+          { title: "Official team news", url: "https://www.thefa.com/news/team-news", description: "Lineup and injury update before the match.", publishedDate: "2026-07-15T14:00:00Z" }
+        ]
+      } as T,
+    }),
+  });
+
+  assert.equal(result.status, "success");
+  assert.equal(result.provider, "stableenrich_x402_firecrawl");
+  assert.equal(result.paymentAmountUsdc, "0.025200");
+  assert.equal(result.evidence.length, 1);
+  assert.equal(result.evidence[0]?.sourceType, "circle_x402_news");
+  assert.equal(result.evidence[0]?.provider, "stableenrich_x402_firecrawl");
+  assert.equal(result.evidence[0]?.sourceUrl, "https://www.thefa.com/news/team-news");
+  assert.deepEqual(result.evidence[0]?.metadata?.evidenceTags, ["injury_lineup", "tactical_news"]);
+  assert.equal(result.evidence[0]?.metadata?.sourcePublishedAt, "2026-07-15T14:00:00Z");
 });
 
 test("tavily x402 payment failure handles error states correctly", async () => {
@@ -321,7 +358,7 @@ test("tavily x402 payment failure handles error states correctly", async () => {
 
 
 
-test("AISA and Tavily x402 providers send external evidence payments through Base config", async () => {
+test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments through Base config", async () => {
   const keys = [
     "CIRCLE_X402_EVIDENCE_CHAIN",
     "CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS",
@@ -336,13 +373,14 @@ test("AISA and Tavily x402 providers send external evidence payments through Bas
   process.env.CIRCLE_X402_EVIDENCE_FACILITATOR_URL = "https://gateway-api.circle.com";
   process.env.CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC = "0.01";
   process.env.CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC = "0.10";
-  process.env.CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS = "api.aisa.one";
+  process.env.CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS = "api.aisa.one,stableenrich.dev";
 
   try {
     const configs: unknown[] = [];
     const payResource = async <T>(input: any) => {
       configs.push(input.config);
       const isTavily = String(input.url).includes("/tavily/");
+      const isFirecrawl = String(input.url).includes("/firecrawl/");
       return {
         enabled: true,
         status: "success" as const,
@@ -355,27 +393,32 @@ test("AISA and Tavily x402 providers send external evidence payments through Bas
         dailyBudgetUsdc: "0.10",
         paymentNetwork: "eip155:8453",
         selectedChain: "base",
-        paymentRef: isTavily ? "0xtavily-base" : "0xaisa-base",
-        txHash: isTavily ? "0xtavily-base" : "0xaisa-base",
-        data: (isTavily
-          ? { results: [{ title: "Team news", url: "https://example.com/news", content: "Lineup and injury update." }] }
-          : { response: { tweets: [{ text: "Team news signal", url: "https://x.com/a/status/2", author: { userName: "reporter" } }] } }) as T,
+        paymentRef: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : "0xaisa-base",
+        txHash: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : "0xaisa-base",
+        data: (isFirecrawl
+          ? { results: [{ title: "Team news crawl", url: "https://example.com/crawl", description: "Lineup and injury update from crawled source.", publishedDate: "2026-07-15T15:00:00Z" }] }
+          : isTavily
+            ? { results: [{ title: "Team news", url: "https://example.com/news", content: "Lineup and injury update." }] }
+            : { response: { tweets: [{ text: "Team news signal", url: "https://x.com/a/status/2", author: { userName: "reporter" } }] } }) as T,
       };
     };
 
     const social = await fetchAisaX402SocialEvidence({ market, snapshot, payResource });
     const tavily = await fetchTavilyX402SearchEvidence({ market, payResource });
+    const firecrawl = await fetchFirecrawlX402SearchEvidence({ market, payResource });
     const runtime = externalX402EvidenceRuntimeConfig();
 
     assert.equal(social.status, "success");
     assert.equal(tavily.status, "success");
-    assert.equal(configs.length, 2);
+    assert.equal(firecrawl.status, "success");
+    assert.equal(configs.length, 3);
     for (const config of configs as any[]) {
       assert.equal(config.chain, "base");
       assert.deepEqual(config.chainCandidates, ["base"]);
       assert.deepEqual(config.acceptedNetworks, ["eip155:8453"]);
       assert.equal(config.facilitatorUrl, "https://gateway-api.circle.com");
       assert.equal(config.maxPaymentUsdc, "0.01");
+      assert.deepEqual(config.allowedHosts, ["api.aisa.one", "stableenrich.dev"]);
     }
     assert.equal(runtime.chain, "base");
     assert.deepEqual(runtime.acceptedNetworks, ["eip155:8453"]);

@@ -17,12 +17,14 @@ export function cleanSearchQuery(title: string): string {
   q = q.replace(/\s+\d{4}-\d{2}-\d{2}/gi, "");
   q = q.replace(/\s+end in a draw/i, " draw");
   q = q.replace(/\s+win/i, "");
-  return `${q.trim()} football news`;
+  const currentYear = new Date().getUTCFullYear();
+  return q.trim() + " latest team news injuries lineups form stats football " + currentYear;
 }
 
 
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
 const STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT = "https://stableenrich.dev/api/reddit/search";
+const STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT = "https://stableenrich.dev/api/firecrawl/search";
 const AISA_TAVILY_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/tavily/search";
 const INTERNAL_GATEWAY_EVIDENCE_PRICE_USDC = "0.001";
 const BASE_MAINNET_NETWORK = "eip155:8453";
@@ -42,6 +44,10 @@ function stableEnrichRedditSearchEndpoint() {
   return optionalEnv("STABLE_ENRICH_X402_REDDIT_SEARCH_ENDPOINT", STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT);
 }
 
+function stableEnrichFirecrawlSearchEndpoint() {
+  return optionalEnv("STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT", STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT);
+}
+
 function x402FallbackProvidersEnabled() {
   return optionalEnv("ENABLE_X402_FALLBACK_PROVIDERS", "true").toLowerCase() !== "false";
 }
@@ -56,6 +62,10 @@ function externalX402FallbackEnabled() {
 
 function parseCsv(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function defaultEvidenceAllowedHosts() {
+  return [...new Set([...parseCsv(optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one")), "api.aisa.one", "stableenrich.dev"])].join(",");
 }
 
 function externalEvidenceChain(): SupportedChainName {
@@ -83,7 +93,7 @@ function externalX402EvidenceConfig(): Partial<GatewayRuntimeConfig> {
     facilitatorUrl: optionalEnv("CIRCLE_X402_EVIDENCE_FACILITATOR_URL", defaultEvidenceFacilitator(chain)),
     maxPaymentUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC", optionalEnv("CIRCLE_X402_MAX_PAYMENT_USDC", "0.005")),
     dailyBudgetUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC", optionalEnv("CIRCLE_X402_DAILY_BUDGET_USDC", "0.10")),
-    allowedHosts: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS", optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one"))),
+    allowedHosts: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS", defaultEvidenceAllowedHosts())),
     minGatewayBalanceUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC", optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25")),
   };
 }
@@ -142,6 +152,10 @@ function buildStableEnrichRequest(query: string) {
 type TweetLike = {
   text?: string;
   url?: string;
+  createdAt?: string;
+  created_at?: string;
+  publishedAt?: string;
+  published_at?: string;
   author?: { userName?: string; username?: string; name?: string };
 };
 
@@ -158,6 +172,11 @@ type RedditPostLike = {
   url?: string;
   permalink?: string;
   subreddit?: string;
+  createdAt?: string;
+  created_at?: string;
+  created_utc?: string | number;
+  publishedAt?: string;
+  published_at?: string;
   author?: string | { name?: string; username?: string };
 };
 
@@ -206,6 +225,8 @@ function evidenceFromAisaTweets(input: {
           marketId: input.market.marketId,
           selectedChain: input.payment.selectedChain,
           supportChecks: input.payment.supportChecks,
+          sourceKind: "social",
+          sourcePublishedAt: tweet.createdAt || tweet.created_at || tweet.publishedAt || tweet.published_at,
           evidenceTags: sportsEvidenceTagsForText(`${tweet.text || ""} ${tweet.url || ""}`),
         },
       };
@@ -432,6 +453,8 @@ function evidenceFromStableEnrichReddit(input: {
           marketId: input.market.marketId,
           selectedChain: input.payment.selectedChain,
           supportChecks: input.payment.supportChecks,
+          sourceKind: "social",
+          sourcePublishedAt: post.createdAt || post.created_at || post.publishedAt || post.published_at || (post.created_utc ? new Date(Number(post.created_utc) * 1000).toISOString() : undefined),
           evidenceTags: sportsEvidenceTagsForText(`${post.title || ""} ${post.selftext || post.text || ""}`),
         },
       };
@@ -592,6 +615,16 @@ function buildAisaTavilyRequest(query: string) {
   };
 }
 
+type TavilySearchResultLike = {
+  title?: string;
+  url?: string;
+  content?: string;
+  raw_content?: string;
+  publishedDate?: string;
+  published_date?: string;
+  date?: string;
+};
+
 function evidenceFromTavily(input: {
   data: any;
   url: string;
@@ -599,7 +632,7 @@ function evidenceFromTavily(input: {
   payment: PayX402ResourceResult;
 }): EvidenceItemInput[] {
   const fetchedAt = nowIso();
-  const results = (input.data as { results?: { title?: string; url?: string; content?: string }[] })?.results || [];
+  const results = (input.data as { results?: TavilySearchResultLike[] })?.results || [];
 
   const items: EvidenceItemInput[] = results.map((res, index) => ({
     evidenceId: `circle-x402-tavily-${index + 1}`,
@@ -607,7 +640,7 @@ function evidenceFromTavily(input: {
     provider: "aisa_x402_tavily",
     sourceUrl: res.url || input.url,
     title: res.title || `x402 Tavily Search Result ${index + 1}`,
-    excerpt: (res.content || "").slice(0, 800),
+    excerpt: (res.content || res.raw_content || "").slice(0, 800),
     credibilityScore: 85,
     fetchedAt,
     capturedAt: fetchedAt,
@@ -621,11 +654,145 @@ function evidenceFromTavily(input: {
       endpoint: aisaTavilySearchEndpoint(),
       marketId: input.market.marketId,
       selectedChain: input.payment.selectedChain,
-      evidenceTags: sportsEvidenceTagsForText(`${res.title || ""} ${res.content || ""}`),
+      sourceKind: "web",
+      sourcePublishedAt: res.publishedDate || res.published_date || res.date,
+      evidenceTags: sportsEvidenceTagsForText(`${res.title || ""} ${res.content || res.raw_content || ""}`),
     },
   }));
 
   return items.filter((item) => item.excerpt.length > 0 && item.sourceUrl !== input.market.url);
+}
+
+function buildFirecrawlSearchRequest(query: string) {
+  return {
+    url: stableEnrichFirecrawlSearchEndpoint(),
+    method: "POST" as const,
+    body: {
+      query,
+      limit: 5,
+    },
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
+type FirecrawlSearchResultLike = {
+  title?: string;
+  url?: string;
+  sourceUrl?: string;
+  description?: string;
+  content?: string;
+  markdown?: string;
+  publishedDate?: string;
+  published_date?: string;
+  date?: string;
+};
+
+function extractFirecrawlResults(data: unknown): FirecrawlSearchResultLike[] {
+  const payload = data as {
+    data?: unknown[] | { results?: unknown[]; items?: unknown[] };
+    results?: unknown[];
+    items?: unknown[];
+  };
+  const nested = payload.data && !Array.isArray(payload.data) ? payload.data : undefined;
+  const results = (Array.isArray(payload.data) ? payload.data : undefined) || nested?.results || nested?.items || payload.results || payload.items || [];
+  return results.filter((item): item is FirecrawlSearchResultLike => Boolean(item && typeof item === "object"));
+}
+
+function evidenceFromFirecrawl(input: {
+  data: unknown;
+  url: string;
+  market: PolymarketMarket;
+  payment: PayX402ResourceResult;
+}): EvidenceItemInput[] {
+  const fetchedAt = nowIso();
+  return extractFirecrawlResults(input.data)
+    .slice(0, 5)
+    .map((res, index) => {
+      const excerpt = (res.content || res.description || res.markdown || "").slice(0, 800);
+      return {
+        evidenceId: "circle-x402-firecrawl-" + (index + 1),
+        sourceType: "circle_x402_news" as const,
+        provider: "stableenrich_x402_firecrawl",
+        sourceUrl: res.url || res.sourceUrl || input.url,
+        title: res.title || "x402 Firecrawl Search Result " + (index + 1),
+        excerpt,
+        credibilityScore: 82,
+        fetchedAt,
+        capturedAt: fetchedAt,
+        paid: true,
+        paymentAmountUsdc: input.payment.amountUsdc,
+        paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
+        paymentRef: input.payment.paymentRef,
+        txHash: input.payment.txHash,
+        metadata: {
+          provider: "stableenrich_x402_firecrawl",
+          endpoint: stableEnrichFirecrawlSearchEndpoint(),
+          marketId: input.market.marketId,
+          selectedChain: input.payment.selectedChain,
+          sourceKind: "web",
+          sourcePublishedAt: res.publishedDate || res.published_date || res.date,
+          evidenceTags: sportsEvidenceTagsForText((res.title || "") + " " + excerpt),
+        },
+      };
+    })
+    .filter((item) => item.excerpt.length > 0 && item.sourceUrl !== input.market.url);
+}
+
+export async function fetchFirecrawlX402SearchEvidence(input: {
+  market: PolymarketMarket;
+  query?: string;
+  dailySpendUsdc?: string | number | undefined;
+  payResource?: typeof payX402Resource | undefined;
+}): Promise<X402EvidenceProviderResult> {
+  const query = cleanSearchQuery(input.query || input.market.title);
+  const request = buildFirecrawlSearchRequest(query);
+  const payResource = input.payResource || payX402Resource;
+  const paymentInput: Parameters<typeof payX402Resource>[0] = {
+    url: request.url,
+    method: request.method,
+    body: request.body,
+    headers: request.headers,
+    config: externalX402EvidenceConfig(),
+  };
+  if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
+  const payment = await payResource<unknown>(paymentInput);
+
+  if (payment.status !== "success" || !payment.paid) {
+    return {
+      enabled: payment.enabled,
+      provider: "stableenrich_x402_firecrawl",
+      status: payment.status,
+      url: request.url,
+      evidence: [],
+      paymentAmountUsdc: payment.amountUsdc,
+      paymentNetwork: payment.paymentNetwork,
+      selectedChain: payment.selectedChain,
+      supportChecks: payment.supportChecks,
+      failureReason: payment.failureReason,
+      paymentRef: payment.paymentRef,
+      txHash: payment.txHash,
+      error: payment.error,
+    };
+  }
+
+  return {
+    enabled: true,
+    provider: "stableenrich_x402_firecrawl",
+    status: "success",
+    url: request.url,
+    evidence: evidenceFromFirecrawl({ data: payment.data, url: request.url, market: input.market, payment }),
+    paymentAmountUsdc: payment.amountUsdc,
+    paymentNetwork: payment.paymentNetwork,
+    selectedChain: payment.selectedChain,
+    supportChecks: payment.supportChecks,
+    failureReason: payment.failureReason,
+    paymentRef: payment.paymentRef,
+    txHash: payment.txHash,
+  };
+}
+
+export async function supportsFirecrawlX402SearchEvidence(query: string) {
+  return supportsX402Resource(stableEnrichFirecrawlSearchEndpoint(), { config: externalX402EvidenceConfig() });
 }
 
 export async function fetchTavilyX402SearchEvidence(input: {
@@ -685,4 +852,4 @@ export async function supportsTavilyX402SearchEvidence(query: string) {
   return supportsX402Resource(aisaTavilySearchEndpoint());
 }
 
-export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };
+export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };

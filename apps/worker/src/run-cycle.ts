@@ -3,7 +3,7 @@ import { runAgentCouncilDetailed } from "@precall/shared/agents/council";
 import { runSportsCouncilDetailed } from "@precall/shared/agents/sports-council";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
-import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
+import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchFirecrawlX402SearchEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
 import { analysisPriceSkipReason, evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
@@ -708,46 +708,57 @@ export async function runSportsEdge() {
       let x402Result: X402EvidenceProviderResult | undefined;
       let aisaResult: X402EvidenceProviderResult | undefined;
       let tavilyResult: X402EvidenceProviderResult | undefined;
+      let firecrawlResult: X402EvidenceProviderResult | undefined;
       try {
         const currentDailySpendUsdc = await getTodayX402SpendUsdc();
         analyzed += 1;
         const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-        const [aisaRes, tavilyRes] = await Promise.all([
-          fetchAisaX402SocialEvidence({
-            market,
-            snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
-            dailySpendUsdc: currentDailySpendUsdc,
-            query: market.title + " injuries form stats news"
-          }),
-          fetchTavilyX402SearchEvidence({
-            market,
-            query: market.title + " injuries form stats news",
-            dailySpendUsdc: currentDailySpendUsdc
-          })
-        ]);
-        aisaResult = aisaRes;
-        tavilyResult = tavilyRes;
+        let marketplaceDailySpendUsdc = currentDailySpendUsdc;
+        aisaResult = await fetchAisaX402SocialEvidence({
+          market,
+          snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
+          dailySpendUsdc: marketplaceDailySpendUsdc,
+          query: market.title + " injuries lineups form stats latest team news",
+        });
+        if (aisaResult.status === "success") marketplaceDailySpendUsdc = addUsdc(marketplaceDailySpendUsdc, aisaResult.paymentAmountUsdc);
 
+        tavilyResult = await fetchTavilyX402SearchEvidence({
+          market,
+          query: market.title + " injuries lineups form stats latest team news",
+          dailySpendUsdc: marketplaceDailySpendUsdc,
+        });
+        if (tavilyResult.status === "success") marketplaceDailySpendUsdc = addUsdc(marketplaceDailySpendUsdc, tavilyResult.paymentAmountUsdc);
+
+        firecrawlResult = await fetchFirecrawlX402SearchEvidence({
+          market,
+          query: market.title + " injuries lineups form stats latest team news",
+          dailySpendUsdc: marketplaceDailySpendUsdc,
+        });
+
+        const providerResults = [aisaResult, tavilyResult, firecrawlResult];
+        const successfulResult = providerResults.find((result) => result.status === "success");
+        const firstFailure = providerResults.find((result) => result.status !== "success") || providerResults[0];
         x402Result = {
-          enabled: aisaResult.enabled || tavilyResult.enabled,
-          provider: "combined_aisa_tavily",
-          status: (aisaResult.status === "success" || tavilyResult.status === "success") ? "success" : aisaResult.status,
-          evidence: [...aisaResult.evidence, ...tavilyResult.evidence],
-          paymentAmountUsdc: addUsdc(aisaResult.paymentAmountUsdc || "0", tavilyResult.paymentAmountUsdc || "0"),
-          paymentNetwork: aisaResult.paymentNetwork || tavilyResult.paymentNetwork,
-          selectedChain: aisaResult.selectedChain || tavilyResult.selectedChain,
-          supportChecks: [...(aisaResult.supportChecks || []), ...(tavilyResult.supportChecks || [])],
-          failureReason: aisaResult.failureReason || tavilyResult.failureReason,
-          paymentRef: aisaResult.paymentRef || tavilyResult.paymentRef,
-          txHash: aisaResult.txHash || tavilyResult.txHash,
-          error: aisaResult.error || tavilyResult.error,
+          enabled: providerResults.some((result) => result.enabled),
+          provider: "combined_circle_marketplace_evidence",
+          status: successfulResult ? "success" : (providerResults[0]?.status || "disabled"),
+          evidence: providerResults.flatMap((result) => result.evidence),
+          paymentAmountUsdc: providerResults.reduce((sum, result) => addUsdc(sum, result.paymentAmountUsdc || "0"), "0"),
+          paymentNetwork: successfulResult?.paymentNetwork || providerResults[0]?.paymentNetwork,
+          selectedChain: successfulResult?.selectedChain || providerResults[0]?.selectedChain,
+          supportChecks: providerResults.flatMap((result) => result.supportChecks || []),
+          failureReason: firstFailure?.failureReason,
+          paymentRef: successfulResult?.paymentRef || providerResults[0]?.paymentRef,
+          txHash: successfulResult?.txHash || providerResults[0]?.txHash,
+          error: firstFailure?.error,
         };
 
         if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
           const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
           const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
-          await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: failedRun?.id });
-          await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: failedRun?.id });
+          if (aisaResult) await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: failedRun?.id });
+          if (tavilyResult) await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: failedRun?.id });
+          if (firecrawlResult) await recordX402CircleAction({ result: firecrawlResult, marketId: market.marketId, agentRunId: failedRun?.id });
           failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
           return;
         }
@@ -766,6 +777,7 @@ export async function runSportsEdge() {
           });
           if (aisaResult) await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: skippedRun?.id });
           if (tavilyResult) await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: skippedRun?.id });
+          if (firecrawlResult) await recordX402CircleAction({ result: firecrawlResult, marketId: market.marketId, agentRunId: skippedRun?.id });
           skipped.push({ ...sportsCandidateSummary(candidate), reasons });
           return;
         }
@@ -792,6 +804,7 @@ export async function runSportsEdge() {
         });
         if (aisaResult) await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: candidateRun?.id });
         if (tavilyResult) await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: candidateRun?.id });
+        if (firecrawlResult) await recordX402CircleAction({ result: firecrawlResult, marketId: market.marketId, agentRunId: candidateRun?.id });
 
         const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
         const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
@@ -823,7 +836,7 @@ export async function runSportsEdge() {
     failed,
     skippedByReason: summarizeSkipReasons(skipped),
     topSportsCandidates: ranked.slice(0, Math.max(dailyTarget, 10)).map(sportsCandidateSummary),
-    circleMarketplaceEvidenceProviders: ["aisa_x402_social", "aisa_x402_tavily"],
+    circleMarketplaceEvidenceProviders: ["aisa_x402_social", "aisa_x402_tavily", "stableenrich_x402_firecrawl"],
   };
 }
 
