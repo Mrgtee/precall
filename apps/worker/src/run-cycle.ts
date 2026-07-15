@@ -4,7 +4,6 @@ import { runSportsCouncilDetailed } from "@precall/shared/agents/sports-council"
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
 import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
-import { apiFootballMatchCacheKey, fetchApiFootballEvidence, type SportsStructuredEvidenceProviderResult } from "@precall/shared/evidence/providers/api-football-provider";
 import { analysisPriceSkipReason, evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
@@ -436,52 +435,6 @@ function x402Summary(result: X402EvidenceProviderResult | undefined) {
   };
 }
 
-function structuredEvidenceSummary(result: SportsStructuredEvidenceProviderResult | undefined) {
-  if (!result) return { enabled: false, status: "not_attempted", evidenceCount: 0 };
-  return {
-    enabled: result.enabled,
-    provider: result.provider,
-    status: result.status,
-    evidenceCount: result.evidence.length,
-    fixtureId: result.fixtureId,
-    teams: result.teams,
-    failureReason: result.failureReason,
-    error: result.error,
-  };
-}
-
-function cloneStructuredEvidenceForMarket(result: SportsStructuredEvidenceProviderResult, market: PolymarketMarket): SportsStructuredEvidenceProviderResult {
-  return {
-    ...result,
-    evidence: result.evidence.map((item) => ({
-      ...item,
-      metadata: {
-        ...(item.metadata || {}),
-        marketId: market.marketId,
-      },
-    })),
-  };
-}
-
-function createStructuredEvidenceFetcher() {
-  const cache = new Map<string, Promise<SportsStructuredEvidenceProviderResult>>();
-  return {
-    cache,
-    async fetch(market: PolymarketMarket) {
-      const key = apiFootballMatchCacheKey(market);
-      let cached = cache.get(key);
-      if (!cached) {
-        cached = fetchApiFootballEvidence({ market }).catch((error) => {
-          cache.delete(key);
-          throw error;
-        });
-        cache.set(key, cached);
-      }
-      return cloneStructuredEvidenceForMarket(await cached, market);
-    },
-  };
-}
-
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
@@ -749,35 +702,29 @@ export async function runSportsEdge() {
   }> = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
-  const structuredEvidenceFetcher = createStructuredEvidenceFetcher();
-
   await Promise.all(
     candidatesForAnalysis.map(async (candidate) => {
       const { market, classification } = candidate;
       let x402Result: X402EvidenceProviderResult | undefined;
       let aisaResult: X402EvidenceProviderResult | undefined;
       let tavilyResult: X402EvidenceProviderResult | undefined;
-      let structuredResult: SportsStructuredEvidenceProviderResult | undefined;
-
       try {
         const currentDailySpendUsdc = await getTodayX402SpendUsdc();
         analyzed += 1;
         const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-        const [structuredRes, aisaRes, tavilyRes] = await Promise.all([
-          structuredEvidenceFetcher.fetch(market),
+        const [aisaRes, tavilyRes] = await Promise.all([
           fetchAisaX402SocialEvidence({
             market,
             snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
             dailySpendUsdc: currentDailySpendUsdc,
-            query: `${market.title} injuries form stats news`
+            query: market.title + " injuries form stats news"
           }),
           fetchTavilyX402SearchEvidence({
             market,
-            query: `${market.title} injuries form stats news`,
+            query: market.title + " injuries form stats news",
             dailySpendUsdc: currentDailySpendUsdc
           })
         ]);
-        structuredResult = structuredRes;
         aisaResult = aisaRes;
         tavilyResult = tavilyRes;
 
@@ -798,14 +745,14 @@ export async function runSportsEdge() {
 
         if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
           const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
-          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) }, failure });
+          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
           await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: failedRun?.id });
           await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: failedRun?.id });
           failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
           return;
         }
 
-        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, structuredEvidence: structuredResult.evidence, x402Evidence: x402Result.evidence });
+        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
         const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext);
         if (!evidenceQuality.ok) {
           const reasons = ["insufficient_real_sports_evidence", ...evidenceQuality.reasons.filter((reason) => reason !== "insufficient_real_sports_evidence")];
@@ -813,7 +760,7 @@ export async function runSportsEdge() {
           const skippedRun = await recordAgentRun({
             status: "sports_skipped_evidence_quality",
             model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
-            inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
+            inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
             failure,
             evidenceContext,
           });
@@ -826,7 +773,7 @@ export async function runSportsEdge() {
         let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
         if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
           const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
-          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, structuredEvidence: structuredResult.evidence, x402Evidence: x402Result.evidence });
+          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
           idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
         }
         const thresholdFailures = sportsThresholdFailures(idea, thresholds);
@@ -837,8 +784,8 @@ export async function runSportsEdge() {
         const candidateRun = await recordAgentRun({
           status: "sports_analyzed",
           model: councilResult.model,
-          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
-          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, evidenceQuality, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) },
+          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
+          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, evidenceQuality, x402: x402Summary(x402Result) },
           evidenceContext,
           retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
           latencyMs: councilResult.totalLatencyMs,
@@ -852,7 +799,7 @@ export async function runSportsEdge() {
         sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason, suggestedSizeBps: idea.suggestedSizeBps });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result), structuredEvidence: structuredEvidenceSummary(structuredResult) }, failure: message });
+        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
         if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
         failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
       }
@@ -876,7 +823,7 @@ export async function runSportsEdge() {
     failed,
     skippedByReason: summarizeSkipReasons(skipped),
     topSportsCandidates: ranked.slice(0, Math.max(dailyTarget, 10)).map(sportsCandidateSummary),
-    structuredEvidenceCacheSize: structuredEvidenceFetcher.cache.size,
+    circleMarketplaceEvidenceProviders: ["aisa_x402_social", "aisa_x402_tavily"],
   };
 }
 

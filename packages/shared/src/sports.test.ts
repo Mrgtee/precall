@@ -38,16 +38,16 @@ const snapshot: OutcomeSnapshot = {
 function sportsEvidence(evidenceId: string, tags: string[], overrides: Partial<EvidenceItemInput> = {}): EvidenceItemInput {
   return {
     evidenceId,
-    sourceType: "sports_structured",
-    provider: "api_football",
-    sourceUrl: `https://v3.football.api-sports.io/${evidenceId}`,
+    sourceType: "circle_x402_news",
+    provider: "circle_marketplace_test",
+    sourceUrl: `https://api.aisa.one/apis/v2/tavily/search/${evidenceId}`,
     title: evidenceId,
     excerpt: `${evidenceId} source-backed sports evidence`,
     credibilityScore: 88,
     fetchedAt: now.toISOString(),
     capturedAt: now.toISOString(),
-    paid: false,
-    metadata: { evidenceTags: tags, provider: "api_football" },
+    paid: true,
+    metadata: { evidenceTags: tags, provider: "circle_marketplace_test" },
     ...overrides,
   };
 }
@@ -344,13 +344,13 @@ test("sports evidence quality gate rejects Polymarket-only and internal Gateway 
   assert.ok(gatewayQuality.reasons.includes("insufficient_real_sports_evidence"));
 });
 
-test("sports evidence quality gate passes with enough real structured football evidence", () => {
+test("sports evidence quality gate passes with enough real Circle marketplace evidence", () => {
   const structuredEvidence = [
-    sportsEvidence("api-football-fixture-context", ["fixture_context"]),
-    sportsEvidence("api-football-injuries", ["injury_lineup"]),
-    sportsEvidence("api-football-form-home", ["form_stats"]),
+    sportsEvidence("circle-x402-tavily-fixture-context", ["fixture_context"]),
+    sportsEvidence("circle-x402-tavily-injuries", ["injury_lineup"]),
+    sportsEvidence("circle-x402-firecrawl-form", ["form_stats"]),
   ];
-  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, structuredEvidence });
+  const evidence = buildSportsEvidenceContext({ market: market(), snapshot, x402Evidence: structuredEvidence });
   const quality = evaluateSportsEvidenceQuality(evidence, { enabled: true });
   assert.equal(quality.ok, true);
   assert.equal(quality.realEvidenceCount, 3);

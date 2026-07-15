@@ -13,7 +13,7 @@ const evidence: EvidenceItemInput[] = [{
   credibilityScore: 80,
   fetchedAt: "2026-05-24T00:00:00.000Z",
   capturedAt: "2026-05-24T00:00:00.000Z",
-  paid: false,
+  paid: true,
 }];
 
 test("sports council rejects unknown evidence IDs", () => {
@@ -40,7 +40,7 @@ test("filterSportsEvidenceForAgent matches keywords and segments evidence correc
       credibilityScore: 90,
       fetchedAt: "2026-06-22T00:00:00Z",
       capturedAt: "2026-06-22T00:00:00Z",
-      paid: false,
+      paid: true,
     },
     {
       evidenceId: "pm-selected-outcome",
@@ -52,7 +52,7 @@ test("filterSportsEvidenceForAgent matches keywords and segments evidence correc
       credibilityScore: 85,
       fetchedAt: "2026-06-22T00:00:00Z",
       capturedAt: "2026-06-22T00:00:00Z",
-      paid: false,
+      paid: true,
     },
     {
       evidenceId: "form-evidence",
@@ -100,7 +100,7 @@ test("filterSportsEvidenceForAgent matches keywords and segments evidence correc
       credibilityScore: 70,
       fetchedAt: "2026-06-22T00:00:00Z",
       capturedAt: "2026-06-22T00:00:00Z",
-      paid: false,
+      paid: true,
     },
   ];
 
@@ -140,15 +140,15 @@ test("filterSportsEvidenceForAgent matches keywords and segments evidence correc
 test("filterSportsEvidenceForAgent routes explicit evidence tags before keyword fallback", () => {
   const item = (evidenceId: string, tags: string[]): EvidenceItemInput => ({
     evidenceId,
-    sourceType: "sports_structured",
-    provider: "api_football",
-    sourceUrl: "https://v3.football.api-sports.io/source",
+    sourceType: "circle_x402_news",
+    provider: "circle_marketplace_test",
+    sourceUrl: "https://api.aisa.one/apis/v2/tavily/search/source",
     title: "Structured source item",
     excerpt: "Provider returned a source-backed item.",
     credibilityScore: 88,
     fetchedAt: "2026-06-22T00:00:00Z",
     capturedAt: "2026-06-22T00:00:00Z",
-    paid: false,
+    paid: true,
     metadata: { evidenceTags: tags },
   });
 
@@ -163,7 +163,7 @@ test("filterSportsEvidenceForAgent routes explicit evidence tags before keyword 
       credibilityScore: 90,
       fetchedAt: "2026-06-22T00:00:00Z",
       capturedAt: "2026-06-22T00:00:00Z",
-      paid: false,
+      paid: true,
     },
     {
       evidenceId: "pm-selected-outcome",
@@ -175,7 +175,7 @@ test("filterSportsEvidenceForAgent routes explicit evidence tags before keyword 
       credibilityScore: 85,
       fetchedAt: "2026-06-22T00:00:00Z",
       capturedAt: "2026-06-22T00:00:00Z",
-      paid: false,
+      paid: true,
       metadata: { evidenceTags: ["market_odds"] },
     },
     item("tagged-form", ["form_stats"]),
