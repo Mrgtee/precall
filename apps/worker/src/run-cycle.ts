@@ -738,11 +738,15 @@ export async function runSportsEdge() {
         const providerResults = [aisaResult, tavilyResult, firecrawlResult];
         const successfulResult = providerResults.find((result) => result.status === "success");
         const firstFailure = providerResults.find((result) => result.status !== "success") || providerResults[0];
+        const marketplaceEvidence = providerResults
+          .flatMap((result) => result.evidence)
+          .filter((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true);
+
         x402Result = {
           enabled: providerResults.some((result) => result.enabled),
           provider: "combined_circle_marketplace_evidence",
           status: successfulResult ? "success" : (providerResults[0]?.status || "disabled"),
-          evidence: providerResults.flatMap((result) => result.evidence),
+          evidence: marketplaceEvidence,
           paymentAmountUsdc: providerResults.reduce((sum, result) => addUsdc(sum, result.paymentAmountUsdc || "0"), "0"),
           paymentNetwork: successfulResult?.paymentNetwork || providerResults[0]?.paymentNetwork,
           selectedChain: successfulResult?.selectedChain || providerResults[0]?.selectedChain,

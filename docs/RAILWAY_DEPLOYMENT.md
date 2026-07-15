@@ -88,24 +88,28 @@ CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_AGENT_PRIVATE_KEY=
-CIRCLE_X402_MAX_PAYMENT_USDC=0.025
+CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
-# AISA/Tavily paid web evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
-# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 ENABLE_X402_FALLBACK_PROVIDERS=true
-ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=true
-CIRCLE_X402_SELLER_ADDRESS=0x...
-INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
+ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
+# Legacy internal fallback only; keep disabled for real marketplace sports evidence.
+# CIRCLE_X402_SELLER_ADDRESS=0x...
+# INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
-# Optional external generic x402 fallback, not required for Gateway proof:
-# CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# Circle Marketplace evidence endpoints. Override only if the catalog URL changes.
+AISA_X402_TWITTER_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/twitter/tweet/advanced_search
+AISA_X402_TAVILY_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/tavily/search
+STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT=https://stableenrich.dev/api/firecrawl/search
+# Optional external generic x402 fallback, not required for sports evidence:
 # STABLE_ENRICH_X402_REDDIT_SEARCH_ENDPOINT=https://stableenrich.dev/api/reddit/search
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10
@@ -115,15 +119,10 @@ CIRCLE_GATEWAY_MAX_DEPOSIT_USDC=10
 # X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
 # CIRCLE_GATEWAY_RPC_URL=
 
-ENABLE_SPORTS_STRUCTURED_EVIDENCE=true
-SPORTS_DATA_PROVIDER=api-football
-API_FOOTBALL_KEY=...
-API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
-API_FOOTBALL_CONCURRENCY=2
-API_FOOTBALL_RETRY_COUNT=2
-API_FOOTBALL_RETRY_DELAY_MS=750
 REQUIRE_REAL_SPORTS_EVIDENCE=true
 SPORTS_MIN_REAL_EVIDENCE_ITEMS=3
+SPORTS_EVIDENCE_MAX_AGE_HOURS=96
+SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true
 
 MIN_LIQUIDITY_USD=10000
 MIN_EDGE_BPS=650
@@ -165,7 +164,7 @@ WORKER_TRIGGER_SECRET=generate-a-long-random-secret
 PORT=8080
 ```
 
-`CIRCLE_AGENT_PRIVATE_KEY` is separate from `AGENT_OWNER_PRIVATE_KEY`. The Circle key is the Gateway/x402 buyer key for paid API evidence. The Arc owner key publishes bonded calls. `API_FOOTBALL_KEY` is also server-only; it powers structured football fixtures, form, injuries, standings, and H2H evidence.
+`CIRCLE_AGENT_PRIVATE_KEY` is separate from `AGENT_OWNER_PRIVATE_KEY`. The Circle key is the Gateway/x402 buyer key for paid API evidence. The Arc owner key publishes bonded calls. Sports evidence is collected through Circle Marketplace x402 sellers. Keep `CIRCLE_AGENT_PRIVATE_KEY` and all marketplace payment settings server-only.
 
 ## Required Vercel Env Vars For Railway Mode
 
@@ -261,7 +260,7 @@ Create four Railway cron services from the same GitHub repo:
 | Job | Schedule | Command | Notes |
 | --- | --- | --- | --- |
 | Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans strict YES/NO markets, optionally pays x402 evidence, and publishes only quality-passing bonded calls. |
-| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, fetches API-Football plus optional x402 evidence, skips thin evidence, and stores qualifying calls. |
+| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, fetches Circle Marketplace x402 evidence from AISA, Tavily, and Firecrawl, skips thin evidence, and stores qualifying calls. |
 | Expire calls | `0 * * * *` | `npm run worker:expire` | Marks matured published calls as awaiting resolution. |
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 
@@ -300,22 +299,23 @@ CIRCLE_AGENT_PRIVATE_KEY=0x...
 CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
-# AISA/Tavily paid web evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
-# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one
-CIRCLE_X402_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 ENABLE_X402_FALLBACK_PROVIDERS=true
-ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=true
-CIRCLE_X402_SELLER_ADDRESS=0x...
-INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
+ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
+# Legacy internal fallback only; keep disabled for real marketplace sports evidence.
+# CIRCLE_X402_SELLER_ADDRESS=0x...
+# INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
 ```
 
@@ -353,7 +353,7 @@ With `REQUIRE_CIRCLE_GATEWAY_X402=false`, admin-triggered `run-once` records pai
 
 1. Push this commit to GitHub.
 2. Create the Railway service from GitHub and let it use `railway.json`, or manually set the build/start commands above.
-3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=false`, `ENABLE_SPORTS_EDGE=true`, `ENABLE_SPORTS_STRUCTURED_EVIDENCE=true`, `API_FOOTBALL_KEY`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
+3. Add all Railway env vars, especially `ENABLE_CIRCLE_GATEWAY_X402=true`, `REQUIRE_CIRCLE_GATEWAY_X402=false`, `ENABLE_SPORTS_EDGE=true`, `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true`, `CIRCLE_AGENT_PRIVATE_KEY`, `AGENT_OWNER_PRIVATE_KEY`, `RESOLVER_PRIVATE_KEY`, and `WORKER_TRIGGER_SECRET`.
 4. Deploy the Railway HTTP worker and open `/healthz`.
 5. Copy the Railway URL into Vercel as `WORKER_TRIGGER_URL`.
 6. Add the same `WORKER_TRIGGER_SECRET` to Vercel.

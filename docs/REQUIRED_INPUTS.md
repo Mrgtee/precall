@@ -159,23 +159,18 @@ PATH="$HOME/.local/bin:$PATH" arc-canteen status
 
 Website: https://arc-node.thecanteenapp.com/
 
-## Structured Football Evidence
+## Circle Marketplace Sports Evidence
 
-Sports Live Calls should use real football data. Set these on Railway/server environments, never as `NEXT_PUBLIC_*` values:
+Sports Live Calls should use real source-backed evidence from Circle Marketplace x402 sellers. Set these on Railway/server environments, never as `NEXT_PUBLIC_*` values:
 
 ```env
-ENABLE_SPORTS_STRUCTURED_EVIDENCE=true
-SPORTS_DATA_PROVIDER=api-football
-API_FOOTBALL_KEY=...
-API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
-API_FOOTBALL_CONCURRENCY=2
-API_FOOTBALL_RETRY_COUNT=2
-API_FOOTBALL_RETRY_DELAY_MS=750
 REQUIRE_REAL_SPORTS_EVIDENCE=true
 SPORTS_MIN_REAL_EVIDENCE_ITEMS=3
+SPORTS_EVIDENCE_MAX_AGE_HOURS=96
+SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true
 ```
 
-When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Circle x402 remains useful for paid web/news evidence, but it is not assumed to provide structured football fixtures, injuries, or form stats.
+When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Precall currently uses Circle Marketplace services for paid sports evidence: AISA Twitter/X for social signals, AISA Tavily for web/news search, and Stable Enrich Firecrawl for source-backed web pages. The worker skips storage if evidence is too thin, stale, or backed only by social posts for injury/lineup claims.
 
 ## Optional Circle Gateway/x402 Paid Evidence
 
@@ -188,24 +183,28 @@ CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_AGENT_PRIVATE_KEY=0x...
-CIRCLE_X402_MAX_PAYMENT_USDC=0.025
+CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
-# AISA/Tavily paid web evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
-# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 ENABLE_X402_FALLBACK_PROVIDERS=true
-ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=true
-CIRCLE_X402_SELLER_ADDRESS=0x...
-INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
+ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
+# Legacy internal fallback only; keep disabled for real marketplace sports evidence.
+# CIRCLE_X402_SELLER_ADDRESS=0x...
+# INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
-# Optional external generic x402 fallback, not required for Gateway proof:
-# CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# Circle Marketplace evidence endpoints. Override only if the catalog URL changes.
+AISA_X402_TWITTER_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/twitter/tweet/advanced_search
+AISA_X402_TAVILY_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/tavily/search
+STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT=https://stableenrich.dev/api/firecrawl/search
+# Optional external generic x402 fallback, not required for sports evidence:
 # STABLE_ENRICH_X402_REDDIT_SEARCH_ENDPOINT=https://stableenrich.dev/api/reddit/search
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 

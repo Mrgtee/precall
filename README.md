@@ -97,6 +97,7 @@ Before unlock, users see only the safe public preview. After a verified Arc USDC
 Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
 
 - Circle Gateway/x402 can pay allowlisted premium APIs for evidence.
+- Sports evidence comes from Circle Marketplace services: AISA Twitter/X social search, AISA Tavily web/news search, and Stable Enrich Firecrawl web search.
 - Base Mainnet is the recommended production x402 payment network when the provider supports it.
 - Arc Testnet remains available for hackathon/demo x402 flows and Arc-bonded settlement demos.
 - The worker checks provider/network support before paying and records paid evidence through `circle_actions`.
@@ -181,7 +182,7 @@ Precall separates active predictions from historical reputation.
 
 1. The Railway worker discovers live Polymarket markets.
 2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
-3. It builds an evidence packet from Polymarket data, structured API-Football data, and optional x402 paid web/news evidence.
+3. It builds an evidence packet from Polymarket data, Circle Marketplace x402 evidence from AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl.
 4. Sports calls must pass the real-evidence gate before any AI council analysis is stored publicly.
 5. An AI council analyzes the market using supplied evidence IDs only.
 6. The system calculates market probability, AI probability, edge, confidence, and risk.
@@ -360,40 +361,39 @@ REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one
-# AISA/Tavily paid web evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
-# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one
-CIRCLE_X402_MAX_PAYMENT_USDC=0.025
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 ENABLE_X402_FALLBACK_PROVIDERS=true
-ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=true
-CIRCLE_X402_SELLER_ADDRESS=0x...
-INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
+ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
+# Legacy internal fallback only; keep disabled for real marketplace sports evidence.
+# CIRCLE_X402_SELLER_ADDRESS=0x...
+# INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
-# Optional external generic x402 fallback, not required for Gateway proof:
-# CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# Circle Marketplace evidence endpoints. Override only if the catalog URL changes.
+AISA_X402_TWITTER_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/twitter/tweet/advanced_search
+AISA_X402_TAVILY_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/tavily/search
+STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT=https://stableenrich.dev/api/firecrawl/search
+# Optional external generic x402 fallback, not required for sports evidence:
 # STABLE_ENRICH_X402_REDDIT_SEARCH_ENDPOINT=https://stableenrich.dev/api/reddit/search
 # Demo/hackathon alternative:
 # CIRCLE_GATEWAY_CHAIN=arcTestnet
 # X402_ACCEPTED_NETWORKS=eip155:5042002
 # X402_FACILITATOR_URL=https://gateway-api-testnet.circle.com
 
-ENABLE_SPORTS_STRUCTURED_EVIDENCE=true
-SPORTS_DATA_PROVIDER=api-football
-API_FOOTBALL_KEY=...
-API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
-API_FOOTBALL_CONCURRENCY=2
-API_FOOTBALL_RETRY_COUNT=2
-API_FOOTBALL_RETRY_DELAY_MS=750
 REQUIRE_REAL_SPORTS_EVIDENCE=true
 SPORTS_MIN_REAL_EVIDENCE_ITEMS=3
+SPORTS_EVIDENCE_MAX_AGE_HOURS=96
+SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true
 
 ENABLE_SPORTS_EDGE=true
 SPORTS_DISCOVERY_MARKET_LIMIT=350
@@ -428,7 +428,7 @@ MAX_ANALYSIS_PRICE_BPS=9900
 WORKER_TRIGGER_SECRET=generate-a-long-random-secret
 ```
 
-Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. With `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `worker:sports` will record `sports_skipped_evidence_quality` instead of storing a live call when API-Football/x402 evidence is too thin. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
+Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. With `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `worker:sports` will record `sports_skipped_evidence_quality` instead of storing a live call when Circle Marketplace x402 evidence is too thin, stale, or social-only for injury claims. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
 
 # 15. Local Development
 
@@ -499,7 +499,7 @@ What they do:
 
 - `worker:health`: checks worker, DB, model, Polymarket, Arc, Circle, and config health.
 - `worker:run-once`: scans strict YES/NO markets and may publish bonded Arc Calls.
-- `worker:sports`: scans sports markets, fetches structured football/x402 evidence, skips weak evidence packets, and stores qualifying Sports Live Calls.
+- `worker:sports`: scans sports markets, fetches Circle Marketplace x402 sports evidence, skips weak evidence packets, and stores qualifying Sports Live Calls.
 - `worker:expire`: expires mature bonded calls and sports calls whose event start has passed.
 - `worker:resolve`: runs expiry, then resolves supported mature YES/NO calls.
 - `worker:gateway:balance`: checks Gateway balance for the configured buyer wallet.

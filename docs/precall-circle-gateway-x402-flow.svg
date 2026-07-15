@@ -69,7 +69,7 @@
   <path class="arrow" d="M240 430 H690"/>
   <rect x="312" y="400" width="306" height="52" rx="6" fill="#eff6ff" stroke="#bfdbfe"/>
   <text class="step" x="465" y="421">3. Request Paid Evidence</text>
-  <text class="detail" x="465" y="441">AISA X/social + Tavily web/news search</text>
+  <text class="detail" x="465" y="441">AISA X + Tavily + Firecrawl search</text>
 
   <path class="arrow" d="M690 500 H240"/>
   <rect x="306" y="470" width="318" height="52" rx="6" fill="#fff7ed" stroke="#fed7aa"/>
@@ -79,7 +79,7 @@
   <rect class="localCard" x="72" y="530" width="336" height="130" stroke="#d97706"/>
   <rect x="72" y="530" width="6" height="130" rx="3" fill="#d97706"/>
   <text class="localTitle" x="240" y="556">5. Enforce Payment Controls</text>
-  <text class="localBody" x="240" y="579">Allowlisted host: api.aisa.one</text>
+  <text class="localBody" x="240" y="579">Allowlisted marketplace hosts</text>
   <text class="localBody" x="240" y="600">Accepted network + Gateway batching support</text>
   <text class="localBody" x="240" y="621">Per-request cap + daily budget + minimum balance</text>
   <text x="240" y="646" text-anchor="middle" style="font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #b45309; letter-spacing: 0;">FAILED CHECK: STOP BEFORE SIGNING; NO FUNDS MOVE</text>
