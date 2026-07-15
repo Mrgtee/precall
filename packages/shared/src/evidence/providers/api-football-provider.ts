@@ -87,6 +87,9 @@ type ApiFootballEnvelope<T> = {
 
 type ApiFootballFetch = typeof fetch;
 
+let apiFootballActiveRequests = 0;
+const apiFootballQueue: Array<() => void> = [];
+
 type ApiFootballConfig = {
   enabled: boolean;
   provider: string;
@@ -112,6 +115,47 @@ export type ApiFootballEvidencePayload = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function positiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(optionalEnv(name, String(fallback)));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function nonNegativeIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(optionalEnv(name, String(fallback)));
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+function apiFootballConcurrency() {
+  return positiveIntegerEnv("API_FOOTBALL_CONCURRENCY", 2);
+}
+
+function apiFootballRetryCount() {
+  return nonNegativeIntegerEnv("API_FOOTBALL_RETRY_COUNT", 2);
+}
+
+function apiFootballRetryDelayMs() {
+  return nonNegativeIntegerEnv("API_FOOTBALL_RETRY_DELAY_MS", 750);
+}
+
+async function wait(ms: number) {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withApiFootballLimit<T>(run: () => Promise<T>): Promise<T> {
+  const concurrency = apiFootballConcurrency();
+  if (apiFootballActiveRequests >= concurrency) {
+    await new Promise<void>((resolve) => apiFootballQueue.push(resolve));
+  }
+  apiFootballActiveRequests += 1;
+  try {
+    return await run();
+  } finally {
+    apiFootballActiveRequests = Math.max(0, apiFootballActiveRequests - 1);
+    apiFootballQueue.shift()?.();
+  }
 }
 
 function config(overrides?: { fetchFn?: ApiFootballFetch | undefined }): ApiFootballConfig {
@@ -163,6 +207,16 @@ export function extractLikelyFootballTeams(market: Pick<PolymarketMarket, "title
   return [...new Set(outcomeTeams)].slice(0, 2);
 }
 
+function normalizeCacheTeamName(team: string) {
+  return cleanTeamName(team).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+export function apiFootballMatchCacheKey(market: Pick<PolymarketMarket, "marketId" | "title" | "description" | "outcomes" | "closeTime">) {
+  const teams = extractLikelyFootballTeams(market).map(normalizeCacheTeamName).filter(Boolean);
+  if (teams.length < 2) return `market:${market.marketId}`;
+  return `api-football:${teams.slice(0, 2).sort().join("|")}:${eventDate(market) || "no-date"}`;
+}
+
 function apiFootballUrl(baseUrl: string, path: string, params: Record<string, string | number | undefined>) {
   const url = new URL(`${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`);
   for (const [key, value] of Object.entries(params)) {
@@ -180,15 +234,33 @@ function hasApiFootballErrors(errors: unknown) {
 
 async function requestApiFootball<T>(cfg: ApiFootballConfig, path: string, params: Record<string, string | number | undefined>) {
   const url = apiFootballUrl(cfg.baseUrl, path, params);
-  const response = await cfg.fetchFn(url.toString(), { headers: { "x-apisports-key": cfg.apiKey } });
-  const payload = await response.json() as ApiFootballEnvelope<T>;
-  if (!response.ok) {
-    throw new Error(`API-Football ${path} failed with HTTP ${response.status}`);
+  const retries = apiFootballRetryCount();
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await withApiFootballLimit(() => cfg.fetchFn(url.toString(), { headers: { "x-apisports-key": cfg.apiKey } }));
+      const payload = await response.json().catch(() => ({})) as ApiFootballEnvelope<T>;
+      if (!response.ok) {
+        const detail = hasApiFootballErrors(payload.errors) ? `: ${JSON.stringify(payload.errors).slice(0, 300)}` : "";
+        if (response.status === 429 && attempt < retries) {
+          await wait(apiFootballRetryDelayMs() * (attempt + 1));
+          continue;
+        }
+        throw new Error(`API-Football ${path} failed with HTTP ${response.status}${detail}`);
+      }
+      if (hasApiFootballErrors(payload.errors) && !payload.response) {
+        throw new Error(`API-Football ${path} returned errors: ${JSON.stringify(payload.errors).slice(0, 300)}`);
+      }
+      return payload.response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries || !/HTTP 429/i.test(error instanceof Error ? error.message : String(error))) break;
+      await wait(apiFootballRetryDelayMs() * (attempt + 1));
+    }
   }
-  if (hasApiFootballErrors(payload.errors) && !payload.response) {
-    throw new Error(`API-Football ${path} returned errors: ${JSON.stringify(payload.errors).slice(0, 300)}`);
-  }
-  return payload.response;
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError || `API-Football ${path} request failed`));
 }
 
 async function safeArrayRequest<T>(cfg: ApiFootballConfig, path: string, params: Record<string, string | number | undefined>, errors: string[]) {
@@ -213,7 +285,7 @@ function seasonFromMarket(market: PolymarketMarket) {
   return month >= 7 ? year : year - 1;
 }
 
-function eventDate(market: PolymarketMarket) {
+function eventDate(market: Pick<PolymarketMarket, "closeTime">) {
   if (!market.closeTime) return undefined;
   const date = new Date(market.closeTime);
   if (!Number.isFinite(date.getTime())) return undefined;

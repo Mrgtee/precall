@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
+import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
 import type { MarketSnapshot, PolymarketMarket } from "../../types";
 
 const market: PolymarketMarket = {
@@ -319,3 +319,71 @@ test("tavily x402 payment failure handles error states correctly", async () => {
   assert.equal(result.evidence.length, 0);
 });
 
+
+
+test("AISA and Tavily x402 providers send external evidence payments through Base config", async () => {
+  const keys = [
+    "CIRCLE_X402_EVIDENCE_CHAIN",
+    "CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS",
+    "CIRCLE_X402_EVIDENCE_FACILITATOR_URL",
+    "CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC",
+    "CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC",
+    "CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  process.env.CIRCLE_X402_EVIDENCE_CHAIN = "base";
+  process.env.CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS = "eip155:8453";
+  process.env.CIRCLE_X402_EVIDENCE_FACILITATOR_URL = "https://gateway-api.circle.com";
+  process.env.CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC = "0.01";
+  process.env.CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC = "0.10";
+  process.env.CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS = "api.aisa.one";
+
+  try {
+    const configs: unknown[] = [];
+    const payResource = async <T>(input: any) => {
+      configs.push(input.config);
+      const isTavily = String(input.url).includes("/tavily/");
+      return {
+        enabled: true,
+        status: "success" as const,
+        paid: true,
+        supported: true,
+        url: input.url,
+        amountUsdc: "0.005000",
+        maxPaymentUsdc: "0.01",
+        dailySpendUsdc: "0.000000",
+        dailyBudgetUsdc: "0.10",
+        paymentNetwork: "eip155:8453",
+        selectedChain: "base",
+        paymentRef: isTavily ? "0xtavily-base" : "0xaisa-base",
+        txHash: isTavily ? "0xtavily-base" : "0xaisa-base",
+        data: (isTavily
+          ? { results: [{ title: "Team news", url: "https://example.com/news", content: "Lineup and injury update." }] }
+          : { response: { tweets: [{ text: "Team news signal", url: "https://x.com/a/status/2", author: { userName: "reporter" } }] } }) as T,
+      };
+    };
+
+    const social = await fetchAisaX402SocialEvidence({ market, snapshot, payResource });
+    const tavily = await fetchTavilyX402SearchEvidence({ market, payResource });
+    const runtime = externalX402EvidenceRuntimeConfig();
+
+    assert.equal(social.status, "success");
+    assert.equal(tavily.status, "success");
+    assert.equal(configs.length, 2);
+    for (const config of configs as any[]) {
+      assert.equal(config.chain, "base");
+      assert.deepEqual(config.chainCandidates, ["base"]);
+      assert.deepEqual(config.acceptedNetworks, ["eip155:8453"]);
+      assert.equal(config.facilitatorUrl, "https://gateway-api.circle.com");
+      assert.equal(config.maxPaymentUsdc, "0.01");
+    }
+    assert.equal(runtime.chain, "base");
+    assert.deepEqual(runtime.acceptedNetworks, ["eip155:8453"]);
+  } finally {
+    for (const key of keys) {
+      const value = previous[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

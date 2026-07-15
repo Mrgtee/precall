@@ -1,10 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { SupportedChainName } from "@circle-fin/x402-batching/client";
 import { createGatewayMiddleware, type PaymentRequest, type PaymentResponse } from "@circle-fin/x402-batching/server";
 import type { EvidenceItemInput, MarketSnapshot, PolymarketMarket } from "../../types";
 import { optionalEnv } from "../../env";
 import { inferSportsEvidenceTagsFromText } from "../sports-tags";
-import { gatewayRuntimeConfig, payX402Resource, supportsX402Resource, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
+import { gatewayRuntimeConfig, payX402Resource, supportsX402Resource, type GatewayRuntimeConfig, type GatewaySupportCheck, type PayX402ResourceResult } from "../../circle/gateway-client";
 
 export function cleanSearchQuery(title: string): string {
   let q = title.replace(/\?$/, "").trim();
@@ -24,6 +25,10 @@ const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet
 const STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT = "https://stableenrich.dev/api/reddit/search";
 const AISA_TAVILY_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/tavily/search";
 const INTERNAL_GATEWAY_EVIDENCE_PRICE_USDC = "0.001";
+const BASE_MAINNET_NETWORK = "eip155:8453";
+const ARC_TESTNET_NETWORK = "eip155:5042002";
+const MAINNET_FACILITATOR_URL = "https://gateway-api.circle.com";
+const TESTNET_FACILITATOR_URL = "https://gateway-api-testnet.circle.com";
 
 function aisaTwitterSearchEndpoint() {
   return optionalEnv("AISA_X402_TWITTER_SEARCH_ENDPOINT", AISA_TWITTER_SEARCH_ENDPOINT);
@@ -47,6 +52,44 @@ function internalGatewayEvidenceEnabled() {
 
 function externalX402FallbackEnabled() {
   return optionalEnv("ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS", "false").toLowerCase() === "true";
+}
+
+function parseCsv(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function externalEvidenceChain(): SupportedChainName {
+  const configured = optionalEnv("CIRCLE_X402_EVIDENCE_CHAIN", "base").trim();
+  if (configured === "arcTestnet" || configured === "base" || configured === "baseSepolia") return configured;
+  return "base";
+}
+
+function defaultEvidenceNetwork(chain: SupportedChainName) {
+  if (chain === "arcTestnet") return ARC_TESTNET_NETWORK;
+  return BASE_MAINNET_NETWORK;
+}
+
+function defaultEvidenceFacilitator(chain: SupportedChainName) {
+  if (chain === "arcTestnet") return TESTNET_FACILITATOR_URL;
+  return MAINNET_FACILITATOR_URL;
+}
+
+function externalX402EvidenceConfig(): Partial<GatewayRuntimeConfig> {
+  const chain = externalEvidenceChain();
+  return {
+    chain,
+    chainCandidates: [chain],
+    acceptedNetworks: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS", defaultEvidenceNetwork(chain))),
+    facilitatorUrl: optionalEnv("CIRCLE_X402_EVIDENCE_FACILITATOR_URL", defaultEvidenceFacilitator(chain)),
+    maxPaymentUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC", optionalEnv("CIRCLE_X402_MAX_PAYMENT_USDC", "0.005")),
+    dailyBudgetUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC", optionalEnv("CIRCLE_X402_DAILY_BUDGET_USDC", "0.10")),
+    allowedHosts: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS", optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one"))),
+    minGatewayBalanceUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC", optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25")),
+  };
+}
+
+export function externalX402EvidenceRuntimeConfig() {
+  return gatewayRuntimeConfig(externalX402EvidenceConfig());
 }
 
 export type X402EvidenceProviderStatus = "disabled" | "unsupported" | "blocked" | "insufficient_balance" | "success" | "failed";
@@ -416,6 +459,7 @@ async function fetchStableEnrichRedditEvidence(input: {
     method: request.method,
     body: request.body,
     headers: request.headers,
+    config: externalX402EvidenceConfig(),
   };
   if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
   const payment = await input.payResource(paymentInput);
@@ -464,7 +508,7 @@ export async function fetchAisaX402SocialEvidence(input: {
   const query = cleanSearchQuery(input.query || input.market.title);
   const url = buildAisaSearchUrl(query);
   const payResource = input.payResource || payX402Resource;
-  const paymentInput: Parameters<typeof payX402Resource>[0] = { url };
+  const paymentInput: Parameters<typeof payX402Resource>[0] = { url, config: externalX402EvidenceConfig() };
   if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
   const payment = await payResource<{ response?: { tweets?: unknown[] }; tweets?: unknown[] }>(paymentInput);
 
@@ -598,6 +642,7 @@ export async function fetchTavilyX402SearchEvidence(input: {
     method: request.method,
     body: request.body,
     headers: request.headers,
+    config: externalX402EvidenceConfig(),
   };
   if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
   const payment = await payResource<any>(paymentInput);

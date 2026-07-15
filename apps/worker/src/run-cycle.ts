@@ -3,8 +3,8 @@ import { runAgentCouncilDetailed } from "@precall/shared/agents/council";
 import { runSportsCouncilDetailed } from "@precall/shared/agents/sports-council";
 import { boolEnv, numberEnv, optionalEnv, requireEnv } from "@precall/shared/env";
 import { getGatewayBalancesByChain, gatewayRuntimeConfig } from "@precall/shared/circle/gateway-client";
-import { fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
-import { fetchApiFootballEvidence, type SportsStructuredEvidenceProviderResult } from "@precall/shared/evidence/providers/api-football-provider";
+import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchTavilyX402SearchEvidence, type X402EvidenceProviderResult } from "@precall/shared/evidence/providers/x402-provider";
+import { apiFootballMatchCacheKey, fetchApiFootballEvidence, type SportsStructuredEvidenceProviderResult } from "@precall/shared/evidence/providers/api-football-provider";
 import { analysisPriceSkipReason, evaluateMarketEligibility, rankMarketCandidates, scoreMarketCandidate, summarizeSkipReasons, type MarketCandidateScore } from "@precall/shared/market-eligibility";
 import { publishAggregatedCallOnchain, registerAgentOnchain, resolveCallOnchain } from "@precall/shared/onchain/precall";
 import {
@@ -45,8 +45,11 @@ export async function health() {
   const thresholds = publishThresholds();
   const sportsConfig = sportsThresholds();
   const gatewayConfig = gatewayRuntimeConfig();
-  const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, error: error instanceof Error ? error.message : String(error) }]) : [];
+  const evidenceGatewayConfig = externalX402EvidenceRuntimeConfig();
+  const gatewayBalances = gatewayConfig.enabled ? await getGatewayBalancesByChain().catch((error) => [{ enabled: true, status: "failed" as const, chain: gatewayConfig.chain, gatewayAvailableUsdc: undefined, error: error instanceof Error ? error.message : String(error) }]) : [];
+  const evidenceGatewayBalances = evidenceGatewayConfig.enabled ? await getGatewayBalancesByChain({ config: evidenceGatewayConfig, chains: evidenceGatewayConfig.chainCandidates }).catch((error) => [{ enabled: true, status: "failed" as const, chain: evidenceGatewayConfig.chain, gatewayAvailableUsdc: undefined, error: error instanceof Error ? error.message : String(error) }]) : [];
   const primaryGatewayBalance = gatewayBalances.find((balance) => balance.chain === gatewayConfig.chain) || gatewayBalances[0];
+  const primaryEvidenceGatewayBalance = evidenceGatewayBalances.find((balance) => balance.chain === evidenceGatewayConfig.chain) || evidenceGatewayBalances[0];
   const circleActionsSchema = await checkCircleActionsSchemaHealth();
   const base = {
     worker: {
@@ -77,6 +80,15 @@ export async function health() {
       x402AcceptedNetworks: gatewayConfig.acceptedNetworks,
       x402FacilitatorUrl: gatewayConfig.facilitatorUrl,
       x402ProductionMode: gatewayConfig.productionMode,
+      evidenceX402PaymentNetworkLabel: evidenceGatewayConfig.paymentNetworkLabel,
+      evidenceX402AcceptedNetworks: evidenceGatewayConfig.acceptedNetworks,
+      evidenceX402FacilitatorUrl: evidenceGatewayConfig.facilitatorUrl,
+      evidenceX402ProductionMode: evidenceGatewayConfig.productionMode,
+      evidenceX402ConfigWarnings: evidenceGatewayConfig.configWarnings,
+      evidenceX402ConfigErrors: evidenceGatewayConfig.configErrors,
+      evidenceGatewayBalanceStatus: primaryEvidenceGatewayBalance?.status,
+      evidenceGatewayAvailableUsdc: primaryEvidenceGatewayBalance?.gatewayAvailableUsdc,
+      evidenceGatewayBalancesByChain: evidenceGatewayBalances.map((balance) => ({ chain: balance.chain, status: balance.status, gatewayAvailableUsdc: balance.gatewayAvailableUsdc, error: balance.error })),
       x402ConfigWarnings: gatewayConfig.configWarnings,
       x402ConfigErrors: gatewayConfig.configErrors,
       x402ChainCandidates: gatewayConfig.chainCandidates,
@@ -438,6 +450,38 @@ function structuredEvidenceSummary(result: SportsStructuredEvidenceProviderResul
   };
 }
 
+function cloneStructuredEvidenceForMarket(result: SportsStructuredEvidenceProviderResult, market: PolymarketMarket): SportsStructuredEvidenceProviderResult {
+  return {
+    ...result,
+    evidence: result.evidence.map((item) => ({
+      ...item,
+      metadata: {
+        ...(item.metadata || {}),
+        marketId: market.marketId,
+      },
+    })),
+  };
+}
+
+function createStructuredEvidenceFetcher() {
+  const cache = new Map<string, Promise<SportsStructuredEvidenceProviderResult>>();
+  return {
+    cache,
+    async fetch(market: PolymarketMarket) {
+      const key = apiFootballMatchCacheKey(market);
+      let cached = cache.get(key);
+      if (!cached) {
+        cached = fetchApiFootballEvidence({ market }).catch((error) => {
+          cache.delete(key);
+          throw error;
+        });
+        cache.set(key, cached);
+      }
+      return cloneStructuredEvidenceForMarket(await cached, market);
+    },
+  };
+}
+
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
@@ -705,6 +749,7 @@ export async function runSportsEdge() {
   }> = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
+  const structuredEvidenceFetcher = createStructuredEvidenceFetcher();
 
   await Promise.all(
     candidatesForAnalysis.map(async (candidate) => {
@@ -719,7 +764,7 @@ export async function runSportsEdge() {
         analyzed += 1;
         const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
         const [structuredRes, aisaRes, tavilyRes] = await Promise.all([
-          fetchApiFootballEvidence({ market }),
+          structuredEvidenceFetcher.fetch(market),
           fetchAisaX402SocialEvidence({
             market,
             snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
@@ -831,6 +876,7 @@ export async function runSportsEdge() {
     failed,
     skippedByReason: summarizeSkipReasons(skipped),
     topSportsCandidates: ranked.slice(0, Math.max(dailyTarget, 10)).map(sportsCandidateSummary),
+    structuredEvidenceCacheSize: structuredEvidenceFetcher.cache.size,
   };
 }
 
