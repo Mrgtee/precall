@@ -1,4 +1,5 @@
 import { CHAIN_CONFIGS, GatewayClient, registerBatchScheme, type Balances, type DepositResult, type PayResult, type SupportedChainName, type SupportsResult } from "@circle-fin/x402-batching/client";
+import { ExactEvmScheme } from "@x402/evm";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client, type PaymentRequirements } from "@x402/fetch";
 import { formatUnits, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -86,7 +87,9 @@ export type GatewaySupportCheck = {
   supported: boolean;
   amountUsdc?: string | undefined;
   paymentNetwork?: string | undefined;
+  paymentScheme?: "gateway-batched" | "standard-exact" | undefined;
   gatewayAvailableUsdc?: string | undefined;
+  walletBalanceUsdc?: string | undefined;
   error?: string | undefined;
 };
 
@@ -98,6 +101,8 @@ export type PayX402ResourceInput = {
   dailySpendUsdc?: string | number | undefined;
   client?: GatewayClientLike | undefined;
   clients?: Partial<Record<SupportedChainName, GatewayClientLike>> | undefined;
+  balanceClient?: GatewayClientLike | undefined;
+  balanceClients?: Partial<Record<SupportedChainName, GatewayClientLike>> | undefined;
   chainCandidates?: SupportedChainName[] | undefined;
   config?: Partial<GatewayRuntimeConfig> | undefined;
   fetch?: typeof globalThis.fetch | undefined;
@@ -116,6 +121,7 @@ export type PayX402ResourceResult<T = unknown> = {
   dailySpendUsdc: string;
   dailyBudgetUsdc: string;
   paymentNetwork?: string | undefined;
+  paymentScheme?: "gateway-batched" | "standard-exact" | undefined;
   selectedChain?: string | undefined;
   supportChecks?: GatewaySupportCheck[] | undefined;
   failureReason?: string | undefined;
@@ -533,6 +539,18 @@ function isGatewayBatchingRequirement(requirement: PaymentRequirements) {
     typeof requirement.extra?.verifyingContract === "string";
 }
 
+function isStandardExactEvmRequirement(requirement: PaymentRequirements) {
+  return requirement.scheme === "exact" &&
+    typeof requirement.network === "string" &&
+    requirement.network.startsWith("eip155:") &&
+    !isGatewayBatchingRequirement(requirement);
+}
+
+function selectRequirementForNetwork(requirements: PaymentRequirements[], network: string) {
+  return requirements.find((candidate) => candidate.network === network && isGatewayBatchingRequirement(candidate)) ||
+    requirements.find((candidate) => candidate.network === network && isStandardExactEvmRequirement(candidate));
+}
+
 function readPaymentResponseRef(response: Response) {
   const header = response.headers.get("PAYMENT-RESPONSE") || response.headers.get("X-PAYMENT-RESPONSE");
   if (!header) return undefined;
@@ -550,13 +568,13 @@ function readPaymentResponseRef(response: Response) {
 
 function statusFromPaymentError(message: string): GatewayX402Status {
   if (/not allowlisted|exceeds|budget|amount was not published/i.test(message)) return "blocked";
-  if (/insufficient|below required minimum/i.test(message)) return "insufficient_balance";
+  if (/insufficient|below required minimum|below required x402 payment amount/i.test(message)) return "insufficient_balance";
   if (/unsupported|no Gateway batching|no supported/i.test(message)) return "unsupported";
   return "failed";
 }
 
 function paymentFailureReasonFromError(message: string, timedOut = false) {
-  if (/unsupported|no Gateway batching/i.test(message)) return "unsupported_network";
+  if (/unsupported|no Gateway batching|no supported exact x402/i.test(message)) return "unsupported_network";
   if (timedOut || /AbortError|aborted|terminated|timeout|ETIMEDOUT|UND_ERR/i.test(message)) return "provider_timeout";
   if (/HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|fetch failed|ECONNRESET/i.test(message)) return "provider_unavailable";
   return undefined;
@@ -576,24 +594,23 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
   let selectedRequirement: PaymentRequirements | undefined;
   let selectedAmountUsdc: string | undefined;
   let selectedPaymentNetwork: string | undefined;
+  let selectedPaymentScheme: "gateway-batched" | "standard-exact" | undefined;
+  const balancesByChain = new Map<SupportedChainName, Balances>();
 
-  try {
-    const balanceClient = await resolveClient(undefined, config, primaryChain);
-    if (!balanceClient) return { ...base, status: "disabled", error: "Gateway x402 is disabled." };
-    const balances = await balanceClient.getBalances();
-    const available = toNumber(balances.gateway.formattedAvailable);
-    const minGatewayBalance = toNumber(config.minGatewayBalanceUsdc);
-    if (available < minGatewayBalance) {
-      supportChecks.push({ chain: primaryChain, status: "failed", supported: false, gatewayAvailableUsdc: balances.gateway.formattedAvailable, error: `Gateway available balance ${balances.gateway.formattedAvailable} USDC is below required minimum ${config.minGatewayBalanceUsdc} USDC.` });
-      return {
-        ...base,
-        status: "insufficient_balance",
-        selectedChain: primaryChain,
-        error: `Gateway available balance ${balances.gateway.formattedAvailable} USDC is below required minimum ${config.minGatewayBalanceUsdc} USDC.`,
-      };
+  for (const chain of chainCandidates) {
+    try {
+      const balanceClient = await resolveClient(clientForChain({ client: input.balanceClient, clients: input.balanceClients }, chain), config, chain);
+      if (!balanceClient) {
+        supportChecks.push({ chain, status: "failed", supported: false, error: "Gateway x402 is disabled." });
+        continue;
+      }
+      balancesByChain.set(chain, await balanceClient.getBalances());
+    } catch (error) {
+      supportChecks.push({ chain, status: "failed", supported: false, error: error instanceof Error ? error.message : String(error) });
     }
-  } catch (error) {
-    return { ...base, status: "failed", selectedChain: primaryChain, error: error instanceof Error ? error.message : String(error) };
+  }
+  if (balancesByChain.size === 0) {
+    return { ...base, status: "failed", selectedChain: primaryChain, error: supportChecks.find((check) => check.error)?.error || "Unable to read x402 wallet balances." };
   }
 
   const privateKey = config.privateKey;
@@ -605,12 +622,13 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       const network = networkForChain(chain);
       if (seen.has(network)) continue;
       seen.add(network);
-      const requirement = requirements.find((candidate) => candidate.network === network && isGatewayBatchingRequirement(candidate));
+      const requirement = selectRequirementForNetwork(requirements, network);
       if (!requirement) {
-        supportChecks.push({ chain, status: "unsupported", supported: false, paymentNetwork: network, error: "Seller did not advertise a Circle Gateway batching option for this chain." });
+        supportChecks.push({ chain, status: "unsupported", supported: false, paymentNetwork: network, error: "Seller did not advertise a supported exact x402 option for this chain." });
         continue;
       }
 
+      const paymentScheme = isGatewayBatchingRequirement(requirement) ? "gateway-batched" : "standard-exact";
       const amountUsdc = extractRequirementAmountUsdc(requirement);
       const paymentNetwork = extractRequirementNetwork(requirement) || requirement.network;
       if (!amountUsdc) {
@@ -626,21 +644,41 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
         throw new Error(`Daily x402 budget would be exceeded (${(dailySpend + amount).toFixed(6)} > ${config.dailyBudgetUsdc} USDC).`);
       }
 
+      const balances = balancesByChain.get(chain);
+      if (!balances) {
+        supportChecks.push({ chain, status: "failed", supported: false, paymentNetwork, paymentScheme, error: "Unable to read x402 wallet balances for this chain." });
+        continue;
+      }
+      if (paymentScheme === "gateway-batched") {
+        const gatewayAvailable = toNumber(balances.gateway.formattedAvailable);
+        const minGatewayBalance = toNumber(config.minGatewayBalanceUsdc);
+        if (gatewayAvailable < minGatewayBalance || gatewayAvailable < amount) {
+          throw new Error(`Gateway available balance ${balances.gateway.formattedAvailable} USDC is below required minimum ${config.minGatewayBalanceUsdc} USDC or payment amount ${amountUsdc} USDC.`);
+        }
+      } else {
+        const walletAvailable = toNumber(balances.wallet.formatted);
+        if (walletAvailable < amount) {
+          throw new Error(`Wallet USDC balance ${balances.wallet.formatted} is below required x402 payment amount ${amountUsdc} USDC for standard exact payment.`);
+        }
+      }
+
       selectedChain = chain;
       selectedRequirement = requirement;
       selectedAmountUsdc = amountUsdc;
       selectedPaymentNetwork = paymentNetwork;
-      supportChecks.push({ chain, status: "success", supported: true, amountUsdc, paymentNetwork });
+      selectedPaymentScheme = paymentScheme;
+      supportChecks.push({ chain, status: "success", supported: true, amountUsdc, paymentNetwork, paymentScheme, gatewayAvailableUsdc: balances.gateway.formattedAvailable, walletBalanceUsdc: balances.wallet.formatted });
       return requirement;
     }
 
     const acceptedNetworks = [...new Set(requirements.map((requirement) => requirement.network).filter(Boolean))].join(", ") || "none";
-    throw new Error(`unsupported_network: no Circle Gateway batching option for candidate chains ${chainCandidates.join(", ")}. Seller accepts: ${acceptedNetworks}`);
+    throw new Error(`unsupported_network: no supported exact x402 option for candidate chains ${chainCandidates.join(", ")}. Seller accepts: ${acceptedNetworks}`);
   });
 
   registerBatchScheme(paymentClient, {
     signer: account,
     networks: chainCandidates.map(networkForChain),
+    fallbackScheme: new ExactEvmScheme(account),
   });
 
   const fetchWithPayment = wrapFetchWithPayment(input.fetch || globalThis.fetch, paymentClient);
@@ -677,6 +715,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
         selectedChain,
         amountUsdc: selectedAmountUsdc,
         paymentNetwork: selectedPaymentNetwork,
+        paymentScheme: selectedPaymentScheme,
         error: `x402 provider returned 401 instead of HTTP 402 Payment Required. Body: ${rawBody.slice(0, 240)}`,
       };
     }
@@ -687,6 +726,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
         selectedChain,
         amountUsdc: selectedAmountUsdc,
         paymentNetwork: selectedPaymentNetwork,
+        paymentScheme: selectedPaymentScheme,
         error: "x402 payment was attempted but the provider still returned HTTP 402 Payment Required.",
       };
     }
@@ -697,6 +737,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
         selectedChain,
         amountUsdc: selectedAmountUsdc,
         paymentNetwork: selectedPaymentNetwork,
+        paymentScheme: selectedPaymentScheme,
         failureReason: response.status >= 500 || (response.status === 403 && /Cloudflare|Just a moment|noindex,nofollow/i.test(rawBody)) ? "provider_unavailable" : undefined,
         error: `x402 provider request failed with HTTP ${response.status}. Body: ${rawBody.slice(0, 240)}`,
       };
@@ -711,6 +752,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       selectedChain,
       amountUsdc: selectedAmountUsdc,
       paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
+      paymentScheme: selectedPaymentScheme,
       paymentRef,
       txHash: paymentRef,
       data,
@@ -725,6 +767,7 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       selectedChain,
       amountUsdc: selectedAmountUsdc,
       paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
+      paymentScheme: selectedPaymentScheme,
       failureReason: paymentFailureReasonFromError(message, timedOut),
       error: message,
     };
@@ -792,6 +835,7 @@ async function payX402ResourceWithGatewayClient<T = unknown>(input: PayX402Resou
         selectedChain: chain,
         amountUsdc: paidAmount,
         paymentNetwork,
+        paymentScheme: "gateway-batched",
         paymentRef: paid.transaction || undefined,
         txHash: paid.transaction || undefined,
         data: paid.data,

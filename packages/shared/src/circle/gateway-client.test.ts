@@ -57,6 +57,54 @@ function balances(availableUsdc = "1.000000", walletUsdc = "0"): Balances {
   };
 }
 
+const TEST_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const TEST_SELLER = "0x0000000000000000000000000000000000000002";
+
+function encodeX402Header(payload: unknown) {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+}
+
+function paymentRequiredHeader(accepts: unknown[]) {
+  return encodeX402Header({
+    x402Version: 2,
+    resource: { url: "https://parallelmpp.dev/api/search", description: "test paid resource", mimeType: "application/json" },
+    accepts,
+  });
+}
+
+function standardBaseRequirement(amount = "10000") {
+  return {
+    scheme: "exact",
+    network: "eip155:8453",
+    asset: BASE_USDC,
+    amount,
+    payTo: TEST_SELLER,
+    maxTimeoutSeconds: 300,
+    extra: { name: "USD Coin", version: "2" },
+  };
+}
+
+function gatewayBaseRequirement(amount = "10000") {
+  return {
+    ...standardBaseRequirement(amount),
+    extra: { name: "GatewayWalletBatched", version: "1", verifyingContract: "0x77777777dcc4d5A8B6E418Fd04D8997ef11000eE" },
+  };
+}
+
+function mockPaidFetch(accepts: unknown[], body: unknown = { ok: true }) {
+  const requests: Request[] = [];
+  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request.clone());
+    if (requests.length === 1) {
+      return new Response(null, { status: 402, headers: { "PAYMENT-REQUIRED": paymentRequiredHeader(accepts) } });
+    }
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  return { fetchImpl: fetchImpl as typeof globalThis.fetch, requests };
+}
+
 function mockClient(input: { amountAtomic?: string; availableUsdc?: string; walletUsdc?: string; supported?: boolean; chainName?: SupportedChainName; network?: string } = {}) {
   let payCalls = 0;
   let depositCalls = 0;
@@ -221,6 +269,65 @@ test("successful payment returns Circle payment metadata", async () => {
   assert.equal(result.selectedChain, "base");
   assert.equal(result.paymentRef, "0xpayment");
   assert.equal(client.payCalls(), 1);
+});
+
+test("fetch x402 supports standard exact Base sellers with wallet USDC", async () => {
+  const balanceClient = mockClient({ chainName: "base", network: "eip155:8453", availableUsdc: "0.000000", walletUsdc: "1.000000" });
+  const paidFetch = mockPaidFetch([standardBaseRequirement()], { ok: true, provider: "parallel" });
+  const result = await payX402Resource<{ ok: boolean; provider: string }>({
+    url: "https://parallelmpp.dev/api/search",
+    method: "POST",
+    body: { query: "football team news" },
+    fetch: paidFetch.fetchImpl,
+    balanceClients: { base: balanceClient },
+    config: baseX402Config({ privateKey: TEST_PRIVATE_KEY, allowedHosts: ["parallelmpp.dev"], maxPaymentUsdc: "0.03", minGatewayBalanceUsdc: "0.25" }),
+  });
+
+  assert.equal(result.status, "success");
+  assert.equal(result.paid, true);
+  assert.equal(result.amountUsdc, "0.01");
+  assert.equal(result.paymentNetwork, "eip155:8453");
+  assert.equal(result.paymentScheme, "standard-exact");
+  assert.equal(result.data?.provider, "parallel");
+  assert.equal(paidFetch.requests.length, 2);
+  assert.equal(paidFetch.requests[1]?.headers.has("PAYMENT-SIGNATURE"), true);
+  assert.equal(result.supportChecks?.[0]?.paymentScheme, "standard-exact");
+  assert.equal(result.supportChecks?.[0]?.walletBalanceUsdc, "1.000000");
+});
+
+test("fetch x402 blocks standard exact sellers when wallet USDC is insufficient", async () => {
+  const balanceClient = mockClient({ chainName: "base", network: "eip155:8453", availableUsdc: "1.000000", walletUsdc: "0.000000" });
+  const paidFetch = mockPaidFetch([standardBaseRequirement()]);
+  const result = await payX402Resource({
+    url: "https://parallelmpp.dev/api/search",
+    method: "POST",
+    fetch: paidFetch.fetchImpl,
+    balanceClients: { base: balanceClient },
+    config: baseX402Config({ privateKey: TEST_PRIVATE_KEY, allowedHosts: ["parallelmpp.dev"], maxPaymentUsdc: "0.03" }),
+  });
+
+  assert.equal(result.status, "insufficient_balance");
+  assert.equal(result.paid, false);
+  assert.equal(result.failureReason, undefined);
+  assert.match(result.error || "", /Wallet USDC balance/i);
+  assert.equal(paidFetch.requests.length, 1);
+});
+
+test("fetch x402 still enforces Gateway balance for Gateway-batched sellers", async () => {
+  const balanceClient = mockClient({ chainName: "base", network: "eip155:8453", availableUsdc: "0.001000", walletUsdc: "1.000000" });
+  const paidFetch = mockPaidFetch([gatewayBaseRequirement()]);
+  const result = await payX402Resource({
+    url: "https://api.aisa.one/apis/v2/tavily/search",
+    method: "POST",
+    fetch: paidFetch.fetchImpl,
+    balanceClients: { base: balanceClient },
+    config: baseX402Config({ privateKey: TEST_PRIVATE_KEY, maxPaymentUsdc: "0.03", minGatewayBalanceUsdc: "0.05" }),
+  });
+
+  assert.equal(result.status, "insufficient_balance");
+  assert.equal(result.paid, false);
+  assert.match(result.error || "", /Gateway available balance/i);
+  assert.equal(paidFetch.requests.length, 1);
 });
 
 test("Gateway balance lookup reports disabled without a key", async () => {
