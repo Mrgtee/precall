@@ -96,9 +96,9 @@ Before unlock, users see only the safe public preview. After a verified Arc USDC
 
 Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
 
-- Circle Gateway/x402 can pay allowlisted premium APIs for evidence.
-- Sports paid evidence uses Circle Marketplace services. AISA Twitter/X and AISA Tavily currently advertise Gateway-batched Base payments. Stable Enrich Firecrawl is inspected as a marketplace candidate, but the current seller advertises standard USDC x402 rather than Gateway batching, so it is recorded as unsupported until a compatible signer is added.
-- Base Mainnet is the recommended production x402 payment network when the provider supports it.
+- Circle x402 pays allowlisted Marketplace APIs for evidence.
+- Sports paid evidence uses Circle Marketplace services only: Parallel web search first, AISA Twitter/X social next, then AISA Tavily and Firecrawl only when the evidence packet is still thin.
+- Base Mainnet is the recommended production x402 payment network. Gateway-batched sellers use the Gateway balance; standard exact x402 sellers such as Parallel/Firecrawl use normal Base USDC in the `CIRCLE_AGENT_PRIVATE_KEY` wallet.
 - Arc Testnet remains available for hackathon/demo x402 flows and Arc-bonded settlement demos.
 - The worker checks provider/network support before paying and records paid evidence through `circle_actions`.
 - Arc remains the settlement/unlock layer for Precall's own bonded calls and user unlocks.
@@ -182,7 +182,7 @@ Precall separates active predictions from historical reputation.
 
 1. The Railway worker discovers live Polymarket markets.
 2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
-3. It builds an evidence packet from Polymarket data and real Circle Marketplace x402 evidence. Gateway-batched AISA Twitter/X and AISA Tavily are the active paid evidence sources; Firecrawl is tracked separately when its seller payment scheme is compatible.
+3. It builds an evidence packet from Polymarket data and real Circle Marketplace x402 evidence: Parallel web search, AISA Twitter/X social, AISA Tavily news, and Firecrawl fallback search.
 4. Sports calls must pass the real-evidence gate before any AI council analysis is stored publicly.
 5. An AI council analyzes the market using supplied evidence IDs only.
 6. The system calculates market probability, AI probability, edge, confidence, and risk.
@@ -361,8 +361,9 @@ REQUIRE_CIRCLE_GATEWAY_X402=false
 CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,parallelmpp.dev,stableenrich.dev
+# Sports evidence defaults to Base even when the app settlement demo uses Arc.
+# Gateway-batched sellers spend Gateway balance; standard exact sellers spend normal Base wallet USDC.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
@@ -371,7 +372,7 @@ CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
 # CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
 # CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,parallelmpp.dev,stableenrich.dev
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
@@ -382,6 +383,7 @@ ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
 # INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
 # Circle Marketplace evidence endpoints. Override only if the catalog URL changes.
+PARALLEL_X402_SEARCH_ENDPOINT=https://parallelmpp.dev/api/search
 AISA_X402_TWITTER_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/twitter/tweet/advanced_search
 AISA_X402_TAVILY_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/tavily/search
 STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT=https://stableenrich.dev/api/firecrawl/search
@@ -483,6 +485,8 @@ circle services pay http://127.0.0.1:3002/api/v1/soccer/predictions \
 
 If this reaches settlement but returns `Insufficient Gateway balance`, deposit testnet USDC into Gateway for the buyer wallet before retrying.
 
+For live sports evidence on Base, fund both balances for the same `CIRCLE_AGENT_PRIVATE_KEY` wallet when needed: Gateway balance for Gateway-batched AISA sellers, and normal Base USDC for standard exact x402 sellers such as Parallel and Firecrawl. `npm run worker:gateway:balance -- base` shows Gateway balance; use your wallet/Circle tooling to confirm normal Base USDC before running paid live calls.
+
 # 16. Worker Commands
 
 ```bash
@@ -492,6 +496,7 @@ npm run worker:sports
 npm run worker:expire
 npm run worker:resolve
 npm run worker:x402:supports -- "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search?query=bitcoin&queryType=Top"
+npm run worker:x402:supports -- "https://parallelmpp.dev/api/search"
 npm run worker:gateway:balance -- arcTestnet
 npm run worker:gateway:balance -- base
 npm run worker:gateway:deposit -- base 1

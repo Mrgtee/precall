@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
   <title id="title">How Precall Works</title>
-  <desc id="desc">A seven-stage flow showing market discovery, quality checks, a Circle Gateway x402 nanopayment for AISA, Tavily, and Firecrawl evidence, Sports Council analysis, locked publication, and a 0.05 USDC user unlock on Arc.</desc>
+  <desc id="desc">A seven-stage flow showing market discovery, quality checks, Circle Marketplace x402 nanopayments for Parallel, AISA, Tavily, and Firecrawl evidence, Sports Council analysis, locked publication, and a 0.05 USDC user unlock on Arc.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M0 0 L10 5 L0 10 Z" fill="#64748b"/>
@@ -63,7 +63,7 @@
   <text class="label" x="700" y="428">Evidence</text>
   <text class="body" x="700" y="486">Marketplace sellers</text>
   <text class="body" x="700" y="514">quotes the resource.</text>
-  <text class="body" x="700" y="552">Circle Gateway x402</text>
+  <text class="body" x="700" y="552">Circle x402 payment</text>
   <text class="body" x="700" y="580">pays the required</text>
   <text class="body" x="700" y="608">USDC nanopayment.</text>
   <text class="detail" x="700" y="690">CAPPED AGENT SPEND</text>
@@ -75,12 +75,12 @@
   <text class="number" x="955" y="337">4</text>
   <text class="label" x="955" y="398">Receive Paid</text>
   <text class="label" x="955" y="428">Evidence</text>
-  <text class="body" x="955" y="486">AISA + Tavily results</text>
-  <text class="body" x="955" y="514">Firecrawl page evidence</text>
+  <text class="body" x="955" y="486">Parallel + AISA evidence</text>
+  <text class="body" x="955" y="514">Tavily + Firecrawl fallback</text>
   <text class="body" x="955" y="542">results return as</text>
   <text class="body" x="955" y="570">verified evidence.</text>
   <text class="detail" x="955" y="680">Marketplace APIs</text>
-  <text class="detail" x="955" y="708">AISA + TAVILY + FIRECRAWL</text>
+  <text class="detail" x="955" y="708">PARALLEL + AISA + TAVILY + FIRECRAWL</text>
 
   <rect class="card" x="1100" y="270" width="220" height="504" stroke="#7c3aed" stroke-width="3"/>
   <rect x="1100" y="270" width="220" height="8" rx="3" fill="#7c3aed"/>

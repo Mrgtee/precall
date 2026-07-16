@@ -170,7 +170,7 @@ SPORTS_EVIDENCE_MAX_AGE_HOURS=96
 SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true
 ```
 
-When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Precall currently uses Circle Marketplace services for paid sports evidence. AISA Twitter/X provides social signals and AISA Tavily provides web/news search through Gateway-batched Base payments. Stable Enrich Firecrawl is inspected as a marketplace candidate, but the current seller advertises standard USDC x402 rather than Gateway batching, so it is recorded as unsupported until a compatible signer is added. The worker skips storage if evidence is too thin, stale, or backed only by social posts for injury/lineup claims.
+When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Precall currently uses Circle Marketplace services for paid sports evidence: Parallel web search first, AISA Twitter/X social next, then AISA Tavily and Firecrawl only when the evidence packet is still thin. Gateway-batched sellers spend Gateway balance; standard exact x402 sellers spend normal Base wallet USDC. The worker skips storage if evidence is too thin, stale, or backed only by social posts for injury/lineup claims.
 
 ## Optional Circle Gateway/x402 Paid Evidence
 
@@ -185,8 +185,9 @@ X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_AGENT_PRIVATE_KEY=0x...
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
-CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
+CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,parallelmpp.dev,stableenrich.dev
+# Sports evidence defaults to Base even when the app settlement demo uses Arc.
+# Gateway-batched sellers spend Gateway balance; standard exact sellers spend normal Base wallet USDC.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
@@ -195,7 +196,7 @@ CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
 # CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
 # CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
-# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
+# CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,parallelmpp.dev,stableenrich.dev
 ENABLE_X402_FALLBACK_PROVIDERS=true
 ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
 # Legacy internal fallback only; keep disabled for real marketplace sports evidence.
@@ -203,6 +204,7 @@ ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
 # INTERNAL_GATEWAY_X402_EVIDENCE_PRICE_USDC=0.001
 ENABLE_EXTERNAL_X402_FALLBACK_PROVIDERS=false
 # Circle Marketplace evidence endpoints. Override only if the catalog URL changes.
+PARALLEL_X402_SEARCH_ENDPOINT=https://parallelmpp.dev/api/search
 AISA_X402_TWITTER_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/twitter/tweet/advanced_search
 AISA_X402_TAVILY_SEARCH_ENDPOINT=https://api.aisa.one/apis/v2/tavily/search
 STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT=https://stableenrich.dev/api/firecrawl/search
@@ -217,7 +219,7 @@ CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC=0.25
 # CIRCLE_GATEWAY_RPC_URL=
 ```
 
-`CIRCLE_AGENT_PRIVATE_KEY` is server-only and must never be committed or exposed as `NEXT_PUBLIC_*`. It is intentionally separate from `AGENT_OWNER_PRIVATE_KEY`: Gateway/x402 pays premium API sellers, while the Arc owner key publishes bonded calls. The x402 payment network affects paid-evidence settlement only; AI analysis quality still depends on evidence, model behavior, and agent logic.
+`CIRCLE_AGENT_PRIVATE_KEY` is server-only and must never be committed or exposed as `NEXT_PUBLIC_*`. It is intentionally separate from `AGENT_OWNER_PRIVATE_KEY`: x402 pays premium API sellers, while the Arc owner key publishes bonded calls. For live sports evidence on Base, fund Gateway balance for Gateway-batched AISA sellers and normal Base USDC for standard exact sellers such as Parallel and Firecrawl. The x402 payment network affects paid-evidence settlement only; AI analysis quality still depends on evidence, model behavior, and agent logic.
 
 ## Final Smoke Test
 
