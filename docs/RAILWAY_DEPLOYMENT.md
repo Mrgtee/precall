@@ -91,13 +91,15 @@ CIRCLE_AGENT_PRIVATE_KEY=
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
+# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
-# Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
+# Evidence-specific defaults: 0.03 max/payment, 0.10 daily, 0.05 Gateway reserve, 90s timeout.
 # CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
+# CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
+# CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
 # CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 ENABLE_X402_FALLBACK_PROVIDERS=true
 ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false
@@ -260,7 +262,7 @@ Create four Railway cron services from the same GitHub repo:
 | Job | Schedule | Command | Notes |
 | --- | --- | --- | --- |
 | Agent run | `0 */3 * * *` | `npm run worker:run-once` | Scans strict YES/NO markets, optionally pays x402 evidence, and publishes only quality-passing bonded calls. |
-| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, fetches Circle Marketplace x402 evidence from AISA, Tavily, and Firecrawl, skips thin evidence, and stores qualifying calls. |
+| Sports Live Calls | `15 */3 * * *` | `npm run worker:sports` | Scans daily sports markets, fetches Circle Marketplace x402 evidence from Gateway-batched AISA/Tavily providers, records incompatible marketplace providers such as current Firecrawl as unsupported, skips thin evidence, and stores qualifying calls. |
 | Expire calls | `0 * * * *` | `npm run worker:expire` | Marks matured published calls as awaiting resolution. |
 | Resolve calls | `30 */3 * * *` | `npm run worker:resolve` | Runs expiry first, then resolves supported YES/NO markets and updates reputation. |
 
@@ -300,13 +302,15 @@ CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
+# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
-# Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
+# Evidence-specific defaults: 0.03 max/payment, 0.10 daily, 0.05 Gateway reserve, 90s timeout.
 # CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
+# CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
+# CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
 # CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10

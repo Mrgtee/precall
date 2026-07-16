@@ -53,7 +53,7 @@ function x402FallbackProvidersEnabled() {
 }
 
 function internalGatewayEvidenceEnabled() {
-  return optionalEnv("ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE", "true").toLowerCase() !== "false";
+  return optionalEnv("ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE", "false").toLowerCase() === "true";
 }
 
 function externalX402FallbackEnabled() {
@@ -62,6 +62,13 @@ function externalX402FallbackEnabled() {
 
 function parseCsv(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function positiveIntegerEnv(name: string, fallback: number) {
+  const explicit = process.env[name];
+  const raw = explicit !== undefined && explicit.trim() !== "" ? explicit : String(fallback);
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
 }
 
 function defaultEvidenceAllowedHosts() {
@@ -91,10 +98,11 @@ function externalX402EvidenceConfig(): Partial<GatewayRuntimeConfig> {
     chainCandidates: [chain],
     acceptedNetworks: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS", defaultEvidenceNetwork(chain))),
     facilitatorUrl: optionalEnv("CIRCLE_X402_EVIDENCE_FACILITATOR_URL", defaultEvidenceFacilitator(chain)),
-    maxPaymentUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC", optionalEnv("CIRCLE_X402_MAX_PAYMENT_USDC", "0.005")),
+    maxPaymentUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC", "0.03"),
     dailyBudgetUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC", optionalEnv("CIRCLE_X402_DAILY_BUDGET_USDC", "0.10")),
     allowedHosts: parseCsv(optionalEnv("CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS", defaultEvidenceAllowedHosts())),
-    minGatewayBalanceUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC", optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25")),
+    minGatewayBalanceUsdc: optionalEnv("CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC", "0.05"),
+    requestTimeoutMs: positiveIntegerEnv("CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS", 90_000),
   };
 }
 
@@ -131,7 +139,7 @@ function sportsEvidenceTagsForText(text: string) {
 function buildAisaSearchUrl(query: string) {
   const url = new URL(aisaTwitterSearchEndpoint());
   url.searchParams.set("query", query);
-  url.searchParams.set("queryType", "Top");
+  url.searchParams.set("queryType", "Latest");
   return url.toString();
 }
 
@@ -467,7 +475,8 @@ function shouldUseGatewayFallback(payment: PayX402ResourceResult) {
   return payment.status === "unsupported" ||
     payment.failureReason === "unsupported_network" ||
     payment.failureReason === "provider_unavailable" ||
-    /HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|error code: 502|No network\/scheme registered|no Gateway batching|unsupported_network/i.test(payment.error || "");
+    payment.failureReason === "provider_timeout" ||
+    /HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|error code: 502|No network\/scheme registered|no Gateway batching|unsupported_network|terminated|AbortError|aborted|timeout|ETIMEDOUT|UND_ERR/i.test(payment.error || "");
 }
 
 async function fetchStableEnrichRedditEvidence(input: {
@@ -598,7 +607,7 @@ export async function fetchAisaX402SocialEvidence(input: {
 }
 
 export async function supportsAisaX402SocialEvidence(query: string) {
-  return supportsX402Resource(buildAisaSearchUrl(query));
+  return supportsX402Resource(buildAisaSearchUrl(query), { config: externalX402EvidenceConfig() });
 }
 
 function buildAisaTavilyRequest(query: string) {
@@ -607,8 +616,10 @@ function buildAisaTavilyRequest(query: string) {
     method: "POST" as const,
     body: {
       query,
-      search_depth: "basic",
-      include_answer: true,
+      topic: "news",
+      time_range: "week",
+      search_depth: "ultra-fast",
+      include_answer: false,
       max_results: 5,
     },
     headers: { "Content-Type": "application/json" },
@@ -849,7 +860,7 @@ export async function fetchTavilyX402SearchEvidence(input: {
 }
 
 export async function supportsTavilyX402SearchEvidence(query: string) {
-  return supportsX402Resource(aisaTavilySearchEndpoint());
+  return supportsX402Resource(aisaTavilySearchEndpoint(), { config: externalX402EvidenceConfig() });
 }
 
 export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };

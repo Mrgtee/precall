@@ -83,6 +83,11 @@ export async function health() {
       evidenceX402AcceptedNetworks: evidenceGatewayConfig.acceptedNetworks,
       evidenceX402FacilitatorUrl: evidenceGatewayConfig.facilitatorUrl,
       evidenceX402ProductionMode: evidenceGatewayConfig.productionMode,
+      evidenceAllowedHosts: evidenceGatewayConfig.allowedHosts,
+      evidenceMaxPaymentUsdc: evidenceGatewayConfig.maxPaymentUsdc,
+      evidenceDailyBudgetUsdc: evidenceGatewayConfig.dailyBudgetUsdc,
+      evidenceMinGatewayBalanceUsdc: evidenceGatewayConfig.minGatewayBalanceUsdc,
+      evidenceRequestTimeoutMs: evidenceGatewayConfig.requestTimeoutMs,
       evidenceX402ConfigWarnings: evidenceGatewayConfig.configWarnings,
       evidenceX402ConfigErrors: evidenceGatewayConfig.configErrors,
       evidenceGatewayBalanceStatus: primaryEvidenceGatewayBalance?.status,
@@ -419,6 +424,15 @@ function addUsdc(left: string | number, right: string | number | undefined) {
   return Number.isFinite(total) ? total.toFixed(6) : String(left);
 }
 
+function x402ProviderFailureSummary(results: X402EvidenceProviderResult[]) {
+  return results
+    .map((result) => {
+      const detail = result.error || result.failureReason || (result.evidence.length === 0 ? "no evidence returned" : "");
+      return `${result.provider}:${result.status}${detail ? ` (${detail.slice(0, 180)})` : ""}`;
+    })
+    .join("; ");
+}
+
 function x402Summary(result: X402EvidenceProviderResult | undefined) {
   if (!result) return { enabled: false, status: "not_attempted" };
   return {
@@ -736,11 +750,14 @@ export async function runSportsEdge() {
         });
 
         const providerResults = [aisaResult, tavilyResult, firecrawlResult];
-        const successfulResult = providerResults.find((result) => result.status === "success");
-        const firstFailure = providerResults.find((result) => result.status !== "success") || providerResults[0];
         const marketplaceEvidence = providerResults
           .flatMap((result) => result.evidence)
           .filter((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true);
+        const successfulResult = providerResults.find((result) =>
+          result.status === "success" &&
+          result.evidence.some((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true),
+        );
+        const firstFailure = providerResults.find((result) => result.status !== "success" || result.evidence.length === 0) || providerResults[0];
 
         x402Result = {
           enabled: providerResults.some((result) => result.enabled),
@@ -758,7 +775,7 @@ export async function runSportsEdge() {
         };
 
         if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
-          const failure = x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
+          const failure = x402ProviderFailureSummary(providerResults) || x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
           const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
           if (aisaResult) await recordX402CircleAction({ result: aisaResult, marketId: market.marketId, agentRunId: failedRun?.id });
           if (tavilyResult) await recordX402CircleAction({ result: tavilyResult, marketId: market.marketId, agentRunId: failedRun?.id });

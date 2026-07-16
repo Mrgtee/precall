@@ -2,7 +2,7 @@ import { CHAIN_CONFIGS, GatewayClient, registerBatchScheme, type Balances, type 
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client, type PaymentRequirements } from "@x402/fetch";
 import { formatUnits, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { boolEnv, optionalEnv } from "../env";
+import { boolEnv, numberEnv, optionalEnv } from "../env";
 
 export type GatewayClientLike = {
   readonly address?: string | undefined;
@@ -43,6 +43,7 @@ export type GatewayRuntimeConfig = {
   allowedHosts: string[];
   minGatewayBalanceUsdc: string;
   maxDepositUsdc: string;
+  requestTimeoutMs: number;
 };
 
 export type GatewayBalanceResult = {
@@ -100,6 +101,7 @@ export type PayX402ResourceInput = {
   chainCandidates?: SupportedChainName[] | undefined;
   config?: Partial<GatewayRuntimeConfig> | undefined;
   fetch?: typeof globalThis.fetch | undefined;
+  requestTimeoutMs?: number | undefined;
 };
 
 export type PayX402ResourceResult<T = unknown> = {
@@ -318,6 +320,7 @@ export function gatewayRuntimeConfig(overrides: Partial<GatewayRuntimeConfig> = 
     allowedHosts: overrides.allowedHosts ?? parseAllowedHosts(optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one")),
     minGatewayBalanceUsdc: overrides.minGatewayBalanceUsdc ?? optionalEnv("CIRCLE_X402_MIN_GATEWAY_BALANCE_USDC", "0.25"),
     maxDepositUsdc: overrides.maxDepositUsdc ?? optionalEnv("CIRCLE_GATEWAY_MAX_DEPOSIT_USDC", "10"),
+    requestTimeoutMs: Math.max(1, Math.round(overrides.requestTimeoutMs ?? numberEnv("CIRCLE_X402_REQUEST_TIMEOUT_MS", 30_000))),
   };
   const validation = validateGatewayRuntimeConfig(baseConfig, overrides);
   return { ...baseConfig, configWarnings: validation.warnings, configErrors: validation.errors };
@@ -552,6 +555,19 @@ function statusFromPaymentError(message: string): GatewayX402Status {
   return "failed";
 }
 
+function paymentFailureReasonFromError(message: string, timedOut = false) {
+  if (/unsupported|no Gateway batching/i.test(message)) return "unsupported_network";
+  if (timedOut || /AbortError|aborted|terminated|timeout|ETIMEDOUT|UND_ERR/i.test(message)) return "provider_timeout";
+  if (/HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|fetch failed|ECONNRESET/i.test(message)) return "provider_unavailable";
+  return undefined;
+}
+
+function paymentErrorMessage(message: string, timedOut: boolean, timeoutMs: number) {
+  if (timedOut) return `x402 provider request timed out after ${timeoutMs} ms before evidence was returned.`;
+  if (/^terminated$/i.test(message.trim())) return "x402 provider request terminated before evidence was returned.";
+  return message;
+}
+
 async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput, config: GatewayRuntimeConfig, dailySpend: number, base: Omit<PayX402ResourceResult<T>, "status">): Promise<PayX402ResourceResult<T>> {
   const chainCandidates = configuredChainCandidates(input.chainCandidates, config);
   const supportChecks = base.supportChecks || [];
@@ -629,7 +645,12 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
 
   const fetchWithPayment = wrapFetchWithPayment(input.fetch || globalThis.fetch, paymentClient);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  const requestTimeoutMs = Math.max(1, Math.round(input.requestTimeoutMs ?? config.requestTimeoutMs));
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, requestTimeoutMs);
   const requestInit: RequestInit = {
     headers: { "Content-Type": "application/json", ...(input.headers || {}) },
     signal: controller.signal,
@@ -641,7 +662,6 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
 
   try {
     const response = await fetchWithPayment(input.url, requestInit);
-    clearTimeout(timeoutId);
     const rawBody = await response.text();
     let data: T | undefined;
     try {
@@ -696,7 +716,8 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       data,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const message = paymentErrorMessage(rawMessage, timedOut, requestTimeoutMs);
     return {
       ...base,
       status: statusFromPaymentError(message),
@@ -704,9 +725,11 @@ async function payX402ResourceWithFetch<T = unknown>(input: PayX402ResourceInput
       selectedChain,
       amountUsdc: selectedAmountUsdc,
       paymentNetwork: selectedPaymentNetwork || selectedRequirement?.network,
-      failureReason: /unsupported|no Gateway batching/i.test(message) ? "unsupported_network" : /HTTP 5\d\d|HTTP 403|Cloudflare|Just a moment|noindex,nofollow|Bad Gateway|fetch failed|ECONNRESET|ETIMEDOUT/i.test(message) ? "provider_unavailable" : undefined,
+      failureReason: paymentFailureReasonFromError(message, timedOut),
       error: message,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

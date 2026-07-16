@@ -248,6 +248,12 @@ test("gatewayRuntimeConfig accepts Base mainnet x402 configuration", () => {
   assert.match(config.configWarnings.join(" "), /real USDC/i);
 });
 
+test("gatewayRuntimeConfig keeps the request timeout configurable", () => {
+  const config = gatewayRuntimeConfig(baseX402Config({ requestTimeoutMs: 45_000 }));
+
+  assert.equal(config.requestTimeoutMs, 45_000);
+});
+
 test("gatewayRuntimeConfig accepts Arc Testnet x402 configuration", () => {
   const config = gatewayRuntimeConfig(arcX402Config());
 

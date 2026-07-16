@@ -170,7 +170,7 @@ SPORTS_EVIDENCE_MAX_AGE_HOURS=96
 SPORTS_REQUIRE_SOURCE_BACKED_NEWS=true
 ```
 
-When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Precall currently uses Circle Marketplace services for paid sports evidence: AISA Twitter/X for social signals, AISA Tavily for web/news search, and Stable Enrich Firecrawl for source-backed web pages. The worker skips storage if evidence is too thin, stale, or backed only by social posts for injury/lineup claims.
+When the evidence gate is enabled, the sports worker skips storage and records `sports_skipped_evidence_quality` if it cannot collect enough real non-Polymarket evidence. Precall currently uses Circle Marketplace services for paid sports evidence. AISA Twitter/X provides social signals and AISA Tavily provides web/news search through Gateway-batched Base payments. Stable Enrich Firecrawl is inspected as a marketplace candidate, but the current seller advertises standard USDC x402 rather than Gateway batching, so it is recorded as unsupported until a compatible signer is added. The worker skips storage if evidence is too thin, stale, or backed only by social posts for injury/lineup claims.
 
 ## Optional Circle Gateway/x402 Paid Evidence
 
@@ -186,13 +186,15 @@ CIRCLE_AGENT_PRIVATE_KEY=0x...
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
+# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
-# Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
+# Evidence-specific defaults: 0.03 max/payment, 0.10 daily, 0.05 Gateway reserve, 90s timeout.
 # CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
+# CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
+# CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
 # CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 ENABLE_X402_FALLBACK_PROVIDERS=true
 ENABLE_INTERNAL_GATEWAY_X402_EVIDENCE=false

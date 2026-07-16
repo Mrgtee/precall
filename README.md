@@ -97,7 +97,7 @@ Before unlock, users see only the safe public preview. After a verified Arc USDC
 Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
 
 - Circle Gateway/x402 can pay allowlisted premium APIs for evidence.
-- Sports evidence comes from Circle Marketplace services: AISA Twitter/X social search, AISA Tavily web/news search, and Stable Enrich Firecrawl web search.
+- Sports paid evidence uses Circle Marketplace services. AISA Twitter/X and AISA Tavily currently advertise Gateway-batched Base payments. Stable Enrich Firecrawl is inspected as a marketplace candidate, but the current seller advertises standard USDC x402 rather than Gateway batching, so it is recorded as unsupported until a compatible signer is added.
 - Base Mainnet is the recommended production x402 payment network when the provider supports it.
 - Arc Testnet remains available for hackathon/demo x402 flows and Arc-bonded settlement demos.
 - The worker checks provider/network support before paying and records paid evidence through `circle_actions`.
@@ -182,7 +182,7 @@ Precall separates active predictions from historical reputation.
 
 1. The Railway worker discovers live Polymarket markets.
 2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
-3. It builds an evidence packet from Polymarket data, Circle Marketplace x402 evidence from AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl.
+3. It builds an evidence packet from Polymarket data and real Circle Marketplace x402 evidence. Gateway-batched AISA Twitter/X and AISA Tavily are the active paid evidence sources; Firecrawl is tracked separately when its seller payment scheme is compatible.
 4. Sports calls must pass the real-evidence gate before any AI council analysis is stored publicly.
 5. An AI council analyzes the market using supplied evidence IDs only.
 6. The system calculates market probability, AI probability, edge, confidence, and risk.
@@ -362,13 +362,15 @@ CIRCLE_GATEWAY_CHAIN=base
 X402_ACCEPTED_NETWORKS=eip155:8453
 X402_FACILITATOR_URL=https://gateway-api.circle.com
 CIRCLE_X402_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
-# AISA Twitter/X, AISA Tavily, and Stable Enrich Firecrawl paid evidence defaults to Base even when the app settlement demo uses Arc.
+# AISA Twitter/X and AISA Tavily paid evidence defaults to Base even when the app settlement demo uses Arc.
 CIRCLE_X402_EVIDENCE_CHAIN=base
 CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS=eip155:8453
 CIRCLE_X402_EVIDENCE_FACILITATOR_URL=https://gateway-api.circle.com
-# Optional evidence-specific overrides inherit the general CIRCLE_X402_* values when unset.
+# Evidence-specific defaults: 0.03 max/payment, 0.10 daily, 0.05 Gateway reserve, 90s timeout.
 # CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC=0.03
 # CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC=0.10
+# CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC=0.05
+# CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS=90000
 # CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS=api.aisa.one,stableenrich.dev
 CIRCLE_X402_MAX_PAYMENT_USDC=0.03
 CIRCLE_X402_DAILY_BUDGET_USDC=0.10
