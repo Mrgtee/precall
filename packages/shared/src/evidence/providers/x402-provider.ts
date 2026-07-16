@@ -25,6 +25,7 @@ export function cleanSearchQuery(title: string): string {
 const AISA_TWITTER_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/twitter/tweet/advanced_search";
 const STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT = "https://stableenrich.dev/api/reddit/search";
 const STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT = "https://stableenrich.dev/api/firecrawl/search";
+const PARALLEL_SEARCH_ENDPOINT = "https://parallelmpp.dev/api/search";
 const AISA_TAVILY_SEARCH_ENDPOINT = "https://api.aisa.one/apis/v2/tavily/search";
 const INTERNAL_GATEWAY_EVIDENCE_PRICE_USDC = "0.001";
 const BASE_MAINNET_NETWORK = "eip155:8453";
@@ -46,6 +47,10 @@ function stableEnrichRedditSearchEndpoint() {
 
 function stableEnrichFirecrawlSearchEndpoint() {
   return optionalEnv("STABLE_ENRICH_X402_FIRECRAWL_SEARCH_ENDPOINT", STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT);
+}
+
+function parallelSearchEndpoint() {
+  return optionalEnv("PARALLEL_X402_SEARCH_ENDPOINT", PARALLEL_SEARCH_ENDPOINT);
 }
 
 function x402FallbackProvidersEnabled() {
@@ -72,7 +77,7 @@ function positiveIntegerEnv(name: string, fallback: number) {
 }
 
 function defaultEvidenceAllowedHosts() {
-  return [...new Set([...parseCsv(optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one")), "api.aisa.one", "stableenrich.dev"])].join(",");
+  return [...new Set([...parseCsv(optionalEnv("CIRCLE_X402_ALLOWED_HOSTS", "api.aisa.one")), "api.aisa.one", "parallelmpp.dev", "stableenrich.dev"])].join(",");
 }
 
 function externalEvidenceChain(): SupportedChainName {
@@ -120,6 +125,7 @@ export type X402EvidenceProviderResult = {
   evidence: EvidenceItemInput[];
   paymentAmountUsdc?: string | undefined;
   paymentNetwork?: string | undefined;
+  paymentScheme?: "gateway-batched" | "standard-exact" | undefined;
   selectedChain?: string | undefined;
   supportChecks?: GatewaySupportCheck[] | undefined;
   failureReason?: string | undefined;
@@ -674,6 +680,142 @@ function evidenceFromTavily(input: {
   return items.filter((item) => item.excerpt.length > 0 && item.sourceUrl !== input.market.url);
 }
 
+function buildParallelSearchRequest(query: string) {
+  return {
+    url: parallelSearchEndpoint(),
+    method: "POST" as const,
+    body: {
+      query,
+      mode: "fast",
+    },
+    headers: { "Content-Type": "application/json" },
+  };
+}
+
+type ParallelSearchResultLike = {
+  title?: string;
+  url?: string;
+  excerpts?: string[];
+  excerpt?: string;
+  content?: string;
+  publish_date?: string | null;
+  publishedDate?: string;
+  published_date?: string;
+  date?: string;
+};
+
+function extractParallelResults(data: unknown): ParallelSearchResultLike[] {
+  const payload = data as {
+    data?: unknown[] | { results?: unknown[]; items?: unknown[] };
+    results?: unknown[];
+    items?: unknown[];
+  };
+  const nested = payload.data && !Array.isArray(payload.data) ? payload.data : undefined;
+  const results = (Array.isArray(payload.data) ? payload.data : undefined) || nested?.results || nested?.items || payload.results || payload.items || [];
+  return results.filter((item): item is ParallelSearchResultLike => Boolean(item && typeof item === "object"));
+}
+
+function evidenceFromParallel(input: {
+  data: unknown;
+  url: string;
+  market: PolymarketMarket;
+  payment: PayX402ResourceResult;
+}): EvidenceItemInput[] {
+  const fetchedAt = nowIso();
+  return extractParallelResults(input.data)
+    .slice(0, 5)
+    .map((res, index) => {
+      const excerpt = (Array.isArray(res.excerpts) ? res.excerpts.join(" ") : res.excerpt || res.content || "").slice(0, 800);
+      const publishedAt = res.publish_date || res.publishedDate || res.published_date || res.date || undefined;
+      return {
+        evidenceId: "circle-x402-parallel-" + (index + 1),
+        sourceType: "circle_x402_news" as const,
+        provider: "parallel_x402_search",
+        sourceUrl: res.url || input.url,
+        title: res.title || "x402 Parallel Search Result " + (index + 1),
+        excerpt,
+        credibilityScore: 86,
+        fetchedAt,
+        capturedAt: fetchedAt,
+        paid: true,
+        paymentAmountUsdc: input.payment.amountUsdc,
+        paymentNetwork: input.payment.paymentNetwork || input.payment.selectedChain,
+        paymentRef: input.payment.paymentRef,
+        txHash: input.payment.txHash,
+        metadata: {
+          provider: "parallel_x402_search",
+          endpoint: parallelSearchEndpoint(),
+          marketId: input.market.marketId,
+          selectedChain: input.payment.selectedChain,
+          paymentScheme: input.payment.paymentScheme,
+          sourceKind: "web",
+          sourcePublishedAt: publishedAt,
+          evidenceTags: sportsEvidenceTagsForText((res.title || "") + " " + excerpt),
+        },
+      };
+    })
+    .filter((item) => item.excerpt.length > 0 && item.sourceUrl !== input.market.url);
+}
+
+export async function fetchParallelX402SearchEvidence(input: {
+  market: PolymarketMarket;
+  query?: string;
+  dailySpendUsdc?: string | number | undefined;
+  payResource?: typeof payX402Resource | undefined;
+}): Promise<X402EvidenceProviderResult> {
+  const query = cleanSearchQuery(input.query || input.market.title);
+  const request = buildParallelSearchRequest(query);
+  const payResource = input.payResource || payX402Resource;
+  const paymentInput: Parameters<typeof payX402Resource>[0] = {
+    url: request.url,
+    method: request.method,
+    body: request.body,
+    headers: request.headers,
+    config: externalX402EvidenceConfig(),
+  };
+  if (input.dailySpendUsdc !== undefined) paymentInput.dailySpendUsdc = input.dailySpendUsdc;
+  const payment = await payResource<unknown>(paymentInput);
+
+  if (payment.status !== "success" || !payment.paid) {
+    return {
+      enabled: payment.enabled,
+      provider: "parallel_x402_search",
+      status: payment.status,
+      url: request.url,
+      evidence: [],
+      paymentAmountUsdc: payment.amountUsdc,
+      paymentNetwork: payment.paymentNetwork,
+      paymentScheme: payment.paymentScheme,
+      selectedChain: payment.selectedChain,
+      supportChecks: payment.supportChecks,
+      failureReason: payment.failureReason,
+      paymentRef: payment.paymentRef,
+      txHash: payment.txHash,
+      error: payment.error,
+    };
+  }
+
+  return {
+    enabled: true,
+    provider: "parallel_x402_search",
+    status: "success",
+    url: request.url,
+    evidence: evidenceFromParallel({ data: payment.data, url: request.url, market: input.market, payment }),
+    paymentAmountUsdc: payment.amountUsdc,
+    paymentNetwork: payment.paymentNetwork,
+    paymentScheme: payment.paymentScheme,
+    selectedChain: payment.selectedChain,
+    supportChecks: payment.supportChecks,
+    failureReason: payment.failureReason,
+    paymentRef: payment.paymentRef,
+    txHash: payment.txHash,
+  };
+}
+
+export async function supportsParallelX402SearchEvidence(query: string) {
+  return supportsX402Resource(parallelSearchEndpoint(), { config: externalX402EvidenceConfig() });
+}
+
 function buildFirecrawlSearchRequest(query: string) {
   return {
     url: stableEnrichFirecrawlSearchEndpoint(),
@@ -693,6 +835,7 @@ type FirecrawlSearchResultLike = {
   description?: string;
   content?: string;
   markdown?: string;
+  snippet?: string;
   publishedDate?: string;
   published_date?: string;
   date?: string;
@@ -719,7 +862,7 @@ function evidenceFromFirecrawl(input: {
   return extractFirecrawlResults(input.data)
     .slice(0, 5)
     .map((res, index) => {
-      const excerpt = (res.content || res.description || res.markdown || "").slice(0, 800);
+      const excerpt = (res.content || res.description || res.snippet || res.markdown || "").slice(0, 800);
       return {
         evidenceId: "circle-x402-firecrawl-" + (index + 1),
         sourceType: "circle_x402_news" as const,
@@ -863,4 +1006,4 @@ export async function supportsTavilyX402SearchEvidence(query: string) {
   return supportsX402Resource(aisaTavilySearchEndpoint(), { config: externalX402EvidenceConfig() });
 }
 
-export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };
+export { AISA_TWITTER_SEARCH_ENDPOINT, STABLE_ENRICH_REDDIT_SEARCH_ENDPOINT, STABLE_ENRICH_FIRECRAWL_SEARCH_ENDPOINT, PARALLEL_SEARCH_ENDPOINT, AISA_TAVILY_SEARCH_ENDPOINT };

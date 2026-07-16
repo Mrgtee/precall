@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchFirecrawlX402SearchEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
+import { externalX402EvidenceRuntimeConfig, fetchAisaX402SocialEvidence, fetchFirecrawlX402SearchEvidence, fetchParallelX402SearchEvidence, fetchTavilyX402SearchEvidence } from "./x402-provider";
 import type { MarketSnapshot, PolymarketMarket } from "../../types";
 
 const market: PolymarketMarket = {
@@ -363,6 +363,47 @@ test("provider fallback can be disabled", async () => {
   }
 });
 
+test("parallel x402 payment parses source-backed search results", async () => {
+  const result = await fetchParallelX402SearchEvidence({
+    market,
+    payResource: async <T>() => ({
+      enabled: true,
+      status: "success",
+      paid: true,
+      supported: true,
+      url: "https://parallelmpp.dev/api/search",
+      amountUsdc: "0.010000",
+      maxPaymentUsdc: "0.03",
+      dailySpendUsdc: "0.000000",
+      dailyBudgetUsdc: "0.10",
+      paymentNetwork: "eip155:8453",
+      paymentScheme: "standard-exact",
+      selectedChain: "base",
+      paymentRef: "0xparallel",
+      txHash: "0xparallel",
+      data: {
+        results: [
+          { title: "Confirmed lineup news", url: "https://example.com/lineups", excerpts: ["Lineup update and injury context before kickoff."], publish_date: "2026-07-15" }
+        ],
+        search_id: "search-1"
+      } as T,
+    }),
+  });
+
+  assert.equal(result.status, "success");
+  assert.equal(result.provider, "parallel_x402_search");
+  assert.equal(result.paymentAmountUsdc, "0.010000");
+  assert.equal(result.paymentScheme, "standard-exact");
+  assert.equal(result.evidence.length, 1);
+  assert.equal(result.evidence[0]?.sourceType, "circle_x402_news");
+  assert.equal(result.evidence[0]?.provider, "parallel_x402_search");
+  assert.equal(result.evidence[0]?.sourceUrl, "https://example.com/lineups");
+  assert.equal(result.evidence[0]?.excerpt, "Lineup update and injury context before kickoff.");
+  assert.deepEqual(result.evidence[0]?.metadata?.evidenceTags, ["injury_lineup", "fixture_context", "tactical_news"]);
+  assert.equal(result.evidence[0]?.metadata?.sourcePublishedAt, "2026-07-15");
+  assert.equal(result.evidence[0]?.metadata?.paymentScheme, "standard-exact");
+});
+
 test("tavily x402 payment parses source-backed search results only", async () => {
   const result = await fetchTavilyX402SearchEvidence({
     market,
@@ -459,7 +500,7 @@ test("tavily x402 payment failure handles error states correctly", async () => {
 
 
 
-test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments through Base config", async () => {
+test("Parallel, AISA, Tavily, and Firecrawl x402 providers send external evidence payments through Base config", async () => {
   const keys = [
     "CIRCLE_X402_EVIDENCE_CHAIN",
     "CIRCLE_X402_EVIDENCE_ACCEPTED_NETWORKS",
@@ -476,7 +517,7 @@ test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments
   process.env.CIRCLE_X402_EVIDENCE_FACILITATOR_URL = "https://gateway-api.circle.com";
   process.env.CIRCLE_X402_EVIDENCE_MAX_PAYMENT_USDC = "0.01";
   process.env.CIRCLE_X402_EVIDENCE_DAILY_BUDGET_USDC = "0.10";
-  process.env.CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS = "api.aisa.one,stableenrich.dev";
+  process.env.CIRCLE_X402_EVIDENCE_ALLOWED_HOSTS = "api.aisa.one,parallelmpp.dev,stableenrich.dev";
   process.env.CIRCLE_X402_EVIDENCE_MIN_GATEWAY_BALANCE_USDC = "0.02";
   process.env.CIRCLE_X402_EVIDENCE_REQUEST_TIMEOUT_MS = "123456";
 
@@ -486,6 +527,7 @@ test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments
     const payResource = async <T>(input: any) => {
       inputs.push(input);
       configs.push(input.config);
+      const isParallel = String(input.url).includes("parallelmpp.dev");
       const isTavily = String(input.url).includes("/tavily/");
       const isFirecrawl = String(input.url).includes("/firecrawl/");
       return {
@@ -500,28 +542,34 @@ test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments
         dailyBudgetUsdc: "0.10",
         paymentNetwork: "eip155:8453",
         selectedChain: "base",
-        paymentRef: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : "0xaisa-base",
-        txHash: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : "0xaisa-base",
+        paymentRef: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : isParallel ? "0xparallel-base" : "0xaisa-base",
+        txHash: isFirecrawl ? "0xfirecrawl-base" : isTavily ? "0xtavily-base" : isParallel ? "0xparallel-base" : "0xaisa-base",
         data: (isFirecrawl
-          ? { results: [{ title: "Team news crawl", url: "https://example.com/crawl", description: "Lineup and injury update from crawled source.", publishedDate: "2026-07-15T15:00:00Z" }] }
+          ? { results: [{ title: "Team news crawl", url: "https://example.com/crawl", snippet: "Lineup and injury update from crawled source.", publishedDate: "2026-07-15T15:00:00Z" }] }
           : isTavily
             ? { results: [{ title: "Team news", url: "https://example.com/news", content: "Lineup and injury update." }] }
-            : { response: { tweets: [{ text: "Team news signal", url: "https://x.com/a/status/2", author: { userName: "reporter" } }] } }) as T,
+            : isParallel
+              ? { results: [{ title: "Team news search", url: "https://example.com/parallel", excerpts: ["Lineup and injury update from search."], publish_date: "2026-07-15" }] }
+              : { response: { tweets: [{ text: "Team news signal", url: "https://x.com/a/status/2", author: { userName: "reporter" } }] } }) as T,
       };
     };
 
     const social = await fetchAisaX402SocialEvidence({ market, snapshot, payResource });
+    const parallel = await fetchParallelX402SearchEvidence({ market, payResource });
     const tavily = await fetchTavilyX402SearchEvidence({ market, payResource });
     const firecrawl = await fetchFirecrawlX402SearchEvidence({ market, payResource });
     const runtime = externalX402EvidenceRuntimeConfig();
 
     assert.equal(social.status, "success");
+    assert.equal(parallel.status, "success");
     assert.equal(tavily.status, "success");
     assert.equal(firecrawl.status, "success");
-    assert.equal(configs.length, 3);
+    assert.equal(configs.length, 4);
     const socialInput = inputs.find((input) => String(input.url).includes("twitter/tweet/advanced_search"));
+    const parallelInput = inputs.find((input) => String(input.url).includes("parallelmpp.dev"));
     const tavilyInput = inputs.find((input) => String(input.url).includes("/tavily/"));
     assert.match(String(socialInput?.url || ""), /queryType=Latest/);
+    assert.equal(parallelInput?.body?.mode, "fast");
     assert.equal(tavilyInput?.body?.topic, "news");
     assert.equal(tavilyInput?.body?.time_range, "week");
     assert.equal(tavilyInput?.body?.search_depth, "ultra-fast");
@@ -534,7 +582,7 @@ test("AISA, Tavily, and Firecrawl x402 providers send external evidence payments
       assert.equal(config.maxPaymentUsdc, "0.01");
       assert.equal(config.minGatewayBalanceUsdc, "0.02");
       assert.equal(config.requestTimeoutMs, 123456);
-      assert.deepEqual(config.allowedHosts, ["api.aisa.one", "stableenrich.dev"]);
+      assert.deepEqual(config.allowedHosts, ["api.aisa.one", "parallelmpp.dev", "stableenrich.dev"]);
     }
     assert.equal(runtime.chain, "base");
     assert.deepEqual(runtime.acceptedNetworks, ["eip155:8453"]);
@@ -577,7 +625,7 @@ test("external x402 evidence defaults do not inherit main seller payment limits"
     assert.equal(runtime.maxPaymentUsdc, "0.03");
     assert.equal(runtime.minGatewayBalanceUsdc, "0.05");
     assert.equal(runtime.requestTimeoutMs, 90_000);
-    assert.deepEqual(runtime.allowedHosts, ["api.aisa.one", "stableenrich.dev"]);
+    assert.deepEqual(runtime.allowedHosts, ["api.aisa.one", "parallelmpp.dev", "stableenrich.dev"]);
   } finally {
     for (const key of keys) {
       const value = previous[key];
