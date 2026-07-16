@@ -364,9 +364,14 @@ test("provider fallback can be disabled", async () => {
 });
 
 test("parallel x402 payment parses source-backed search results", async () => {
+  let capturedInput: any;
+  const eventQuery = "France vs England match date 2026-07-18 latest confirmed team news injuries lineups";
   const result = await fetchParallelX402SearchEvidence({
     market,
-    payResource: async <T>() => ({
+    query: eventQuery,
+    payResource: async <T>(input: any) => {
+      capturedInput = input;
+      return {
       enabled: true,
       status: "success",
       paid: true,
@@ -387,9 +392,11 @@ test("parallel x402 payment parses source-backed search results", async () => {
         ],
         search_id: "search-1"
       } as T,
-    }),
+    };
+    },
   });
 
+  assert.equal(capturedInput?.body?.query, eventQuery);
   assert.equal(result.status, "success");
   assert.equal(result.provider, "parallel_x402_search");
   assert.equal(result.paymentAmountUsdc, "0.010000");

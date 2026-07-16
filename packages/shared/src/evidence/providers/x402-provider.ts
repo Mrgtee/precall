@@ -142,6 +142,11 @@ function sportsEvidenceTagsForText(text: string) {
   return inferSportsEvidenceTagsFromText(text);
 }
 
+function providerSearchQuery(input: { market: PolymarketMarket; query?: string | undefined }) {
+  const explicitQuery = input.query?.trim();
+  return explicitQuery ? explicitQuery : cleanSearchQuery(input.market.title);
+}
+
 function buildAisaSearchUrl(query: string) {
   const url = new URL(aisaTwitterSearchEndpoint());
   url.searchParams.set("query", query);
@@ -543,7 +548,7 @@ export async function fetchAisaX402SocialEvidence(input: {
   dailySpendUsdc?: string | number | undefined;
   payResource?: typeof payX402Resource | undefined;
 }): Promise<X402EvidenceProviderResult> {
-  const query = cleanSearchQuery(input.query || input.market.title);
+  const query = providerSearchQuery(input);
   const url = buildAisaSearchUrl(query);
   const payResource = input.payResource || payX402Resource;
   const paymentInput: Parameters<typeof payX402Resource>[0] = { url, config: externalX402EvidenceConfig() };
@@ -763,7 +768,7 @@ export async function fetchParallelX402SearchEvidence(input: {
   dailySpendUsdc?: string | number | undefined;
   payResource?: typeof payX402Resource | undefined;
 }): Promise<X402EvidenceProviderResult> {
-  const query = cleanSearchQuery(input.query || input.market.title);
+  const query = providerSearchQuery(input);
   const request = buildParallelSearchRequest(query);
   const payResource = input.payResource || payX402Resource;
   const paymentInput: Parameters<typeof payX402Resource>[0] = {
@@ -898,7 +903,7 @@ export async function fetchFirecrawlX402SearchEvidence(input: {
   dailySpendUsdc?: string | number | undefined;
   payResource?: typeof payX402Resource | undefined;
 }): Promise<X402EvidenceProviderResult> {
-  const query = cleanSearchQuery(input.query || input.market.title);
+  const query = providerSearchQuery(input);
   const request = buildFirecrawlSearchRequest(query);
   const payResource = input.payResource || payX402Resource;
   const paymentInput: Parameters<typeof payX402Resource>[0] = {
@@ -955,7 +960,7 @@ export async function fetchTavilyX402SearchEvidence(input: {
   dailySpendUsdc?: string | number | undefined;
   payResource?: typeof payX402Resource | undefined;
 }): Promise<X402EvidenceProviderResult> {
-  const query = cleanSearchQuery(input.query || input.market.title);
+  const query = providerSearchQuery(input);
   const request = buildAisaTavilyRequest(query);
   const payResource = input.payResource || payX402Resource;
   const paymentInput: Parameters<typeof payX402Resource>[0] = {

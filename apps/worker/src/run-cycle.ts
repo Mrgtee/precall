@@ -15,7 +15,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, evaluateSportsEvidenceQuality, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -731,12 +731,26 @@ export async function runSportsEdge() {
         const currentDailySpendUsdc = await getTodayX402SpendUsdc();
         analyzed += 1;
         const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-        const marketplaceQuery = market.title + " injuries lineups form stats latest team news";
+        const eventDate = sportsEventTime(market)?.slice(0, 10);
+        const eventYear = eventDate?.slice(0, 4) || String(new Date().getUTCFullYear());
+        const sportTerms = classification.category === "soccer" ? "football soccer" : classification.category;
+        const shortDescription = market.description ? market.description.replace(/\s+/g, " ").slice(0, 140) : undefined;
+        const marketplaceQuery = [
+          market.title,
+          shortDescription,
+          eventDate ? `match date ${eventDate}` : undefined,
+          eventYear,
+          sportTerms,
+          "latest confirmed team news injuries lineups form stats match preview",
+        ].filter(Boolean).join(" ").slice(0, 380);
         let marketplaceDailySpendUsdc = currentDailySpendUsdc;
         providerResults = [];
-        const realMarketplaceEvidence = () => providerResults
+        const rawMarketplaceEvidence = () => providerResults
           .flatMap((result) => result.evidence)
           .filter((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true);
+        const realMarketplaceEvidence = () => filterCurrentSportsEvidence(rawMarketplaceEvidence(), { market });
+        const marketplaceQuality = () => evaluateSportsEvidenceQuality(buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: realMarketplaceEvidence() }), { market });
+        const needsMoreMarketplaceEvidence = () => !marketplaceQuality().ok;
         const recordProviderResult = (result: X402EvidenceProviderResult) => {
           providerResults.push(result);
           if (result.status === "success") marketplaceDailySpendUsdc = addUsdc(marketplaceDailySpendUsdc, result.paymentAmountUsdc);
@@ -757,8 +771,7 @@ export async function runSportsEdge() {
         });
         recordProviderResult(aisaResult);
 
-        const coreEvidence = realMarketplaceEvidence();
-        if (coreEvidence.length < 3 || !coreEvidence.some((item) => item.sourceType === "circle_x402_news")) {
+        if (needsMoreMarketplaceEvidence()) {
           tavilyResult = await fetchTavilyX402SearchEvidence({
             market,
             query: marketplaceQuery,
@@ -767,8 +780,7 @@ export async function runSportsEdge() {
           recordProviderResult(tavilyResult);
         }
 
-        const searchEvidence = realMarketplaceEvidence();
-        if (searchEvidence.length < 3) {
+        if (needsMoreMarketplaceEvidence()) {
           firecrawlResult = await fetchFirecrawlX402SearchEvidence({
             market,
             query: marketplaceQuery,

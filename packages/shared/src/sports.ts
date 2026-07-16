@@ -359,7 +359,7 @@ function metadataFlagIsFalse(value: unknown) {
   return value === false || String(value).toLowerCase() === "false";
 }
 
-type SportsEvidenceQualityOptions = {
+export type SportsEvidenceQualityOptions = {
   enabled?: boolean | undefined;
   minRealEvidenceItems?: number | undefined;
   market?: PolymarketMarket | undefined;
@@ -438,6 +438,10 @@ function isBaseIndependentSportsEvidence(item: EvidenceItemInput) {
 function isIndependentSportsEvidence(item: EvidenceItemInput, options: SportsEvidenceQualityOptions) {
   if (!isBaseIndependentSportsEvidence(item)) return false;
   return staleSportsEvidenceReason(item, options) === "";
+}
+
+export function filterCurrentSportsEvidence(evidence: EvidenceItemInput[], options: SportsEvidenceQualityOptions = {}) {
+  return evidence.filter((item) => !isBaseIndependentSportsEvidence(item) || staleSportsEvidenceReason(item, options) === "");
 }
 
 function isSourceBackedSportsEvidence(item: EvidenceItemInput) {

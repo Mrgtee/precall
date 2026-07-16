@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, evaluateSportsEvidenceQuality, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
 import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -369,6 +369,27 @@ test("sports evidence quality gate rejects old-year injury snippets", () => {
   assert.equal(quality.ok, false);
   assert.equal(quality.realEvidenceCount, 0);
   assert.ok(quality.reasons.includes("stale_or_old_sports_evidence"));
+});
+
+test("current sports evidence filter removes stale and old-year marketplace items", () => {
+  const staleInjury = sportsEvidence("circle-x402-parallel-stale", ["injury_lineup"], {
+    title: "Old injury report",
+    excerpt: "Key starter injury update.",
+    metadata: { evidenceTags: ["injury_lineup"], sourcePublishedAt: "2026-05-19T00:00:00.000Z" },
+  });
+  const oldYearInjury = sportsEvidence("circle-x402-firecrawl-old-year", ["injury_lineup"], {
+    title: "Messi injury update from 2024",
+    excerpt: "A 2024 hamstring injury note is not current team news for this event.",
+    metadata: { evidenceTags: ["injury_lineup"], sourcePublishedAt: now.toISOString() },
+  });
+  const currentFixture = sportsEvidence("circle-x402-tavily-current", ["fixture_context"], {
+    title: "Knicks vs Celtics preview",
+    excerpt: "Current matchup preview and team form for the 2026 game.",
+    metadata: { evidenceTags: ["fixture_context"], sourcePublishedAt: now.toISOString() },
+  });
+
+  const filtered = filterCurrentSportsEvidence([staleInjury, oldYearInjury, currentFixture], { market: market(), now, maxEvidenceAgeHours: 24 });
+  assert.deepEqual(filtered.map((item) => item.evidenceId), ["circle-x402-tavily-current"]);
 });
 
 test("sports evidence quality gate rejects social-only injury evidence", () => {
