@@ -15,7 +15,7 @@ import {
   polymarketCopyUrl,
 } from "@precall/shared/polymarket";
 import { aggregateVotes, brierScoreBps, hashText, passesPublishThresholds, publishThresholdFailures, type PublishThresholds } from "@precall/shared/scoring";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, maxSportsAnalyzedPerRun, rankSportsCandidates, sportsDailyTarget, sportsDiscoveryLimit, sportsEnabled, sportsEvidenceGroupKey, sportsMarketplaceEvidenceQuery, sportsOnlyCategory, sportsEventTime, sportsStatusReason, sportsThresholdFailures, sportsThresholds, sportsVerdictForStatus, type SportsCallStatus, type SportsCandidate, type SportsSkip } from "@precall/shared/sports";
 import type { MarketSnapshot, OutcomeSnapshot, PolymarketMarket } from "@precall/shared/types";
 import {
   ensureCouncilAgent,
@@ -451,6 +451,62 @@ function x402Summary(result: X402EvidenceProviderResult | undefined) {
   };
 }
 
+type SportsMarketplaceEvidenceBundle = {
+  groupKey: string;
+  x402Result: X402EvidenceProviderResult;
+};
+
+function sportsMarketplaceRequestDelayMs() {
+  return Math.max(0, numberEnv("SPORTS_MARKETPLACE_REQUEST_DELAY_MS", 1_500));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function combineSportsMarketplaceProviderResults(providerResults: X402EvidenceProviderResult[], marketplaceEvidence = providerResults.flatMap((result) => result.evidence)): X402EvidenceProviderResult {
+  const successfulResult = providerResults.find((result) =>
+    result.status === "success" &&
+    result.evidence.some((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true),
+  );
+  const firstFailure = providerResults.find((result) => result.status !== "success" || result.evidence.length === 0) || providerResults[0];
+
+  return {
+    enabled: providerResults.some((result) => result.enabled),
+    provider: "combined_circle_marketplace_evidence",
+    status: successfulResult ? "success" : (providerResults[0]?.status || "disabled"),
+    evidence: marketplaceEvidence,
+    paymentAmountUsdc: providerResults.reduce((sum, result) => addUsdc(sum, result.paymentAmountUsdc || "0"), "0"),
+    paymentNetwork: successfulResult?.paymentNetwork || providerResults[0]?.paymentNetwork,
+    paymentScheme: successfulResult?.paymentScheme || providerResults.find((result) => result.paymentScheme)?.paymentScheme,
+    selectedChain: successfulResult?.selectedChain || providerResults[0]?.selectedChain,
+    supportChecks: providerResults.flatMap((result) => result.supportChecks || []),
+    failureReason: firstFailure?.failureReason,
+    paymentRef: successfulResult?.paymentRef || providerResults[0]?.paymentRef,
+    txHash: successfulResult?.txHash || providerResults[0]?.txHash,
+    error: firstFailure?.error,
+  };
+}
+
+function reuseSportsMarketplaceEvidenceResult(bundle: SportsMarketplaceEvidenceBundle): X402EvidenceProviderResult {
+  return {
+    ...bundle.x402Result,
+    provider: `${bundle.x402Result.provider}_reused`,
+    evidence: bundle.x402Result.evidence.map((item) => ({
+      ...item,
+      metadata: {
+        ...(item.metadata || {}),
+        reusedSportsMarketplaceEvidence: true,
+        sportsEvidenceGroupKey: bundle.groupKey,
+      },
+    })),
+    paymentAmountUsdc: "0",
+    paymentRef: undefined,
+    txHash: undefined,
+    failureReason: bundle.x402Result.status === "success" ? undefined : bundle.x402Result.failureReason,
+  };
+}
+
 export async function runOnce() {
   requireEnv("OPENAI_API_KEY");
   const publishOnchain = boolEnv("PUBLISH_ONCHAIN", true);
@@ -718,32 +774,27 @@ export async function runSportsEdge() {
   }> = [];
   const callsByStatus: Record<Exclude<SportsCallStatus, "avoid_call">, number> = { strong_call: 0, lean_call: 0, high_risk_call: 0 };
   let analyzed = 0;
-  await Promise.all(
-    candidatesForAnalysis.map(async (candidate) => {
-      const { market, classification } = candidate;
-      let x402Result: X402EvidenceProviderResult | undefined;
-      let parallelResult: X402EvidenceProviderResult | undefined;
-      let aisaResult: X402EvidenceProviderResult | undefined;
-      let tavilyResult: X402EvidenceProviderResult | undefined;
-      let firecrawlResult: X402EvidenceProviderResult | undefined;
-      let providerResults: X402EvidenceProviderResult[] = [];
-      try {
-        const currentDailySpendUsdc = await getTodayX402SpendUsdc();
-        analyzed += 1;
-        const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
-        const eventDate = sportsEventTime(market)?.slice(0, 10);
-        const eventYear = eventDate?.slice(0, 4) || String(new Date().getUTCFullYear());
-        const sportTerms = classification.category === "soccer" ? "football soccer" : classification.category;
-        const shortDescription = market.description ? market.description.replace(/\s+/g, " ").slice(0, 140) : undefined;
-        const marketplaceQuery = [
-          market.title,
-          shortDescription,
-          eventDate ? `match date ${eventDate}` : undefined,
-          eventYear,
-          sportTerms,
-          "latest confirmed team news injuries lineups form stats match preview",
-        ].filter(Boolean).join(" ").slice(0, 380);
-        let marketplaceDailySpendUsdc = currentDailySpendUsdc;
+  let sportsEvidenceGroupsFetched = 0;
+  let sportsEvidenceGroupsReused = 0;
+  let sportsMarketplaceDailySpendUsdc = await getTodayX402SpendUsdc();
+  const sportsEvidenceCache = new Map<string, SportsMarketplaceEvidenceBundle>();
+
+  for (const candidate of candidatesForAnalysis) {
+    const { market, classification } = candidate;
+    let x402Result: X402EvidenceProviderResult | undefined;
+    let providerResults: X402EvidenceProviderResult[] = [];
+    try {
+      analyzed += 1;
+      const provisionalSnapshot = await fetchOutcomeSnapshot(market, provisionalSportsOutcomeIndex(candidate));
+      const evidenceGroupKey = sportsEvidenceGroupKey(market, classification);
+      const cachedEvidence = sportsEvidenceCache.get(evidenceGroupKey);
+
+      if (cachedEvidence) {
+        sportsEvidenceGroupsReused += 1;
+        x402Result = reuseSportsMarketplaceEvidenceResult(cachedEvidence);
+      } else {
+        sportsEvidenceGroupsFetched += 1;
+        const marketplaceQuery = sportsMarketplaceEvidenceQuery(market, classification);
         providerResults = [];
         const rawMarketplaceEvidence = () => providerResults
           .flatMap((result) => result.evidence)
@@ -753,124 +804,108 @@ export async function runSportsEdge() {
         const needsMoreMarketplaceEvidence = () => !marketplaceQuality().ok;
         const recordProviderResult = (result: X402EvidenceProviderResult) => {
           providerResults.push(result);
-          if (result.status === "success") marketplaceDailySpendUsdc = addUsdc(marketplaceDailySpendUsdc, result.paymentAmountUsdc);
+          if (result.status === "success") sportsMarketplaceDailySpendUsdc = addUsdc(sportsMarketplaceDailySpendUsdc, result.paymentAmountUsdc);
         };
 
-        parallelResult = await fetchParallelX402SearchEvidence({
+        const parallelResult = await fetchParallelX402SearchEvidence({
           market,
           query: marketplaceQuery,
-          dailySpendUsdc: marketplaceDailySpendUsdc,
+          dailySpendUsdc: sportsMarketplaceDailySpendUsdc,
         });
         recordProviderResult(parallelResult);
 
-        aisaResult = await fetchAisaX402SocialEvidence({
+        const aisaResult = await fetchAisaX402SocialEvidence({
           market,
           snapshot: marketSnapshotFromOutcome(provisionalSnapshot),
-          dailySpendUsdc: marketplaceDailySpendUsdc,
+          dailySpendUsdc: sportsMarketplaceDailySpendUsdc,
           query: marketplaceQuery,
         });
         recordProviderResult(aisaResult);
 
         if (needsMoreMarketplaceEvidence()) {
-          tavilyResult = await fetchTavilyX402SearchEvidence({
+          const tavilyResult = await fetchTavilyX402SearchEvidence({
             market,
             query: marketplaceQuery,
-            dailySpendUsdc: marketplaceDailySpendUsdc,
+            dailySpendUsdc: sportsMarketplaceDailySpendUsdc,
           });
           recordProviderResult(tavilyResult);
         }
 
         if (needsMoreMarketplaceEvidence()) {
-          firecrawlResult = await fetchFirecrawlX402SearchEvidence({
+          const firecrawlResult = await fetchFirecrawlX402SearchEvidence({
             market,
             query: marketplaceQuery,
-            dailySpendUsdc: marketplaceDailySpendUsdc,
+            dailySpendUsdc: sportsMarketplaceDailySpendUsdc,
           });
           recordProviderResult(firecrawlResult);
         }
 
         const marketplaceEvidence = realMarketplaceEvidence();
-        const successfulResult = providerResults.find((result) =>
-          result.status === "success" &&
-          result.evidence.some((item) => item.provider !== "precall_gateway_x402_evidence" && item.metadata?.internalGatewayOnly !== true),
-        );
-        const firstFailure = providerResults.find((result) => result.status !== "success" || result.evidence.length === 0) || providerResults[0];
+        x402Result = combineSportsMarketplaceProviderResults(providerResults, marketplaceEvidence);
+        sportsEvidenceCache.set(evidenceGroupKey, { groupKey: evidenceGroupKey, x402Result });
 
-        x402Result = {
-          enabled: providerResults.some((result) => result.enabled),
-          provider: "combined_circle_marketplace_evidence",
-          status: successfulResult ? "success" : (providerResults[0]?.status || "disabled"),
-          evidence: marketplaceEvidence,
-          paymentAmountUsdc: providerResults.reduce((sum, result) => addUsdc(sum, result.paymentAmountUsdc || "0"), "0"),
-          paymentNetwork: successfulResult?.paymentNetwork || providerResults[0]?.paymentNetwork,
-          paymentScheme: successfulResult?.paymentScheme || providerResults.find((result) => result.paymentScheme)?.paymentScheme,
-          selectedChain: successfulResult?.selectedChain || providerResults[0]?.selectedChain,
-          supportChecks: providerResults.flatMap((result) => result.supportChecks || []),
-          failureReason: firstFailure?.failureReason,
-          paymentRef: successfulResult?.paymentRef || providerResults[0]?.paymentRef,
-          txHash: successfulResult?.txHash || providerResults[0]?.txHash,
-          error: firstFailure?.error,
-        };
-
-        if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
-          const failure = x402ProviderFailureSummary(providerResults) || x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
-          const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
-          for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: failedRun?.id });
-          failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
-          return;
-        }
-
-        let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
-        const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext, { market });
-        if (!evidenceQuality.ok) {
-          const reasons = ["insufficient_real_sports_evidence", ...evidenceQuality.reasons.filter((reason) => reason !== "insufficient_real_sports_evidence")];
-          const failure = `Sports evidence quality gate failed: ${reasons.join(", ")}`;
-          const skippedRun = await recordAgentRun({
-            status: "sports_skipped_evidence_quality",
-            model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
-            inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
-            failure,
-            evidenceContext,
-          });
-          for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: skippedRun?.id });
-          skipped.push({ ...sportsCandidateSummary(candidate), reasons });
-          return;
-        }
-        const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
-        let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
-        if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
-          const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
-          evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
-          idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
-        }
-        const thresholdFailures = sportsThresholdFailures(idea, thresholds);
-        const sportsStatus = classifySportsCallStatus(idea, thresholds);
-        const statusReason = sportsStatusReason(sportsStatus, thresholdFailures);
-        idea = { ...idea, verdict: sportsVerdictForStatus(sportsStatus, idea) };
-
-        const candidateRun = await recordAgentRun({
-          status: "sports_analyzed",
-          model: councilResult.model,
-          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
-          outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, evidenceQuality, x402: x402Summary(x402Result) },
-          evidenceContext,
-          retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
-          latencyMs: councilResult.totalLatencyMs,
-        });
-        for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: candidateRun?.id });
-
-        const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
-        const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
-        callsByStatus[reportedStatus] += 1;
-        sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason, suggestedSizeBps: idea.suggestedSizeBps });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
-        if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
-        failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
+        const throttleMs = sportsMarketplaceRequestDelayMs();
+        if (throttleMs > 0) await delay(throttleMs);
       }
-    })
-  );
+
+      if (requireX402 && (x402Result.status !== "success" || x402Result.evidence.length === 0)) {
+        const failure = x402ProviderFailureSummary(providerResults) || x402Result.failureReason || x402Result.error || `Required Gateway/x402 sports evidence failed with status ${x402Result.status}.`;
+        const failedRun = await recordAgentRun({ status: "sports_failed_x402_required", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, thresholds, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure });
+        for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: failedRun?.id });
+        failed.push({ marketId: market.marketId, title: market.title, stage: "sports_x402_required", error: failure });
+        continue;
+      }
+
+      let evidenceContext = buildSportsEvidenceContext({ market, snapshot: provisionalSnapshot, x402Evidence: x402Result.evidence });
+      const evidenceQuality = evaluateSportsEvidenceQuality(evidenceContext, { market });
+      if (!evidenceQuality.ok) {
+        const reasons = ["insufficient_real_sports_evidence", ...evidenceQuality.reasons.filter((reason) => reason !== "insufficient_real_sports_evidence")];
+        const failure = `Sports evidence quality gate failed: ${reasons.join(", ")}`;
+        const skippedRun = await recordAgentRun({
+          status: "sports_skipped_evidence_quality",
+          model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+          inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
+          failure,
+          evidenceContext,
+        });
+        for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: skippedRun?.id });
+        skipped.push({ ...sportsCandidateSummary(candidate), reasons });
+        continue;
+      }
+      const councilResult = await runSportsCouncilDetailed({ market, snapshot: provisionalSnapshot, evidence: evidenceContext, candidateOutcomeIndexes: candidate.outcomeIndexes, category: classification.category, marketKind: classification.marketKind });
+      let idea = aggregateSportsVotes({ market, snapshot: provisionalSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      if (idea.selectedOutcomeIndex !== provisionalSnapshot.outcomeIndex) {
+        const selectedSnapshot = await fetchOutcomeSnapshot(market, idea.selectedOutcomeIndex);
+        evidenceContext = buildSportsEvidenceContext({ market, snapshot: selectedSnapshot, x402Evidence: x402Result.evidence });
+        idea = aggregateSportsVotes({ market, snapshot: selectedSnapshot, category: classification.category, marketKind: classification.marketKind, evidence: evidenceContext, votes: councilResult.votes });
+      }
+      const thresholdFailures = sportsThresholdFailures(idea, thresholds);
+      const sportsStatus = classifySportsCallStatus(idea, thresholds);
+      const statusReason = sportsStatusReason(sportsStatus, thresholdFailures);
+      idea = { ...idea, verdict: sportsVerdictForStatus(sportsStatus, idea) };
+
+      const candidateRun = await recordAgentRun({
+        status: "sports_analyzed",
+        model: councilResult.model,
+        inputs: { market, thresholds, candidateScore: candidate.candidateScore, candidateOutcomeIndexes: candidate.outcomeIndexes, evidenceIds: evidenceContext.map((item) => item.evidenceId), evidenceQuality, x402: x402Summary(x402Result) },
+        outputs: { idea, sportsStatus, votes: councilResult.votes, failures: councilResult.failures, thresholdFailures, evidenceQuality, x402: x402Summary(x402Result) },
+        evidenceContext,
+        retryCount: councilResult.votes.reduce((sum, vote) => sum + (vote.retryCount || 0), 0),
+        latencyMs: councilResult.totalLatencyMs,
+      });
+      for (const result of providerResults) await recordX402CircleAction({ result, marketId: market.marketId, agentRunId: candidateRun?.id });
+
+      const row = await upsertSportsPrediction({ agentId: sportsCouncil.id, idea, sourceRunId: candidateRun?.id, x402Status: x402Summary(x402Result), status: sportsStatus, statusReason, eventStartTime: sportsEventTime(market) });
+      const reportedStatus = sportsStatus === "avoid_call" ? "high_risk_call" : sportsStatus;
+      callsByStatus[reportedStatus] += 1;
+      sportsCalls.push({ id: row.id, status: reportedStatus, market: idea.market.title, selectedOption: idea.selectedOption, edgeBps: idea.edgeBps, confidenceBps: idea.confidenceBps, riskLevel: idea.riskLevel, statusReason, suggestedSizeBps: idea.suggestedSizeBps });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failedRun = await recordAgentRun({ status: "sports_failed", model: optionalEnv("OPENAI_MODEL", "gpt-4.1-mini"), inputs: { market, candidateScore: candidate.candidateScore, x402: x402Summary(x402Result) }, failure: message });
+      if (x402Result) await recordX402CircleAction({ result: x402Result, marketId: market.marketId, agentRunId: failedRun?.id });
+      failed.push({ marketId: market.marketId, title: market.title, stage: "sports_analysis_or_store", error: message });
+    }
+  }
 
   return {
     discoveryLimit,
@@ -881,6 +916,9 @@ export async function runSportsEdge() {
     checked: markets.length,
     eligible: ranked.length,
     analyzed,
+    sportsEvidenceGroupsFetched,
+    sportsEvidenceGroupsReused,
+    sportsMarketplaceRequestDelayMs: sportsMarketplaceRequestDelayMs(),
     liveCallsStored: sportsCalls.length,
     callsByStatus,
     expiryUpdate,

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, selectedSportsOptionLabel, sportsEventTime, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
+import { aggregateSportsVotes, buildSportsEvidenceContext, classifySportsCallStatus, classifySportsMarket, evaluateSportsCandidate, evaluateSportsEvidenceQuality, filterCurrentSportsEvidence, selectedSportsOptionLabel, sportsEvidenceGroupKey, sportsEventTime, sportsMarketplaceEvidenceQuery, sportsOnlyCategory, sportsHitRatePotentialScore, sportsThresholdFailures, sportsVerdictForStatus } from "./sports";
 import type { EvidenceItemInput, OutcomeSnapshot, PolymarketMarket, SportsVote } from "./types";
 
 function market(overrides: Partial<PolymarketMarket> = {}): PolymarketMarket {
@@ -102,6 +102,47 @@ test("sports classifier catches FIFA matchup slugs when Gamma only exposes them 
   assert.equal(classification.isSports, true);
   assert.equal(classification.category, "soccer");
   assert.equal(classification.marketKind, "moneyline");
+});
+
+
+test("sports evidence grouping reuses one marketplace packet for related soccer markets", () => {
+  const baseMarket = market({
+    title: "Will Argentina win on 2026-07-19?",
+    slug: "fifwc-esp-arg-2026-07-19-arg",
+    url: "https://polymarket.com/market/fifwc-esp-arg-2026-07-19-arg",
+    description: "International soccer match market.",
+    closeTime: "2026-07-19T20:00:00.000Z",
+  });
+  const classification = classifySportsMarket(baseMarket);
+  const expectedKey = "soccer:fifwc:esp-arg:2026-07-19";
+
+  for (const relatedMarket of [
+    baseMarket,
+    market({ title: "Spain vs. Argentina: O/U 0.5", slug: "fifwc-esp-arg-2026-07-19-total-0pt5", closeTime: "2026-07-19T20:00:00.000Z" }),
+    market({ title: "Spain vs. Argentina: Spain (-1.5)", slug: "fifwc-esp-arg-2026-07-19-spread-home-1pt5", closeTime: "2026-07-19T20:00:00.000Z" }),
+    market({ title: "Exact Score: Spain 1 - 1 Argentina?", slug: "fifwc-esp-arg-2026-07-19-exact-score-1-1", closeTime: "2026-07-19T20:00:00.000Z" }),
+    market({ title: "Spain vs. Argentina: Team to Advance", slug: "fifwc-esp-arg-2026-07-19-team-to-advance", closeTime: "2026-07-19T20:00:00.000Z" }),
+  ]) {
+    assert.equal(sportsEvidenceGroupKey(relatedMarket, classification), expectedKey);
+  }
+});
+
+test("sports marketplace evidence query uses matchup, date, and current evidence terms", () => {
+  const soccerMarket = market({
+    title: "Will Argentina win on 2026-07-19?",
+    slug: "fifwc-esp-arg-2026-07-19-arg",
+    url: "https://polymarket.com/market/fifwc-esp-arg-2026-07-19-arg",
+    description: "International soccer match market.",
+    closeTime: "2026-07-19T20:00:00.000Z",
+  });
+  const query = sportsMarketplaceEvidenceQuery(soccerMarket, classifySportsMarket(soccerMarket));
+
+  assert.match(query, /Spain vs Argentina/);
+  assert.match(query, /match date 2026-07-19/);
+  assert.match(query, /football soccer/);
+  assert.match(query, /latest confirmed team news injuries lineups/);
+  assert.match(query, /xG stats/);
+  assert.ok(query.length <= 380);
 });
 
 

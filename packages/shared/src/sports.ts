@@ -244,6 +244,110 @@ export function sportsEventTime(market: PolymarketMarket): string | null {
   return `${match[1]}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`;
 }
 
+const SPORTS_SLUG_TEAM_NAMES: Record<string, string> = {
+  aja: "Ajax",
+  arg: "Argentina",
+  ars: "Arsenal",
+  bih: "Bosnia and Herzegovina",
+  bos: "Boston Celtics",
+  can: "Canada",
+  che: "Chelsea",
+  eng: "England",
+  esp: "Spain",
+  eve: "Everton",
+  fra: "France",
+  nyk: "New York Knicks",
+  okc: "Oklahoma City Thunder",
+  sas: "San Antonio Spurs",
+  tot: "Tottenham Hotspur",
+  utr: "Utrecht",
+};
+
+function marketSlugOrUrlSlug(market: PolymarketMarket) {
+  if (market.slug.trim()) return market.slug.trim().toLowerCase();
+  const tail = market.url.split("/").filter(Boolean).pop() || "";
+  return tail.trim().toLowerCase();
+}
+
+function slugTeamName(code: string) {
+  return SPORTS_SLUG_TEAM_NAMES[code] || code.toUpperCase();
+}
+
+function normalizeEvidenceGroupToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+function slugMatchupParts(market: PolymarketMarket) {
+  const slug = marketSlugOrUrlSlug(market);
+  const match = slug.match(/^([a-z0-9]+)-([a-z0-9]+)-([a-z0-9]+)-(20\d{2})-(\d{2})-(\d{2})(?:-|$)/);
+  if (!match?.[1] || !match[2] || !match[3] || !match[4] || !match[5] || !match[6]) return null;
+  return {
+    competition: match[1],
+    homeCode: match[2],
+    awayCode: match[3],
+    homeName: slugTeamName(match[2]),
+    awayName: slugTeamName(match[3]),
+    date: `${match[4]}-${match[5]}-${match[6]}`,
+  };
+}
+
+function titleMatchupParts(title: string) {
+  const withoutQuestion = title.replace(/\?$/, "").trim();
+  const colonTail = withoutQuestion.includes(":") ? withoutQuestion.split(":").slice(1).join(":").trim() : "";
+  const candidate = /\bvs\.?\b/i.test(colonTail) ? colonTail : withoutQuestion;
+  const match = candidate.match(/^(.+?)\s+vs\.?\s+(.+?)(?::| - |$)/i);
+  if (!match?.[1] || !match[2]) return null;
+  return { homeName: match[1].trim(), awayName: match[2].trim() };
+}
+
+function sportsEvidenceMatchupLabel(market: PolymarketMarket) {
+  const slugParts = slugMatchupParts(market);
+  if (slugParts) return `${slugParts.homeName} vs ${slugParts.awayName}`;
+  const titleParts = titleMatchupParts(market.title);
+  if (titleParts) return `${titleParts.homeName} vs ${titleParts.awayName}`;
+  return "";
+}
+
+export function sportsEvidenceGroupKey(market: PolymarketMarket, classification?: SportsMarketClassification | undefined) {
+  const category = classification?.category && classification.category !== "unknown" ? classification.category : classifySportsMarket(market).category;
+  const slugParts = slugMatchupParts(market);
+  if (slugParts) return `${category}:${slugParts.competition}:${slugParts.homeCode}-${slugParts.awayCode}:${slugParts.date}`;
+
+  const eventDate = sportsEventTime(market)?.slice(0, 10) || "unknown-date";
+  const titleParts = titleMatchupParts(market.title);
+  if (titleParts) {
+    return `${category}:title:${normalizeEvidenceGroupToken(titleParts.homeName)}-${normalizeEvidenceGroupToken(titleParts.awayName)}:${eventDate}`;
+  }
+
+  return `${category}:market:${market.conditionId || market.marketId}`;
+}
+
+export function sportsMarketplaceEvidenceQuery(market: PolymarketMarket, classification?: SportsMarketClassification | undefined) {
+  const resolvedClassification = classification || classifySportsMarket(market);
+  const eventDate = sportsEventTime(market)?.slice(0, 10);
+  const eventYear = eventDate?.slice(0, 4) || String(new Date().getUTCFullYear());
+  const sportTerms = resolvedClassification.category === "soccer" ? "football soccer" : String(resolvedClassification.category || "sports");
+  const matchup = sportsEvidenceMatchupLabel(market);
+  const shortDescription = market.description ? market.description.replace(/\s+/g, " ").slice(0, 140) : undefined;
+  const evidenceTerms = resolvedClassification.category === "soccer"
+    ? "latest confirmed team news injuries lineups suspensions form xG stats match preview"
+    : "latest confirmed team news injuries lineups suspensions form stats match preview";
+
+  return [
+    matchup || market.title,
+    matchup ? undefined : shortDescription,
+    eventDate ? `match date ${eventDate}` : undefined,
+    eventYear,
+    sportTerms,
+    evidenceTerms,
+  ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 380);
+}
+
 function closeTimeScore(market: PolymarketMarket, now: Date, lookaheadHours: number, minStartLeadMinutes: number) {
   const eventTime = sportsEventTime(market);
   if (!eventTime) return { ok: false, score: 0, reason: "missing_close_time" };

@@ -97,7 +97,7 @@ Before unlock, users see only the safe public preview. After a verified Arc USDC
 Precall uses Circle Agent Stack concepts for agentic payment and evidence workflows.
 
 - Circle x402 pays allowlisted Marketplace APIs for evidence.
-- Sports paid evidence uses Circle Marketplace services only: Parallel web search first, AISA Twitter/X social next, then AISA Tavily and Firecrawl only when the evidence packet is still thin.
+- Sports paid evidence uses Circle Marketplace services only: Parallel web search first, AISA Twitter/X social next, then AISA Tavily and Firecrawl only when the evidence packet is still thin. Related markets from the same match reuse one paid evidence packet.
 - Base Mainnet is the recommended production x402 payment network. Gateway-batched sellers use the Gateway balance; standard exact x402 sellers such as Parallel/Firecrawl use normal Base USDC in the `CIRCLE_AGENT_PRIVATE_KEY` wallet.
 - Arc Testnet remains available for hackathon/demo x402 flows and Arc-bonded settlement demos.
 - The worker checks provider/network support before paying and records paid evidence through `circle_actions`.
@@ -182,7 +182,7 @@ Precall separates active predictions from historical reputation.
 
 1. The Railway worker discovers live Polymarket markets.
 2. It filters expired, unsupported, low-liquidity, bad-spread, already-live, extreme-price, or unclear markets.
-3. It builds an evidence packet from Polymarket data and real Circle Marketplace x402 evidence: Parallel web search, AISA Twitter/X social, AISA Tavily news, and Firecrawl fallback search.
+3. It builds one match-level evidence packet from Polymarket data and real Circle Marketplace x402 evidence: Parallel web search, AISA Twitter/X social, AISA Tavily news, and Firecrawl fallback search. Related markets from the same event reuse that packet.
 4. Sports calls must pass the real-evidence gate before any AI council analysis is stored publicly.
 5. An AI council analyzes the market using supplied evidence IDs only.
 6. The system calculates market probability, AI probability, edge, confidence, and risk.
@@ -432,7 +432,7 @@ MAX_ANALYSIS_PRICE_BPS=9900
 WORKER_TRIGGER_SECRET=generate-a-long-random-secret
 ```
 
-Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. With `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `worker:sports` will record `sports_skipped_evidence_quality` instead of storing a live call when Circle Marketplace x402 evidence is too thin, stale, or social-only for injury claims. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
+Note: the supported sports start-buffer variable is `SPORTS_MIN_START_LEAD_MINUTES`. With `REQUIRE_REAL_SPORTS_EVIDENCE=true`, `worker:sports` will record `sports_skipped_evidence_quality` instead of storing a live call when Circle Marketplace x402 evidence is too thin, stale, or social-only for injury claims. `SPORTS_MARKETPLACE_REQUEST_DELAY_MS` throttles new paid match-level evidence packets; related markets from the same match reuse cached evidence in the same run. Do not use private keys, tokenized RPC URLs, or secrets in any `NEXT_PUBLIC_*` variable.
 
 # 15. Local Development
 
