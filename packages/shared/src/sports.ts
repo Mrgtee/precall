@@ -76,6 +76,7 @@ const SPORTS_PATTERNS = [
 
 const NON_SPORTS_FALSE_POSITIVE_PATTERNS = [
   /\b(president|nomination|election|congress|senate|iran|israel|hezbollah|uranium|nuclear|ceasefire|peace deal|invasion|tariff|fed|bitcoin|wti|oil)\b/,
+  /\b(highest temperature|temperature|weather underground|daily observations|day high|day low|forecast|rainfall|snowfall|heat index|fahrenheit|celsius)\b/,
 ];
 
 function lowerMarketText(market: PolymarketMarket) {
@@ -93,33 +94,37 @@ export function classifySportsMarket(market: PolymarketMarket): SportsMarketClas
   if (!isSports) reasons.push("not_sports");
 
   let category: SportsCategory | "unknown" = "unknown";
-  if (/\b(nba|wnba|basketball)\b/.test(text)) category = "nba";
-  else if (/\b(mlb|baseball)\b/.test(text)) category = "mlb";
-  else if (/\b(nhl|hockey)\b/.test(text)) category = "nhl";
-  else if (/\b(ufc|mma|boxing)\b/.test(text)) category = "ufc";
-  else if (/\b(nfl|american football)\b/.test(text)) category = "football";
-  else if (/\b(atp|wta|tennis|roland garros)\b/.test(text)) category = "tennis";
-  else if (/\b(cricket|ipl|cricipl|indian premier league)\b/.test(text)) category = "cricket";
-  else if (/\b(golf)\b/.test(text)) category = "golf";
-  else if (/\b(rugby)\b/.test(text)) category = "rugby";
-  else if (/\b(dota\s*2?|dota2|counter-strike|cs2|league of legends|lol|valorant|esports?)\b/.test(text)) category = "esports";
-  else if (new RegExp(`\\b(soccer|ucl|uel|uefa super cup|leagues cup|copa libertadores|copa sudamericana|club friendlies|epl|ere|fifwc|ligamx|liga mx|mex|mls|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|sc|united|city|hotspur|ajax|inter|madrid|barcelona|arsenal|chelsea|liverpool|tottenham|brighton|everton|west ham|newcastle|aston villa|paris saint-germain|psg|inter miami|orlando city|nashville sc|seattle sounders|los angeles fc|san diego fc|fc dallas|atl[eé]tico san luis|club le[oó]n|le[oó]n fc|quer[eé]taro|guadalajara|club puebla|necaxa|toluca|deportivo toluca|pumas|club america|tigres|monterrey|chivas|cruz azul|pachuca|santos laguna)\\b|\\b(${SOCCER_COMPETITION_SLUGS})-`).test(text)) category = "soccer";
-  else if (/\bfootball\b/.test(text)) category = "football";
-  else if (isSports) category = "other_sports";
+  if (isSports) {
+    if (/\b(nba|wnba|basketball)\b/.test(text)) category = "nba";
+    else if (/\b(mlb|baseball)\b/.test(text)) category = "mlb";
+    else if (/\b(nhl|hockey)\b/.test(text)) category = "nhl";
+    else if (/\b(ufc|mma|boxing)\b/.test(text)) category = "ufc";
+    else if (/\b(nfl|american football)\b/.test(text)) category = "football";
+    else if (/\b(atp|wta|tennis|roland garros)\b/.test(text)) category = "tennis";
+    else if (/\b(cricket|ipl|cricipl|indian premier league)\b/.test(text)) category = "cricket";
+    else if (/\b(golf)\b/.test(text)) category = "golf";
+    else if (/\b(rugby)\b/.test(text)) category = "rugby";
+    else if (/\b(dota\s*2?|dota2|counter-strike|cs2|league of legends|lol|valorant|esports?)\b/.test(text)) category = "esports";
+    else if (new RegExp(`\\b(soccer|ucl|uel|uefa super cup|leagues cup|copa libertadores|copa sudamericana|club friendlies|epl|ere|fifwc|ligamx|liga mx|mex|mls|premier league|la liga|serie a|bundesliga|ligue 1|fifa|world cup|afc|fc|sc|united|city|hotspur|ajax|inter|madrid|barcelona|arsenal|chelsea|liverpool|tottenham|brighton|everton|west ham|newcastle|aston villa|paris saint-germain|psg|inter miami|orlando city|nashville sc|seattle sounders|los angeles fc|san diego fc|fc dallas|atl[eé]tico san luis|club le[oó]n|le[oó]n fc|quer[eé]taro|guadalajara|club puebla|necaxa|toluca|deportivo toluca|pumas|club america|tigres|monterrey|chivas|cruz azul|pachuca|santos laguna)\\b|\\b(${SOCCER_COMPETITION_SLUGS})-`).test(text)) category = "soccer";
+    else if (/\bfootball\b/.test(text)) category = "football";
+    else category = "other_sports";
+  }
 
   let marketKind: SportsMarketKind = "other";
-  if (/both teams to score|\bbtts\b/.test(text)) marketKind = "both_teams_to_score";
-  else if (/correct score/.test(text)) marketKind = "correct_score";
-  else if (/score range|goals? range|between \d+(?:\.\d+)?(?: and |-)\d+(?:\.\d+)? goals?/.test(text)) marketKind = "goals_range";
-  else if (/team total|team goals?|\b[a-z .'-]+ goals? over|\b[a-z .'-]+ goals? under/.test(text)) marketKind = "team_total";
-  else if (/over\/under|over under|total goals?|total points?|total runs?|\bo\/u\b|over \d+(?:\.\d+)?|under \d+(?:\.\d+)?/.test(text)) marketKind = "over_under";
-  else if (/spread|\([+-]?\d+(?:\.\d+)?\)|(?:^|\s)[+-]\d+(?:\.\d+)?\b/.test(text)) marketKind = "spread";
-  else if (/double chance/.test(text)) marketKind = "double_chance";
-  else if (/\bdraw\b/.test(text)) marketKind = "draw";
-  else if (/player|points|rebounds|assists|shots|cards|goalscorer|touchdown|strikeouts|bases|saves/.test(text) && !/team goals?/.test(text)) marketKind = "player_prop";
-  else if (/winner|wins?|beat|defeat|vs\.| vs |moneyline/.test(text)) marketKind = "moneyline";
-  else if (/will .* win/.test(text)) marketKind = "team_win";
-  else if (/champion|finals|world cup|conference|division|tournament/.test(text)) marketKind = "outright";
+  if (isSports) {
+    if (/both teams to score|\bbtts\b/.test(text)) marketKind = "both_teams_to_score";
+    else if (/correct score/.test(text)) marketKind = "correct_score";
+    else if (/score range|goals? range|between \d+(?:\.\d+)?(?: and |-)\d+(?:\.\d+)? goals?/.test(text)) marketKind = "goals_range";
+    else if (/team total|team goals?|\b[a-z .'-]+ goals? over|\b[a-z .'-]+ goals? under/.test(text)) marketKind = "team_total";
+    else if (/over\/under|over under|total goals?|total points?|total runs?|\bo\/u\b|over \d+(?:\.\d+)?|under \d+(?:\.\d+)?/.test(text)) marketKind = "over_under";
+    else if (/spread|\([+-]?\d+(?:\.\d+)?\)|(?:^|\s)[+-]\d+(?:\.\d+)?\b/.test(text)) marketKind = "spread";
+    else if (/double chance/.test(text)) marketKind = "double_chance";
+    else if (/\bdraw\b/.test(text)) marketKind = "draw";
+    else if (/player|points|rebounds|assists|shots|cards|goalscorer|touchdown|strikeouts|bases|saves/.test(text) && !/team goals?/.test(text)) marketKind = "player_prop";
+    else if (/winner|wins?|beat|defeat|vs\.| vs |moneyline/.test(text)) marketKind = "moneyline";
+    else if (/will .* win/.test(text)) marketKind = "team_win";
+    else if (/champion|finals|world cup|conference|division|tournament/.test(text)) marketKind = "outright";
+  }
 
   return { isSports, category, marketKind, reasons };
 }
@@ -376,7 +381,7 @@ export function evaluateSportsCandidate(market: PolymarketMarket, thresholds = s
   if (market.status !== "active") reasons.push("inactive");
 
   const forceCategory = sportsOnlyCategory();
-  if (forceCategory && classification.category !== forceCategory) {
+  if (forceCategory && classification.isSports && classification.category !== forceCategory) {
     reasons.push("wrong_sports_category");
   }
   const close = closeTimeScore(market, now, thresholds.lookaheadHours, thresholds.minStartLeadMinutes);

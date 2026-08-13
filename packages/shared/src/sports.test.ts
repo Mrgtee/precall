@@ -70,6 +70,35 @@ test("sports classifier avoids substring false positives in non-sports politics 
   assert.ok(classification.reasons.includes("not_sports"));
 });
 
+test("sports classifier rejects weather markets even when city names look like soccer signals", () => {
+  for (const candidate of [
+    market({
+      title: "Will the highest temperature in London be 30°C on August 12?",
+      slug: "highest-temperature-in-london-on-august-12-2026-30c",
+      description: "This market resolves from Weather Underground Daily Observations.",
+      url: "https://polymarket.com/market/highest-temperature-in-london-on-august-12-2026-30c",
+    }),
+    market({
+      title: "Will the highest temperature in Madrid be 40°C on August 12?",
+      slug: "highest-temperature-in-madrid-on-august-12-2026-40c",
+      description: "This market resolves from Weather Underground Daily Observations.",
+      url: "https://polymarket.com/market/highest-temperature-in-madrid-on-august-12-2026-40c",
+    }),
+    market({
+      title: "Will the highest temperature in New York City be between 86-87°F on August 12?",
+      slug: "highest-temperature-in-nyc-on-august-12-2026-86-87f",
+      description: "This market resolves from Weather Underground Daily Observations.",
+      url: "https://polymarket.com/market/highest-temperature-in-nyc-on-august-12-2026-86-87f",
+    }),
+  ]) {
+    const classification = classifySportsMarket(candidate);
+    assert.equal(classification.isSports, false, candidate.title);
+    assert.equal(classification.category, "unknown", candidate.title);
+    assert.equal(classification.marketKind, "other", candidate.title);
+    assert.ok(classification.reasons.includes("not_sports"), candidate.title);
+  }
+});
+
 test("sports classifier catches club-name soccer markets without explicit soccer words", () => {
   const classification = classifySportsMarket(market({
     title: "Will AFC Ajax win on 2026-05-24?",
@@ -397,6 +426,15 @@ test("sports candidate eligibility respects SPORTS_ONLY_CATEGORY env variable", 
     const nbaResult = evaluateSportsCandidate(nbaMarket, undefined, now);
     assert.equal(nbaResult.eligible, false);
     assert.ok(nbaResult.reasons.includes("wrong_sports_category"));
+
+    const weatherResult = evaluateSportsCandidate(market({
+      title: "Will the highest temperature in Madrid be 40°C on August 12?",
+      slug: "highest-temperature-in-madrid-on-august-12-2026-40c",
+      description: "This market resolves from Weather Underground Daily Observations.",
+    }), undefined, now);
+    assert.equal(weatherResult.eligible, false);
+    assert.ok(weatherResult.reasons.includes("not_sports"));
+    assert.ok(!weatherResult.reasons.includes("wrong_sports_category"));
 
     const soccerResult = evaluateSportsCandidate(soccerMarket, undefined, now);
     assert.equal(soccerResult.eligible, true);
